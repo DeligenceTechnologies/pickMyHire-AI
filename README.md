@@ -12,6 +12,7 @@
 <p align="center">
   <a href="https://pickmyhire.ai"><strong>Website</strong></a> ·
   <a href="https://pickmyhire.ai/demo"><strong>Watch the demo</strong></a> ·
+  <a href="docs/PRODUCT-GUIDE.md"><strong>Product guide</strong></a> ·
   <a href="https://pickmyhire.ai/signup"><strong>Start a free trial</strong></a> ·
   <a href="https://pickmyhire.ai/login"><strong>Sign in</strong></a>
 </p>
@@ -39,6 +40,8 @@ An AI interviewer runs a personalized voice and video interview with every candi
 4. **Review the evidence.** A structured report with strengths and areas to explore, each linked to the moment in the recording.
 5. **Run the next rounds.** Schedule interviews with your panel; each interviewer fills in a scorecard.
 6. **Shortlist.** Once a candidate clears every round, one overall result brings it all together.
+
+The **[product guide](docs/PRODUCT-GUIDE.md)** walks through every step with screenshots, from creating your account to the shortlist.
 
 ## Features
 
@@ -114,10 +117,10 @@ An AI interviewer runs a personalized voice and video interview with every candi
 |---|---|
 | Website | https://pickmyhire.ai |
 | Product demo | https://pickmyhire.ai/demo |
+| Product guide | [docs/PRODUCT-GUIDE.md](docs/PRODUCT-GUIDE.md) |
 | Start a free trial | https://pickmyhire.ai/signup |
 | Sign in | https://pickmyhire.ai/login |
 | Cookie policy | https://pickmyhire.ai/cookies |
-| Developer guide | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) |
 
 ## About
 
