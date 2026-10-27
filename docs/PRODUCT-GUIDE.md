@@ -490,13 +490,13 @@ Open **Help and support** to message the PickMyHire.ai team: report a problem, a
 
 The number of companies, users, completed interviews and new inquiries, plus free trials, companies out of free interviews, the newest companies and recent candidate issue reports.
 
-![Platform overview](../public/product-guide/50-admin.jpg)
+![Platform overview](admin-screens/50-admin.jpg)
 
 ### Companies
 
 Every company with its status, free interviews used, members and last interview. Filter by **Active, Free trials, Suspended** or **Out of interviews**, or create a company with **New company**.
 
-![Companies](../public/product-guide/51-admin-companies.jpg)
+![Companies](admin-screens/51-admin-companies.jpg)
 
 Open a company to:
 
@@ -504,7 +504,7 @@ Open a company to:
 - set its **allowed free interviews** (or unlimited) and keep **private notes**;
 - **Suspend** it, and once suspended, **Delete company**. Deletion shows exactly what will be removed (jobs, candidates, interviews, recordings and files) and can also delete members' accounts so their emails can be used again. You confirm by typing the company name.
 
-![Company detail](../public/product-guide/52-admin-company.jpg)
+![Company detail](admin-screens/52-admin-company.jpg)
 
 ### Users
 
@@ -513,7 +513,7 @@ Everyone with an account. From the ⋯ menu on a user:
 - **Change email** fixes a mistyped email. Their account and history stay the same.
 - **Delete user** removes the account so the email can sign up again. It shows first which companies they'd be removed from, and any company where they're the only member is deleted too. You confirm by typing their email. Someone who already used a free trial can't start another one with the same email.
 
-![Users](../public/product-guide/53-admin-users.jpg)
+![Users](admin-screens/53-admin-users.jpg)
 
 ### Inquiries, support and settings
 
@@ -522,9 +522,9 @@ Everyone with an account. From the ⋯ menu on a user:
 - **Settings**: switch the **free trial** on or off and set the interviews and days per trial, require email confirmation, manage the **shared access code**, and set defaults for new companies.
 - **Audit log**: every platform admin action.
 
-![Inquiries](../public/product-guide/54-admin-requests.jpg)
+![Inquiries](admin-screens/54-admin-requests.jpg)
 
-![Platform settings](../public/product-guide/55-admin-settings.jpg)
+![Platform settings](admin-screens/55-admin-settings.jpg)
 
 ---
 
