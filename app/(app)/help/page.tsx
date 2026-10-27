@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronRight, Inbox, MessageSquareText } from "lucide-react";
+import { BookOpen, ChevronRight, ExternalLink, Inbox, MessageSquareText } from "lucide-react";
 import { EmptyState } from "@/components/common/states";
 import { PageHeader } from "@/components/common/page-header";
 import { SupportStatusBadge } from "@/components/support/badges";
@@ -18,6 +18,14 @@ export default async function HelpPage() {
   return (
     <>
       <PageHeader title="Help and support" description="Write to the PickMyHire.ai team. We reply here, and you'll get an email too." />
+      <a href="/guide" target="_blank" rel="noopener" className="mb-6 flex items-center gap-4 rounded-xl border bg-card p-4 hover:border-primary hover:bg-accent/40">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><BookOpen className="size-5" /></span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-medium">Product guide</span>
+          <span className="block text-sm text-muted-foreground">Step-by-step help with screenshots for every feature. Most questions are answered here.</span>
+        </span>
+        <ExternalLink className="size-4 shrink-0 text-muted-foreground" />
+      </a>
       <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
         <Card>
           <CardHeader>

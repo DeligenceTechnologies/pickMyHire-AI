@@ -5,7 +5,7 @@ const u = (s: string) => new URL(s, "https://pickmyhire.ai");
 
 describe("analytics pages", () => {
   it("tracks only the public pages", () => {
-    for (const p of ["/", "/demo", "/apply/frontend-dev-abc"]) expect(isTrackedPath(p)).toBe(true);
+    for (const p of ["/", "/demo", "/guide", "/apply/frontend-dev-abc"]) expect(isTrackedPath(p)).toBe(true);
     for (const p of ["/login", "/signup", "/reset-password", "/verify-email", "/dashboard", "/candidates/1", "/interview/tok123", "/interview/tok123/session", "/admin", "/cookies", "/help", "/apply/x/extra"]) {
       expect(isTrackedPath(p)).toBe(false);
     }

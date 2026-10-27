@@ -44,6 +44,17 @@ function SectionHead({ eyebrow, title, intro, dark, center }: { eyebrow: string;
   );
 }
 
+const GUIDE_TOPICS = [
+  { icon: Users, title: "Set up your company", body: "Team, roles, branding and privacy settings.", href: "/guide#3-set-up-your-company" },
+  { icon: Workflow, title: "Interview templates", body: "Sections, timing and follow-up limits.", href: "/guide#4-interview-templates" },
+  { icon: Briefcase, title: "Create a job", body: "Rounds, application questions and hiring limits.", href: "/guide#5-create-a-job" },
+  { icon: Link2, title: "Receive applications", body: "AI screening, the fit check and filters.", href: "/guide#6-receive-applications" },
+  { icon: Video, title: "Candidate experience", body: "Invitations, consent and the device check.", href: "/guide#8-what-the-candidate-sees" },
+  { icon: FileSearch, title: "Review an AI interview", body: "Report, recording, evaluation and decisions.", href: "/guide#9-review-an-ai-interview" },
+  { icon: UserCheck, title: "Human rounds", body: "Scheduling, panels and scorecards.", href: "/guide#10-human-interview-rounds" },
+  { icon: ClipboardCheck, title: "Shortlist and hire", body: "The overall result, HR details and notes.", href: "/guide#11-the-candidate-page-and-the-shortlist" },
+];
+
 const STEPS = [
   { icon: Briefcase, title: "Create a job", body: "Paste the job description. AI turns it into required and preferred skills, experience and responsibilities." },
   { icon: Link2, title: "Share the apply link", body: "Post one link anywhere. Candidates apply with their resume, and AI screens each one against the requirements." },
@@ -451,6 +462,25 @@ export default async function Home() {
         </div>
       </section>
 
+      {/* Product guide */}
+      <section id="guide" className="scroll-mt-20 border-t border-[#E3EAF5] bg-white py-24">
+        <div className="mx-auto max-w-7xl px-5 sm:px-8">
+          <SectionHead center eyebrow="Product guide" title="Step-by-step help, whenever you need it" intro="Every feature explained with screenshots, from setting up your company to the shortlist. Jump straight to the part you need." />
+          <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {GUIDE_TOPICS.map(({ icon: Icon, title, body, href }) => (
+              <Link key={href} href={href} className="group rounded-2xl border border-[#DCE4F0] bg-[#F8FAFD] p-5 transition hover:-translate-y-0.5 hover:border-[#0B5BD3] hover:bg-white hover:shadow-md">
+                <span className="flex size-10 items-center justify-center rounded-xl bg-[#E6EFFC] text-[#0B5BD3]"><Icon className="size-5" /></span>
+                <p className="mt-4 font-semibold group-hover:text-[#0B5BD3]">{title}</p>
+                <p className="mt-1 text-sm leading-relaxed text-[#5A6A86]">{body}</p>
+              </Link>
+            ))}
+          </div>
+          <div className="mt-10 text-center">
+            <Link href="/guide" className={BLUE_BTN}>Open the product guide <ArrowRight className="size-4" /></Link>
+          </div>
+        </div>
+      </section>
+
       {/* Contact: support for signed-in customers, request access / contact us for everyone else */}
       {app ? (
         <section id="contact" className="scroll-mt-20 py-24">
@@ -513,6 +543,7 @@ export default async function Home() {
               <li><a href="#industries" className="hover:text-[#0B5BD3]">Industries</a></li>
               <li><a href="#trust" className="hover:text-[#0B5BD3]">Trust and security</a></li>
               <li><a href="#faq" className="hover:text-[#0B5BD3]">FAQ</a></li>
+              <li><Link href="/guide" className="hover:text-[#0B5BD3]">Product guide</Link></li>
             </ul>
           </div>
           <div>

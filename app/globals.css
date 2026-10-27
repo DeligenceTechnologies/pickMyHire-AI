@@ -131,3 +131,30 @@
 @layer utilities {
   .tabular { font-variant-numeric: tabular-nums; }
 }
+
+/* Public product guide (/guide), rendered from docs/PRODUCT-GUIDE.md. */
+.guide { color: #2B3A55; font-size: 16px; line-height: 1.7; }
+.guide section + section { margin-top: 3.5rem; padding-top: 3rem; border-top: 1px solid #E3EAF5; }
+.guide h2 { scroll-margin-top: 6rem; font-size: 1.75rem; line-height: 1.25; font-weight: 700; letter-spacing: -0.01em; color: #0F1F3A; margin-bottom: 1rem; }
+.guide h3 { scroll-margin-top: 6rem; font-size: 1.2rem; font-weight: 650; color: #0F1F3A; margin: 2rem 0 0.5rem; }
+.guide p { margin: 0.75rem 0; }
+.guide ul, .guide ol { margin: 0.75rem 0; padding-left: 1.4rem; }
+.guide ul { list-style: disc; }
+.guide ol { list-style: decimal; }
+.guide li { margin: 0.3rem 0; }
+.guide li > ul, .guide li > ol { margin: 0.25rem 0; }
+.guide li:has(> input[type="checkbox"]) { list-style: none; margin-left: -1.4rem; }
+.guide input[type="checkbox"] { margin-right: 0.5rem; accent-color: #0B5BD3; }
+.guide strong { color: #0F1F3A; font-weight: 650; }
+.guide a { color: #0B5BD3; font-weight: 500; }
+.guide a:hover { text-decoration: underline; }
+.guide blockquote { margin: 1rem 0; padding: 0.75rem 1rem; border-left: 3px solid #0B5BD3; background: #EEF4FD; border-radius: 0 0.75rem 0.75rem 0; }
+.guide code { font-size: 0.875em; background: #EEF2F8; padding: 0.1em 0.35em; border-radius: 0.35rem; }
+.guide pre { margin: 1rem 0; padding: 1rem 1.25rem; overflow-x: auto; background: #0B1E3D; color: #DCE6F7; border-radius: 1rem; font-size: 13px; line-height: 1.55; }
+.guide pre code { background: none; padding: 0; color: inherit; }
+.guide table { display: block; overflow-x: auto; margin: 1rem 0; border-collapse: collapse; font-size: 15px; }
+.guide th, .guide td { padding: 0.6rem 0.85rem; border-bottom: 1px solid #E3EAF5; text-align: left; vertical-align: top; }
+.guide th { font-weight: 600; color: #0F1F3A; background: #F1F5FB; }
+.guide .guide-shot { display: block; margin: 1.25rem 0 1.75rem; }
+.guide .guide-shot:hover { text-decoration: none; }
+.guide .guide-shot img { width: 100%; height: auto; border: 1px solid #DCE4F0; border-radius: 0.9rem; box-shadow: 0 10px 30px -12px rgba(15, 31, 58, 0.18); background: #fff; }

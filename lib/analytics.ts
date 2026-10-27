@@ -17,7 +17,7 @@ export type Consent = "granted" | "denied";
 
 /** Public pages where analytics may run. */
 export function isTrackedPath(pathname: string) {
-  return pathname === "/" || pathname === "/demo" || /^\/apply\/[^/]+\/?$/.test(pathname);
+  return pathname === "/" || pathname === "/demo" || pathname === "/guide" || /^\/apply\/[^/]+\/?$/.test(pathname);
 }
 
 /** Pages where the cookie banner is shown. */
