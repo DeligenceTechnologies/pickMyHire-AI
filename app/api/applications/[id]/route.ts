@@ -12,7 +12,7 @@ export const GET = route<{ id: string }>(async (_req, { id }) => {
 
 export const PATCH = route<{ id: string }>(async (req, { id }) => {
   const auth = await requireApiAuth("candidate:write");
-  const { status } = await body(req, z.object({ status: z.enum(["new", "shortlisted", "declined"]) }));
+  const { status } = await body(req, z.object({ status: z.enum(["new", "declined"]) }));
   await setApplicationStatus(auth.orgId, auth.userId, uuidParam(id), status);
   return { ok: true };
 });

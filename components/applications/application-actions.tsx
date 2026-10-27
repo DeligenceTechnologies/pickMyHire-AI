@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { CheckCircle2, Loader2, RefreshCw, Send, Star, XCircle } from "lucide-react";
+import { CheckCircle2, Loader2, RefreshCw, Send, XCircle } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -40,11 +40,6 @@ export function ApplicationActions({ id, status, interviewId, canWrite, canInvit
       )}
       {!invited && canWrite && status === "declined" && (
         <Button variant="outline" disabled={!!pending} onClick={() => run("reopen", `/api/applications/${id}`, { method: "PATCH", body: { status: "new" }, success: "Application reopened" })}>Reopen</Button>
-      )}
-      {!invited && canWrite && status === "new" && (
-        <Button variant="outline" disabled={!!pending} onClick={() => run("short", `/api/applications/${id}`, { method: "PATCH", body: { status: "shortlisted" }, success: "Shortlisted" })}>
-          <Star /> Shortlist
-        </Button>
       )}
       {canInvite && (
         <Button variant={invited ? "outline" : "default"} onClick={() => { setLink(null); setOpen(true); }}>

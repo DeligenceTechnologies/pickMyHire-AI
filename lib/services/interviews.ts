@@ -179,7 +179,7 @@ export async function createInterview(orgId: string, userId: string, input: Crea
     });
     // Whichever page the invite came from, an open application for this job is now handled.
     await tx`update job_applications set interview_id = ${iv.id},
-        status = case when status in ('new', 'shortlisted') then 'interview_invited'::application_status else status end,
+        status = case when status = 'new' then 'interview_invited'::application_status else status end,
         reviewed_by = coalesce(reviewed_by, ${userId}), reviewed_at = coalesce(reviewed_at, now())
       where job_id = ${job.id} and candidate_id = ${cand.id} and organization_id = ${orgId}`;
     return { id: iv.id, candidate: cand, jobTitle: job.title, minutes: sections.reduce((a, s) => a + s.duration_minutes, 0) };

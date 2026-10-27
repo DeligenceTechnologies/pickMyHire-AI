@@ -21,7 +21,6 @@ export function MatchBadge({ level, screeningStatus, className }: { level: strin
 
 export const APPLICATION_STATUS: Record<string, string> = {
   new: "New",
-  shortlisted: "Shortlisted",
   interview_invited: "Interview invited",
   declined: "Not moving forward",
 };

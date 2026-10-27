@@ -58,6 +58,33 @@ test("public application with AI screening", async ({ page, browser }) => {
   await expect(page.getByRole("heading", { name: /AI screening/ })).toBeVisible();
   await expect(page.getByRole("cell", { name: /PostgreSQL/ }).first()).toBeVisible();
   if (process.env.E2E_SCREENSHOTS) await page.screenshot({ path: "test-results/application.png", fullPage: true });
+  // An application's next step is an interview or "Not moving forward": there's no early Shortlist.
+  await expect(page.getByRole("button", { name: "Not moving forward" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Shortlist" })).toHaveCount(0);
+
+  // HR details and notes, added from the application, are the same record on the candidate page.
+  const hr = page.getByRole("region", { name: "HR details and notes" });
+  await hr.getByRole("button", { name: "Add details" }).click();
+  await hr.getByLabel("Current CTC").fill("8 LPA");
+  await hr.getByLabel("Notice period").fill("30 days");
+  await hr.getByLabel("Other details").fill("Has another offer; prefers hybrid.");
+  await hr.getByRole("button", { name: "Save" }).click();
+  await expect(hr.getByText("8 LPA")).toBeVisible();
+  await hr.getByLabel("Add a note").fill("HR call done: can join in 30 days.");
+  await hr.getByRole("button", { name: "Add note" }).click();
+  await expect(hr.getByRole("listitem").filter({ hasText: "HR call done: can join in 30 days." })).toBeVisible();
+  await expect(hr.getByLabel("Add a note")).toHaveValue("");
+  if (process.env.E2E_SCREENSHOTS) await page.screenshot({ path: "test-results/hr-panel-application.png", fullPage: true });
+  const applicationUrl = page.url();
+  await page.getByRole("link", { name: /Open candidate profile/ }).click();
+  const hr2 = page.getByRole("region", { name: "HR details and notes" });
+  await expect(hr2.getByText("8 LPA")).toBeVisible();
+  await expect(hr2.getByText("Has another offer; prefers hybrid.")).toBeVisible();
+  await expect(hr2.getByRole("listitem").filter({ hasText: "HR call done: can join in 30 days." })).toBeVisible();
+  await expect(hr2.getByText("Backend Engineer").first()).toBeVisible(); // tagged with the job
+  if (process.env.E2E_SCREENSHOTS) await hr2.screenshot({ path: "test-results/hr-panel-candidate.png" });
+  await page.goto(applicationUrl);
+
 
   await page.getByRole("button", { name: "Invite to AI interview" }).click();
   await page.getByRole("checkbox").click(); // don't email in tests

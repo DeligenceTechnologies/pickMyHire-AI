@@ -11,6 +11,8 @@ import { requireAuth } from "@/lib/auth/session";
 import { formatDate } from "@/lib/format";
 import { isUuid } from "@/lib/ids";
 import { getApplication } from "@/lib/services/applications";
+import { getHrPanel } from "@/lib/services/candidate-notes";
+import { HrPanel } from "@/components/candidates/hr-panel";
 import { matchLevelLabel } from "@/lib/validation/ai-schemas";
 
 export const metadata = { title: "Application" };
@@ -28,6 +30,7 @@ export default async function ApplicationPage(props: PageProps<"/jobs/[jobId]/ap
   if (!isUuid(jobId) || !isUuid(applicationId)) notFound();
   const a = await getApplication(auth.orgId, applicationId);
   if (!a || a.job_id !== jobId) notFound();
+  const hr = await getHrPanel(auth.orgId, a.candidate_id);
   const s = a.screening;
   const busy = a.screening_status === "pending" || a.screening_status === "processing";
   const capped = s && s.ai_match_level !== a.match_level;
@@ -124,6 +127,7 @@ export default async function ApplicationPage(props: PageProps<"/jobs/[jobId]/ap
               <p className="whitespace-pre-wrap text-sm text-muted-foreground">{a.cover_note}</p>
             </section>
           )}
+          <HrPanel candidateId={a.candidate_id} data={hr} currentUserId={auth.userId} canEdit={can(auth.role, "candidate:write")} jobId={a.job_id} jobTitle={a.job_title} />
         </div>
       </div>
     </>

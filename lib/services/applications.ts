@@ -14,7 +14,7 @@ import { parseCandidateResume, storeResume } from "./candidates";
 import { detectResumeKind } from "./document-text";
 import { createInterview, type CreateInterviewInput } from "./interviews";
 
-export type ApplicationStatus = "new" | "shortlisted" | "interview_invited" | "declined";
+export type ApplicationStatus = "new" | "interview_invited" | "declined";
 
 export const ApplyInputSchema = z.object({
   name: z.string().trim().min(1, "Please enter your name").max(120),
@@ -203,7 +203,7 @@ export async function getApplication(orgId: string, applicationId: string) {
   return a ?? null;
 }
 
-export async function setApplicationStatus(orgId: string, userId: string, applicationId: string, status: "new" | "shortlisted" | "declined") {
+export async function setApplicationStatus(orgId: string, userId: string, applicationId: string, status: "new" | "declined") {
   await withOrg(orgId, async (tx) => {
     const [a] = await tx`update job_applications set status = ${status}, reviewed_by = ${userId}, reviewed_at = now()
       where id = ${applicationId} and organization_id = ${orgId} and status <> 'interview_invited' returning id`;
