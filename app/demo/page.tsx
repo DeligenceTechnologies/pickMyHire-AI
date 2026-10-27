@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { Copyright } from "@/components/layout/logo";
-import { DemoVideo } from "@/components/marketing/demo-video";
+import { DemoVideo, WALKTHROUGH_VIDEO } from "@/components/marketing/demo-video";
 import { CookieSettingsLink } from "@/components/analytics/analytics";
 import { SiteHeader } from "@/components/marketing/site-header";
 import { DEMO_URL } from "@/lib/marketing";
@@ -11,22 +11,22 @@ import { getTrialSettings } from "@/lib/services/platform";
 
 export const metadata: Metadata = {
   title: { absolute: "Product demo · PickMyHire.ai" },
-  description: "Watch an 11-minute walkthrough of PickMyHire.ai: AI screening, a real AI video interview, the evidence-backed report, human interview rounds and the shortlist.",
+  description: "Watch a 4-minute walkthrough of PickMyHire.ai: a real AI video interview, then every round from job to shortlist, with the identity check, human interviews and the overall result.",
   openGraph: {
     title: "PickMyHire.ai · Product demo",
-    description: "An 11-minute walkthrough: a real AI interview, the evidence-backed report, human rounds and the shortlist.",
+    description: "A 4-minute walkthrough: a real AI interview, then every round from job to shortlist.",
     images: ["/demo/og.jpg"],
   },
 };
 
 const CHAPTERS = [
-  "Jobs, AI-extracted requirements and interview rounds",
-  "Public apply link and AI application screening",
-  "Inviting a candidate, with a branded email",
-  "The candidate's side, and a real AI interview",
-  "The evidence-backed report, transcript and comparison",
-  "Round decisions, human interviews and scorecards",
-  "Shortlist, team roles, branding and support",
+  "A real AI interview, with adaptive questions",
+  "Creating a job with AI and human interview rounds",
+  "Apply link and AI application screening",
+  "Inviting a candidate, consent and the identity check",
+  "The evidence-backed report, with the identity check result",
+  "Human interviews, scorecards and the overall result",
+  "Shortlisting, with your team in control",
 ];
 
 export default async function DemoPage() {
@@ -38,10 +38,11 @@ export default async function DemoPage() {
         <p className="text-center text-sm font-semibold tracking-[0.18em] text-[#0B5BD3] uppercase">Product demo</p>
         <h1 className="mt-3 text-center text-3xl font-bold tracking-tight text-balance sm:text-5xl">See PickMyHire.ai in action</h1>
         <p className="mx-auto mt-4 max-w-2xl text-center text-lg leading-relaxed text-[#4A5874]">
-          An 11-minute walkthrough, from creating a job to a real AI interview, the evidence-backed report, human interview rounds and the shortlist.
+          A 4-minute walkthrough: a real AI interview, then every round from job to shortlist, with the identity check, human interviews and the overall result.
         </p>
         <DemoVideo className="mt-10" />
-        <p className="mt-3 text-center text-xs text-[#7A8AA6]">Recorded with sample data.</p>
+        <p className="mt-3 text-center text-xs text-[#7A8AA6]">Recorded with sample data, apart from the real candidate interview.</p>
+        <p className="mt-3 text-center text-base text-[#3D4D6A]">Want every detail? <a href="#walkthrough" className="font-semibold text-[#0B5BD3] hover:underline">Watch the full 11-minute product walkthrough ↓</a></p>
 
         <div className="mt-12 grid gap-10 md:grid-cols-[1.2fr_1fr]">
           <section>
@@ -75,6 +76,15 @@ export default async function DemoPage() {
           </section>
           )}
         </div>
+
+        <section id="walkthrough" className="mt-20 scroll-mt-24">
+          <h2 className="text-center text-2xl font-bold tracking-tight sm:text-3xl">Full product walkthrough</h2>
+          <p className="mx-auto mt-3 max-w-2xl text-center text-base leading-relaxed text-[#4A5874]">
+            The 11-minute version: every screen in detail, from creating a job and screening applicants to the AI interview, the report, human rounds, scorecards and the shortlist.
+          </p>
+          <DemoVideo className="mt-8" video={WALKTHROUGH_VIDEO} />
+          <p className="mt-3 text-center text-xs text-[#7A8AA6]">Recorded with sample data, apart from the real candidate interview.</p>
+        </section>
       </main>
       <footer className="border-t border-[#E3EAF5] bg-white py-6 text-center"><Copyright /><div className="mt-2 flex items-center justify-center gap-4 text-xs text-[#5A6A86]"><Link href="/cookies" className="hover:text-[#0B5BD3]">Cookie policy</Link><CookieSettingsLink className="hover:text-[#0B5BD3]" /></div></footer>
     </div>

@@ -131,7 +131,7 @@ const INDUSTRIES = [
 ];
 
 const ABOUT_POINTS = [
-  { icon: Clock, text: "Faster first rounds, with no scheduling" },
+  { icon: Clock, text: "Faster hiring rounds, with less scheduling" },
   { icon: ShieldCheck, text: "Privacy, consent and fairness built in" },
   { icon: MessageSquareText, text: "Structured, evidence-based conversations" },
 ];
@@ -215,9 +215,10 @@ export default async function Home() {
       {/* Product demo */}
       <section id="demo" className="scroll-mt-20 py-24">
         <div className="mx-auto max-w-5xl px-5 sm:px-8">
-          <SectionHead center eyebrow="Product demo" title="See PickMyHire.ai in action" intro="An 11-minute walkthrough: create a job, screen applicants, watch a real AI interview, review the evidence-backed report, then run human rounds and shortlist." />
+          <SectionHead center eyebrow="Product demo" title="See PickMyHire.ai in action" intro="A 4-minute walkthrough: a real AI interview, then every round from job to shortlist, with the identity check, human interviews and the overall result." />
           <DemoVideo className="mt-12" />
-          <p className="mt-4 text-center text-sm text-[#7A8AA6]">Recorded with sample data. <Link href="/demo" className="font-medium text-[#0B5BD3] hover:underline">Open the demo page</Link></p>
+          <p className="mt-4 text-center text-sm text-[#7A8AA6]">Recorded with sample data, apart from the real candidate interview.</p>
+          <p className="mt-3 text-center text-base text-[#3D4D6A]">Want the full product walkthrough? <Link href="/demo#walkthrough" className="inline-flex items-center gap-1 font-semibold text-[#0B5BD3] hover:underline">Watch the 11-minute version <ArrowRight className="size-4" /></Link></p>
         </div>
       </section>
 
@@ -292,7 +293,7 @@ export default async function Home() {
 
           <div className="grid grid-cols-1 items-center gap-12 lg:grid-cols-2">
             <div className="lg:order-2">
-              <SectionHead eyebrow="Rounds, decisions and shortlist" title="From first round to shortlist, in one place" />
+              <SectionHead eyebrow="Rounds, decisions and shortlist" title="Every round, from first interview to shortlist, in one place" />
               <ul className="mt-7 space-y-3.5 text-base text-[#3D4D6A]">
                 {["Mix AI and human interview rounds in each job", "Your team marks every round Qualified, Not qualified or On hold, with who decided and when", "Schedule, reschedule or cancel human interviews, with a calendar invite and your own Zoom, Meet or Teams link", "Each interviewer fills in their own scorecard against your criteria", "Scorecards lock after a decision; reopening needs a reason, and earlier versions are kept"].map((t) => (
                   <li key={t} className="flex gap-3"><Check className="mt-0.5 size-5 shrink-0 text-[#0B5BD3]" />{t}</li>
@@ -376,7 +377,7 @@ export default async function Home() {
       {/* Why: before vs after */}
       <section id="why" className="scroll-mt-20 py-24">
         <div className="mx-auto max-w-7xl px-5 sm:px-8">
-          <SectionHead center eyebrow="Why PickMyHire.ai" title="First-round interviews, without the first-round grind" />
+          <SectionHead center eyebrow="Why PickMyHire.ai" title="Every interview round, without the grind" />
           <div className="mt-12 overflow-hidden rounded-2xl border border-[#DCE4F0] bg-white">
             <div className="hidden grid-cols-[180px_1fr_1fr] border-b border-[#E3EAF5] bg-[#F3F7FC] text-sm font-semibold md:grid">
               <p className="px-6 py-4 text-[#5A6A86]" />
@@ -417,8 +418,8 @@ export default async function Home() {
           <div>
             <SectionHead eyebrow="About us" title="Built by Deligence Technologies" />
             <div className="mt-6 space-y-4 text-lg leading-relaxed text-[#4A5874]">
-              <p>We&apos;re a technology company focused on practical AI. We built PickMyHire.ai because first-round interviews take the most recruiter time and give the least reliable signal: rushed calls, inconsistent questions and notes written from memory.</p>
-              <p>PickMyHire.ai makes that first conversation consistent, personalized and verifiable, so your team spends its time on the candidates and decisions that matter.</p>
+              <p>We&apos;re a technology company focused on practical AI. We built PickMyHire.ai because interviews take the most recruiter time and often give the least reliable signal: rushed calls, inconsistent questions and notes written from memory, round after round.</p>
+              <p>PickMyHire.ai makes every round consistent, personalized and verifiable, so your team spends its time on the candidates and decisions that matter.</p>
             </div>
           </div>
           <div className="rounded-2xl border border-[#DCE4F0] bg-white p-8">
