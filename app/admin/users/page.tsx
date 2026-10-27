@@ -47,7 +47,7 @@ export default async function UsersPage(props: PageProps<"/admin/users">) {
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">{u.last_seen_at ? timeAgo(u.last_seen_at) : "Never"}</td>
                   <td className="px-4 py-3 text-muted-foreground">{formatDate(u.created_at)}</td>
-                  <td className="px-4 py-3 text-right"><UserActions id={u.id} name={u.name} disabled={!!u.disabled_at} isSelf={u.id === admin.userId} /></td>
+                  <td className="px-4 py-3 text-right"><UserActions id={u.id} name={u.name} email={u.email} disabled={!!u.disabled_at} isSelf={u.id === admin.userId} /></td>
                 </tr>
               ))}
             </tbody>

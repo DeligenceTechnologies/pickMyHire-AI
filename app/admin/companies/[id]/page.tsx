@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { MembersCard, NotesCard, QuotaCard, SuspendButton, TrialCard, type CompanyData } from "@/components/admin/company-manager";
+import { DeleteCompanyButton } from "@/components/admin/delete-dialogs";
 import { CompanyStatusBadge, TrialBadge } from "@/components/admin/quota-badge";
 import { PageHeader } from "@/components/common/page-header";
 import { FormCard } from "@/components/settings/form-card";
@@ -34,7 +35,7 @@ export default async function CompanyPage(props: PageProps<"/admin/companies/[id
           <span>Created {formatDate(company.org.created_at)}</span>
           {company.org.suspended_at && <span>Suspended {formatDate(company.org.suspended_at, true)}</span>}
         </>}
-        actions={<SuspendButton id={id} name={company.org.name} status={company.org.status} />}
+        actions={<div className="flex flex-wrap gap-2"><SuspendButton id={id} name={company.org.name} status={company.org.status} />{company.org.status === "suspended" && <DeleteCompanyButton id={id} name={company.org.name} />}</div>}
       />
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
         <div className="min-w-0 space-y-6">

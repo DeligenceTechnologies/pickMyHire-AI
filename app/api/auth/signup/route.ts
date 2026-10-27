@@ -2,6 +2,7 @@ import { z } from "zod";
 import { ApiError, body, route } from "@/lib/api";
 import { withSystem } from "@/lib/database/db";
 import { getSignupCode, getTrialSettings } from "@/lib/services/platform";
+import { trialAlreadyUsed } from "@/lib/services/admin";
 import { safeEqual } from "@/lib/security/tokens";
 import { createSession } from "@/lib/auth/session";
 import { sendEmailVerification, signup } from "@/lib/services/accounts";
@@ -31,6 +32,9 @@ export const POST = route(async (req) => {
       if (!t.enabled) throw new ApiError(403, "Free trials are paused right now. Request access or book a demo and we'll set you up.");
       if (!isWorkEmail(input.email)) throw new ApiError(400, WORK_EMAIL_MESSAGE, "personal_email");
       if (!input.orgName) throw new ApiError(400, "Enter your company name.");
+      if (await trialAlreadyUsed(input.email)) {
+        throw new ApiError(409, "This email has already used a free trial. Request access or book a demo and we'll set you up.", "trial_used");
+      }
       const domain = emailDomain(input.email);
       // One trial per company domain, once addresses are confirmed by email (otherwise
       // anyone could block a real company by signing up with its domain first).

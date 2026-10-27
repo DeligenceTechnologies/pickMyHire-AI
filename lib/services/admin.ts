@@ -8,6 +8,8 @@ import type { InquiryTopic } from "@/lib/marketing";
 import { generateToken, hashToken } from "@/lib/security/tokens";
 import { platformAudit, writeSetting, getDefaultQuota, getSignupCode, getTrialSettings, type TrialSettings } from "./platform";
 import { COUNTED_STATUSES, RUNNING_STATUSES, WAITING_STATUSES, getQuotaStatus } from "./quota";
+import { storage } from "@/lib/storage";
+import { log } from "@/lib/logger";
 
 // Platform admin operations across all companies. Everything runs in the
 // system context, so every function here must only be reached through
@@ -393,4 +395,149 @@ export async function listPlatformAudit(page = 1) {
     select l.id, l.action, l.target_type, l.target_id, l.details, l.created_at, u.name as admin_name, u.email as admin_email
     from platform_audit_logs l left join users u on u.id = l.admin_user_id
     order by l.created_at desc limit ${PLATFORM_AUDIT_PAGE_SIZE} offset ${(Math.max(1, page) - 1) * PLATFORM_AUDIT_PAGE_SIZE}`);
+}
+
+// ---------------------------------------------------------------------------
+// Change email and permanent deletion
+// ---------------------------------------------------------------------------
+
+const trialHash = (email: string) => hashToken(`trial:${email.trim().toLowerCase()}`);
+
+/** True when this email already used a free trial on an account that was deleted. */
+export async function trialAlreadyUsed(email: string) {
+  const [row] = await withSystem((tx) => tx`select 1 from used_trials where email_hash = ${trialHash(email)}`);
+  return !!row;
+}
+
+/** Fix a mistyped email. The account, companies and history stay as they are. */
+export async function changeUserEmail(adminId: string, userId: string, email: string) {
+  const next = email.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(next) || next.length > 254) throw new ApiError(400, "Enter a valid email address.");
+  await withSystem(async (tx) => {
+    const [u] = await tx<{ email: string }[]>`select email from users where id = ${userId} for update`;
+    if (!u) throw new ApiError(404, "User not found");
+    if (u.email.toLowerCase() === next) return;
+    const [taken] = await tx`select 1 from users where email = ${next}`;
+    if (taken) throw new ApiError(409, "Another account already uses this email.");
+    // The new address hasn't been confirmed yet.
+    await tx`update users set email = ${next}, email_verified_at = null where id = ${userId}`;
+    await tx`delete from password_resets where user_id = ${userId}`;
+    await tx`delete from email_verifications where user_id = ${userId}`;
+    await platformAudit(tx, { adminId, action: "user.email_changed", targetType: "user", targetId: userId, details: { from: u.email, to: next } });
+  });
+}
+
+type CompanyImpact = { id: string; name: string; jobs: number; candidates: number; interviews: number };
+
+/** What deleting a user would also remove, and anything that blocks it. */
+export async function userDeletionPreview(adminId: string, userId: string) {
+  return withSystem(async (tx) => {
+    const [u] = await tx<{ email: string; is_platform_admin: boolean }[]>`select email, is_platform_admin from users where id = ${userId}`;
+    if (!u) throw new ApiError(404, "User not found");
+    const memberships = await tx<{ org_id: string; name: string; role: Role; others: number; other_owners: number }[]>`
+      select o.id as org_id, o.name, m.role,
+        (select count(*)::int from organization_members x where x.organization_id = o.id and x.user_id <> ${userId}) as others,
+        (select count(*)::int from organization_members x where x.organization_id = o.id and x.user_id <> ${userId} and x.role = 'owner') as other_owners
+      from organization_members m join organizations o on o.id = m.organization_id where m.user_id = ${userId}`;
+    const blockers: string[] = [];
+    if (userId === adminId) blockers.push("You can't delete your own account.");
+    if (u.is_platform_admin) blockers.push("This is a platform admin account.");
+    const soloIds = memberships.filter((m) => m.others === 0).map((m) => m.org_id);
+    for (const m of memberships) {
+      if (m.others > 0 && m.role === "owner" && m.other_owners === 0) blockers.push(`${m.name}: transfer ownership to another member first.`);
+    }
+    // Scorecards are part of a company's hiring record: don't delete them from companies that stay.
+    const scorecards = await tx<{ name: string; n: number }[]>`
+      select o.name, count(*)::int as n from human_interview_scorecards s join organizations o on o.id = s.organization_id
+      where s.user_id = ${userId} and not (s.organization_id = any(${soloIds}))
+      group by o.name`;
+    for (const s of scorecards) blockers.push(`${s.name}: has ${s.n} interview scorecard${s.n === 1 ? "" : "s"}. Disable this user instead, so their scorecards stay.`);
+    const companies = soloIds.length ? await tx<CompanyImpact[]>`
+      select o.id, o.name,
+        (select count(*)::int from jobs where organization_id = o.id) as jobs,
+        (select count(*)::int from candidates where organization_id = o.id) as candidates,
+        (select count(*)::int from interviews where organization_id = o.id) as interviews
+      from organizations o where o.id = any(${soloIds})` : [];
+    return { email: u.email, blockers, companiesDeleted: companies, staysIn: memberships.filter((m) => m.others > 0).map((m) => m.name) };
+  });
+}
+
+/** Free-trial companies (signed up without an invitation or code) record their members' emails. */
+async function rememberTrials(tx: Tx, userIds: string[]) {
+  if (!userIds.length) return;
+  const rows = await tx<{ email: string }[]>`
+    select distinct u.email from users u join organization_members m on m.user_id = u.id join organizations o on o.id = m.organization_id
+    where u.id = any(${userIds}) and (o.plan = 'trial' or o.signup_domain is not null)`;
+  for (const r of rows) await tx`insert into used_trials (email_hash) values (${trialHash(r.email)}) on conflict do nothing`;
+}
+
+/**
+ * Permanently delete a user so their email can be used again. Companies where
+ * they're the only member are deleted with them (all their data and files).
+ */
+export async function deleteUser(adminId: string, userId: string, confirmEmail: string) {
+  const preview = await userDeletionPreview(adminId, userId);
+  if (preview.blockers.length) throw new ApiError(409, preview.blockers.join(" "));
+  if (confirmEmail.trim().toLowerCase() !== preview.email.toLowerCase()) throw new ApiError(400, "Type the user's email to confirm.");
+  const orgIds = preview.companiesDeleted.map((c) => c.id);
+  await withSystem(async (tx) => {
+    await rememberTrials(tx, [userId]);
+    if (orgIds.length) await tx`delete from organizations where id = any(${orgIds})`;
+    await tx`delete from users where id = ${userId}`;
+    await platformAudit(tx, { adminId, action: "user.deleted", targetType: "user", targetId: userId, details: { email: preview.email, companies_deleted: preview.companiesDeleted } });
+  });
+  await deleteCompanyFiles(orgIds);
+}
+
+/** What deleting a company would remove. */
+export async function companyDeletionPreview(orgId: string) {
+  return withSystem(async (tx) => {
+    const [o] = await tx<(CompanyImpact & { status: string; recording_bytes: number })[]>`
+      select o.id, o.name, o.status,
+        (select count(*)::int from jobs where organization_id = o.id) as jobs,
+        (select count(*)::int from candidates where organization_id = o.id) as candidates,
+        (select count(*)::int from interviews where organization_id = o.id) as interviews,
+        (select coalesce(sum(size), 0)::bigint::float8 from recording_chunks where organization_id = o.id) as recording_bytes
+      from organizations o where o.id = ${orgId}`;
+    if (!o) throw new ApiError(404, "Company not found");
+    // Members with no other company lose their only workspace: their accounts can go too.
+    const onlyHere = await tx<{ id: string; name: string; email: string }[]>`
+      select u.id, u.name, u.email from organization_members m join users u on u.id = m.user_id
+      where m.organization_id = ${orgId} and not u.is_platform_admin
+        and not exists (select 1 from organization_members x where x.user_id = u.id and x.organization_id <> ${orgId})`;
+    return { ...o, onlyHere };
+  });
+}
+
+/**
+ * Permanently delete a suspended company: every job, candidate, interview,
+ * recording, resume and note. Optionally also the accounts of members who
+ * belong to no other company, so their emails can be used again.
+ */
+export async function deleteCompany(adminId: string, orgId: string, input: { confirmName: string; deleteMembers: boolean }) {
+  const preview = await companyDeletionPreview(orgId);
+  if (preview.status !== "suspended") throw new ApiError(409, "Suspend the company before deleting it.");
+  if (input.confirmName.trim() !== preview.name.trim()) throw new ApiError(400, "Type the company name exactly to confirm.");
+  const userIds = input.deleteMembers ? preview.onlyHere.map((u) => u.id).filter((id) => id !== adminId) : [];
+  await withSystem(async (tx) => {
+    await rememberTrials(tx, userIds);
+    await tx`delete from organizations where id = ${orgId}`;
+    if (userIds.length) await tx`delete from users where id = any(${userIds})`;
+    await platformAudit(tx, {
+      adminId, action: "company.deleted", targetType: "organization", targetId: orgId,
+      details: { name: preview.name, jobs: preview.jobs, candidates: preview.candidates, interviews: preview.interviews, members_deleted: preview.onlyHere.filter((u) => userIds.includes(u.id)).map((u) => u.email) },
+    });
+  });
+  await deleteCompanyFiles([orgId]);
+}
+
+/** Every stored file of a company lives under its id: recordings, resumes, photos, logo. */
+async function deleteCompanyFiles(orgIds: string[]) {
+  for (const id of orgIds) {
+    try {
+      await storage().deletePrefix(`${id}/`);
+    } catch (err) {
+      log.warn("company.files_delete_failed", { orgId: id, err });
+    }
+  }
 }
