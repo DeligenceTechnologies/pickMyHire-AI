@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 import { Briefcase, Clock, MapPin } from "lucide-react";
 import { ApplyForm } from "@/components/apply/apply-form";
@@ -5,6 +6,7 @@ import { BrandMark } from "@/components/branding/brand-mark";
 import { type Brand, brandStyle, logoUrl } from "@/lib/branding";
 import { employmentTypeLabel } from "@/lib/format";
 import { getPublicJob } from "@/lib/services/applications";
+import { CookieSettingsLink } from "@/components/analytics/analytics";
 
 export async function generateMetadata(props: PageProps<"/apply/[slug]">): Promise<Metadata> {
   const job = await getPublicJob((await props.params).slug);
@@ -76,6 +78,10 @@ export default async function ApplyPage(props: PageProps<"/apply/[slug]">) {
           <ApplyForm slug={slug} company={job.company_name} jobTitle={job.title} />
         </aside>
       </main>
+      <footer className="flex items-center justify-center gap-4 pb-8 text-xs text-muted-foreground">
+        <Link href="/cookies" className="hover:text-foreground">Cookie policy</Link>
+        <CookieSettingsLink className="hover:text-foreground" />
+      </footer>
     </div>
   );
 }
