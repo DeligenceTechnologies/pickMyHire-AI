@@ -12,6 +12,8 @@ import { Label } from "@/components/ui/label";
 import { CopyButton } from "@/components/common/copy-button";
 import { api, ClientApiError } from "@/lib/client/api";
 import { emptyChoice, type RoundChoice, RoundPicker } from "./round-picker";
+import { emptyValues, pruneErrors, QuestionFields, valuesFromAnswers, type AnswerValues } from "@/components/applications/question-fields";
+import { validateAnswers, type ApplicationForm } from "@/lib/application-form";
 
 type Option = { id: string; label: string; sub?: string };
 
@@ -43,6 +45,33 @@ export function InviteDialog({ jobId, candidateId, candidateName, jobs, triggerL
   const [link, setLink] = useState<string | null>(null);
   const [choice, setChoice] = useState<RoundChoice>(emptyChoice);
   const [blocked, setBlocked] = useState(false);
+  const [questions, setQuestions] = useState<ApplicationForm | null>(null);
+  const [answers, setAnswers] = useState<AnswerValues>(emptyValues);
+  const [answerErrors, setAnswerErrors] = useState<Record<string, string>>({});
+  const existingId = candidateId ?? (mode === "existing" ? selectedCandidate : "");
+
+  // The job's application questions: the person inviting fills them in from what the candidate told them.
+  useEffect(() => {
+    if (!open || !selectedJob) return;
+    let live = true;
+    api<{ form: ApplicationForm }>(`/api/jobs/${selectedJob}/application-form`).then((r) => {
+      if (!live) return;
+      const has = Object.values(r.form.standard).some((q) => q.enabled) || r.form.custom.length > 0;
+      setQuestions(has ? r.form : null);
+    }).catch(() => live && setQuestions(null));
+    return () => { live = false; };
+  }, [open, selectedJob]);
+
+  // Answers already on file for this candidate and job are filled in.
+  useEffect(() => {
+    if (!open || !selectedJob) return;
+    let live = true;
+    const load = existingId
+      ? api<{ answers: Record<string, unknown> | null }>(`/api/candidates/${existingId}/jobs/${selectedJob}/answers`).then((r) => r.answers)
+      : Promise.resolve(null);
+    load.then((found) => { if (live) { setAnswers(valuesFromAnswers(found)); setAnswerErrors({}); } }).catch(() => {});
+    return () => { live = false; };
+  }, [open, selectedJob, existingId]);
 
   useEffect(() => {
     if (!open || candidateId || mode !== "existing") return;
@@ -55,13 +84,22 @@ export function InviteDialog({ jobId, candidateId, candidateName, jobs, triggerL
   }, [open, search, mode, candidateId]);
 
   const reset = () => {
-    setLink(null); setError(null); setForm({ name: "", email: "", phone: "" }); setFile(null); setBusy(false);
+    setLink(null); setError(null); setForm({ name: "", email: "", phone: "" }); setFile(null); setBusy(false); setAnswers(emptyValues()); setAnswerErrors({});
     if (!candidateId) setSelectedCandidate("");
   };
 
   const submit = async () => {
-    setBusy(true);
     setError(null);
+    setAnswerErrors({});
+    if (questions) {
+      const checked = validateAnswers(questions, answers);
+      if (Object.keys(checked.errors).length) {
+        setAnswerErrors(checked.errors);
+        setError("Please fill in the candidate's answers in the right format.");
+        return;
+      }
+    }
+    setBusy(true);
     try {
       let cid = selectedCandidate;
       if (!candidateId && mode === "new") {
@@ -77,6 +115,15 @@ export function InviteDialog({ jobId, candidateId, candidateName, jobs, triggerL
       }
       if (!cid) throw new ClientApiError("Select a candidate.", 400);
       if (!selectedJob) throw new ClientApiError("Select a job.", 400);
+      if (questions) {
+        try {
+          await api(`/api/candidates/${cid}/jobs/${selectedJob}/answers`, { method: "PUT", body: { answers } });
+        } catch (e) {
+          const issues = (e as ClientApiError).issues ?? [];
+          setAnswerErrors(Object.fromEntries(issues.filter((i) => i.path.startsWith("answers.")).map((i) => [i.path.slice(8), i.message])));
+          throw e;
+        }
+      }
       const res = await api<{ id: string; link: string }>("/api/interviews", { body: { jobId: selectedJob, candidateId: cid, sendInvite, ...choice } });
       setLink(res.link);
       toast.success(sendInvite ? "Invitation sent" : "Interview created");
@@ -92,7 +139,7 @@ export function InviteDialog({ jobId, candidateId, candidateName, jobs, triggerL
     <>
       <Button onClick={() => { reset(); setOpen(true); }}><Send /> {triggerLabel}</Button>
       <Dialog open={open} onOpenChange={(o) => !busy && setOpen(o)}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
           {link ? (
             <>
               <DialogHeader>
@@ -161,6 +208,12 @@ export function InviteDialog({ jobId, candidateId, candidateName, jobs, triggerL
                       </div>
                     )}
                   </>
+                )}
+                {questions && (
+                  <details open className="rounded-lg border px-3 py-2">
+                    <summary className="cursor-pointer text-sm font-medium">Candidate&apos;s answers <span className="font-normal text-muted-foreground">(from your call or their email)</span></summary>
+                    <div className="mt-3"><QuestionFields form={questions} values={answers} onChange={(v) => { setAnswerErrors((e) => pruneErrors(e, answers, v)); setAnswers(v); }} errors={answerErrors} idPrefix="inv-q" /></div>
+                  </details>
                 )}
                 {selectedJob && (
                   <RoundPicker

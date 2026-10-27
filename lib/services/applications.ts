@@ -13,6 +13,8 @@ import type { ApplicationScreening, JobRequirements, MatchLevel, ResumeProfile }
 import { parseCandidateResume, storeResume } from "./candidates";
 import { detectResumeKind } from "./document-text";
 import { createInterview, type CreateInterviewInput } from "./interviews";
+import { checkAnswers, saveAnswersTx } from "./application-answers";
+import { readForm, type ApplicationForm } from "@/lib/application-form";
 
 export type ApplicationStatus = "new" | "interview_invited" | "declined";
 
@@ -52,6 +54,8 @@ export type PublicJob = {
   experience_min: number | null; experience_max: number | null; required_skills: string[]; preferred_skills: string[];
   responsibilities: string[]; company_name: string;
   logo_path: string | null; logo_updated_at: Date | null; brand_color: string | null;
+  /** The job's application questions (never the internal hiring limits). */
+  application_form: ApplicationForm;
 };
 
 /** Public job lookup: only active jobs with the apply link switched on. */
@@ -60,16 +64,17 @@ export async function getPublicJob(slug: string): Promise<PublicJob | null> {
   const [job] = await withSystem((tx) => tx<PublicJob[]>`
     select j.id, j.organization_id, j.title, j.description, j.location, j.employment_type, j.experience_min, j.experience_max,
       j.required_skills, j.preferred_skills, j.responsibilities, o.name as company_name,
-      o.logo_path, o.logo_updated_at, o.brand_color
+      o.logo_path, o.logo_updated_at, o.brand_color, j.application_form
     from jobs j join organizations o on o.id = j.organization_id
     where j.apply_slug = ${slug} and j.apply_enabled and j.status = 'active' and o.status = 'active'`);
-  return job ?? null;
+  return job ? { ...job, application_form: readForm(job.application_form) } : null;
 }
 
 /** Public submission: create/reuse the candidate, store the resume, then parse + screen in the background. */
-export async function submitApplication(slug: string, input: ApplyInput, file: { name: string; bytes: Uint8Array }) {
+export async function submitApplication(slug: string, input: ApplyInput, file: { name: string; bytes: Uint8Array }, rawAnswers: unknown = {}) {
   const job = await getPublicJob(slug);
   if (!job) throw new ApiError(404, "This job is no longer accepting applications.");
+  const answers = checkAnswers(job.application_form, rawAnswers); // before anything is created
   detectResumeKind(file.name, file.bytes); // fail fast on bad files before creating anything
   const orgId = job.organization_id;
 
@@ -100,6 +105,7 @@ export async function submitApplication(slug: string, input: ApplyInput, file: {
       values (${orgId}, ${job.id}, ${candidateId}, ${input.linkedin_url}, ${input.cover_note}, true, now())
       on conflict (job_id, candidate_id) do nothing returning id`;
     if (!a) throw new ApiError(409, "You've already applied for this role. We'll be in touch.");
+    await saveAnswersTx(tx, orgId, { jobId: job.id, candidateId, form: job.application_form, answers, answeredBy: null });
     await audit(tx, { orgId, actorType: "candidate", action: "application.received", entityType: "application", entityId: a.id, metadata: { job_id: job.id } });
     await notify(tx, { orgId, type: "application.received", payload: { application_id: a.id, job_id: job.id, candidate: input.name, job: job.title } });
     return a.id;

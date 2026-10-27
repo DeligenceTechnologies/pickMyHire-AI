@@ -12,6 +12,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { TagInput } from "@/components/common/tag-input";
 import { api, ClientApiError } from "@/lib/client/api";
 import { newRoundKey, type RoundValue, RoundsEditor } from "./rounds-editor";
+import { ApplicationQuestionsEditor, HiringLimitsEditor } from "./application-questions-editor";
+import { DEFAULT_FORM, NO_LIMITS, type ApplicationForm, type HiringLimits } from "@/lib/application-form";
 
 export type JobFormValue = {
   title: string;
@@ -26,6 +28,8 @@ export type JobFormValue = {
   rounds: RoundValue[];
   status: "draft" | "active" | "paused" | "closed";
   face_verification: boolean;
+  application_form: ApplicationForm;
+  hiring_limits: HiringLimits;
 };
 
 const selectClass = "h-9 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
@@ -48,6 +52,7 @@ export function JobForm({ initial, jobId, templates }: { initial?: JobFormValue;
     title: "", description: "", location: "", employment_type: "full_time", experience_min: null, experience_max: null,
     required_skills: [], preferred_skills: [], responsibilities: [],
     rounds: [{ key: newRoundKey(), name: "Screening", kind: "ai", template_id: templates.find((t) => t.is_default)?.id ?? templates[0]?.id ?? "", criteria: [], guide: "" }], status: "active", face_verification: true,
+    application_form: DEFAULT_FORM, hiring_limits: NO_LIMITS,
   });
   const [respText, setRespText] = useState((initial?.responsibilities ?? []).join("\n"));
   const [busy, setBusy] = useState(false);
@@ -61,6 +66,7 @@ export function JobForm({ initial, jobId, templates }: { initial?: JobFormValue;
     setErrors({});
     const payload = {
       ...v, location: v.location || null, responsibilities: respText.split("\n").map((s) => s.replace(/^[-*•]\s*/, "").trim()).filter(Boolean),
+      application_form: { ...v.application_form, custom: v.application_form.custom.map((q) => ({ ...q, label: q.label.trim(), options: q.options.map((o) => o.trim()).filter(Boolean) })) },
       rounds: v.rounds.map(({ id, name, kind, template_id, criteria, guide }) => ({
         ...(id ? { id } : {}), name: name.trim(), kind,
         ...(kind === "human" ? { template_id: null, criteria, guide: guide.trim() || null } : { template_id }),
@@ -138,6 +144,14 @@ export function JobForm({ initial, jobId, templates }: { initial?: JobFormValue;
             <option value="draft">Draft</option><option value="active">Active</option><option value="paused">Paused</option><option value="closed">Closed</option>
           </select>
         </div>
+      </Section>
+      <Section title="Application questions" description="Asked on the apply page, and filled in by your team when you invite someone directly. Answers go into the candidate's HR details.">
+        <ApplicationQuestionsEditor value={v.application_form} onChange={(f) => set("application_form", f)}
+          error={Object.entries(errors).find(([k]) => k.startsWith("application_form"))?.[1]} />
+      </Section>
+      <Section title="Hiring limits" description="Budget, notice period and other limits for this role. Answers are checked against them, so HR only needs to call about the exceptions.">
+        <HiringLimitsEditor value={v.hiring_limits} onChange={(l) => set("hiring_limits", l)} form={v.application_form}
+          error={Object.entries(errors).find(([k]) => k.startsWith("hiring_limits"))?.[1]} />
       </Section>
       <Section title="Identity check" description="Confirm the person interviewing is the same person throughout. The candidate's photo is taken at the setup check and compared with their face during the AI interview.">
         <label className="flex items-start gap-3 text-sm">

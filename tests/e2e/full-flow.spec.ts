@@ -56,6 +56,9 @@ test("recruiter to candidate to report", async ({ page, browser }) => {
   await page.getByLabel("Full name").fill("Taylor Morgan");
   await page.getByRole("textbox", { name: "Email" }).fill(candidateEmail);
   await page.locator("#inv-file").setInputFiles(path.join(__dirname, "fixtures/resume.txt"));
+  // The job's questions, filled in by the recruiter for a direct invite.
+  await page.getByRole("dialog").getByLabel(/Expected CTC/).fill("18");
+  await page.getByRole("dialog").getByLabel("Notice period").selectOption("30");
   await page.getByRole("button", { name: "Send invitation" }).click();
   const linkInput = page.locator("input[readonly]").first();
   await expect(linkInput).toHaveValue(/\/interview\//);

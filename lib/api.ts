@@ -7,7 +7,7 @@ import { log } from "@/lib/logger";
 import { clientIp, rateLimit } from "@/lib/security/rate-limit";
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string, public code = "error") {
+  constructor(public status: number, message: string, public code = "error", public issues?: { path: string; message: string }[]) {
     super(message);
   }
 }
@@ -60,7 +60,7 @@ export function errorResponse(err: unknown, req?: NextRequest): Response {
     );
   }
   if (err instanceof AuthError) return NextResponse.json({ error: err.message }, { status: err.status });
-  if (err instanceof ApiError) return NextResponse.json({ error: err.message, code: err.code }, { status: err.status });
+  if (err instanceof ApiError) return NextResponse.json({ error: err.message, code: err.code, ...(err.issues ? { issues: err.issues } : {}) }, { status: err.status });
   if (err instanceof AIError) {
     log.warn("api.ai_error", { code: err.code, path: req?.nextUrl.pathname });
     const msg = err.code === "not_configured"

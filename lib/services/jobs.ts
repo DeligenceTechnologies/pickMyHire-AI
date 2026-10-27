@@ -8,6 +8,7 @@ import { log } from "@/lib/logger";
 import { runInBackground } from "@/lib/background";
 import type { JobRequirements } from "@/lib/validation/ai-schemas";
 import { MAX_ROUNDS, RoundInputSchema, saveRounds } from "./rounds";
+import { ApplicationFormSchema, DEFAULT_FORM, HiringLimitsSchema, NO_LIMITS, type ApplicationForm, type HiringLimits } from "@/lib/application-form";
 
 const list = z.array(z.string().trim().min(1).max(80)).max(40);
 
@@ -26,6 +27,10 @@ export const JobInputSchema = z.object({
   status: z.enum(["draft", "active", "paused", "closed"]).default("draft"),
   /** Compare the candidate's face with a reference photo during AI interviews. */
   face_verification: z.boolean().default(true),
+  /** Questions on the apply page (and for direct invites). */
+  application_form: ApplicationFormSchema.default(DEFAULT_FORM),
+  /** Internal limits for the fit check: never shown to candidates. */
+  hiring_limits: HiringLimitsSchema.default(NO_LIMITS),
 }).refine((j) => j.experience_min == null || j.experience_max == null || j.experience_min <= j.experience_max, {
   message: "Minimum experience cannot exceed maximum",
   path: ["experience_min"],
@@ -52,6 +57,8 @@ export type JobRow = {
   apply_enabled: boolean;
   apply_slug: string | null;
   face_verification: boolean;
+  application_form: ApplicationForm | null;
+  hiring_limits: HiringLimits | null;
   created_at: Date;
   updated_at: Date;
 };
@@ -81,10 +88,12 @@ export async function createJob(orgId: string, userId: string, input: JobInput) 
   const id = await withOrg(orgId, async (tx) => {
     const [row] = await tx<{ id: string }[]>`
       insert into jobs (organization_id, title, description, location, employment_type, experience_min, experience_max,
-        required_skills, preferred_skills, responsibilities, interview_template_id, status, created_by, parse_status, face_verification)
+        required_skills, preferred_skills, responsibilities, interview_template_id, status, created_by, parse_status, face_verification,
+        application_form, hiring_limits)
       values (${orgId}, ${input.title}, ${input.description}, ${input.location}, ${input.employment_type}, ${input.experience_min},
         ${input.experience_max}, ${json(input.required_skills)}, ${json(input.preferred_skills)}, ${json(input.responsibilities)},
-        ${input.rounds.find((r) => r.kind !== "human")?.template_id ?? null}, ${input.status}, ${userId}, ${input.description ? "pending" : null}, ${input.face_verification})
+        ${input.rounds.find((r) => r.kind !== "human")?.template_id ?? null}, ${input.status}, ${userId}, ${input.description ? "pending" : null}, ${input.face_verification},
+        ${json(input.application_form)}, ${json(input.hiring_limits)})
       returning id`;
     await saveRounds(tx, orgId, row.id, input.rounds);
     await audit(tx, { orgId, userId, action: "job.created", entityType: "job", entityId: row.id });
@@ -103,7 +112,8 @@ export async function updateJob(orgId: string, userId: string, jobId: string, in
       update jobs set title = ${input.title}, description = ${input.description}, location = ${input.location},
         employment_type = ${input.employment_type}, experience_min = ${input.experience_min}, experience_max = ${input.experience_max},
         required_skills = ${json(input.required_skills)}, preferred_skills = ${json(input.preferred_skills)},
-        responsibilities = ${json(input.responsibilities)}, status = ${input.status}, face_verification = ${input.face_verification}
+        responsibilities = ${json(input.responsibilities)}, status = ${input.status}, face_verification = ${input.face_verification},
+        application_form = ${json(input.application_form)}, hiring_limits = ${json(input.hiring_limits)}
       where id = ${jobId} and organization_id = ${orgId}`;
     await saveRounds(tx, orgId, jobId, input.rounds);
     await audit(tx, { orgId, userId, action: "job.updated", entityType: "job", entityId: jobId });

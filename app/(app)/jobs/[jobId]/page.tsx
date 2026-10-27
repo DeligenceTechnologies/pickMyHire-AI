@@ -19,6 +19,7 @@ import { listRounds } from "@/lib/services/rounds";
 import { applyUrl, listApplications } from "@/lib/services/applications";
 import { ApplyLinkCard } from "@/components/applications/apply-link-card";
 import { ApplicationsTable } from "@/components/applications/applications-table";
+import { fitForJob } from "@/lib/services/application-answers";
 import { JobPipeline } from "@/components/hiring/job-pipeline";
 import { getJobPipeline } from "@/lib/services/pipeline";
 
@@ -35,6 +36,7 @@ export default async function JobPage(props: PageProps<"/jobs/[jobId]">) {
     listRounds(auth.orgId, jobId),
     canSeeCandidates ? getJobPipeline(auth.orgId, jobId) : Promise.resolve(null),
   ]);
+  const fits = canSeeCandidates ? await fitForJob(auth.orgId, jobId) : new Map();
   const screening = applications.some((a) => a.screening_status === "pending" || a.screening_status === "processing");
   const newCount = applications.filter((a) => a.status === "new").length;
   const req = job.parsed_requirements;
@@ -63,7 +65,8 @@ export default async function JobPage(props: PageProps<"/jobs/[jobId]">) {
               </h2>
               <span className="text-xs text-muted-foreground">AI tags help prioritise review — they are not decisions.</span>
             </div>
-            <ApplicationsTable rows={applications.map((a) => ({ ...a, created_at: a.created_at.toISOString() }))} />
+            <ApplicationsTable canInvite={can(auth.role, "interview:write") && job.status !== "closed"}
+              rows={applications.map((a) => ({ ...a, created_at: a.created_at.toISOString(), fit: fits.get(a.candidate_id) ?? { level: "none" as const, items: [] } }))} />
           </section>
           )}
           {pipeline && pipeline.rows.length > 0 && (

@@ -75,7 +75,7 @@ export default async function ApplyPage(props: PageProps<"/apply/[slug]">) {
           )}
         </article>
         <aside className="lg:sticky lg:top-6 lg:self-start">
-          <ApplyForm slug={slug} company={job.company_name} jobTitle={job.title} />
+          <ApplyForm slug={slug} company={job.company_name} jobTitle={job.title} form={job.application_form} />
         </aside>
       </main>
       <footer className="flex items-center justify-center gap-4 pb-8 text-xs text-muted-foreground">

@@ -13,6 +13,8 @@ import { isUuid } from "@/lib/ids";
 import { getApplication } from "@/lib/services/applications";
 import { getHrPanel } from "@/lib/services/candidate-notes";
 import { HrPanel } from "@/components/candidates/hr-panel";
+import { AnswersCard } from "@/components/applications/answers-card";
+import { answersForCandidate } from "@/lib/services/application-answers";
 import { matchLevelLabel } from "@/lib/validation/ai-schemas";
 
 export const metadata = { title: "Application" };
@@ -30,7 +32,7 @@ export default async function ApplicationPage(props: PageProps<"/jobs/[jobId]/ap
   if (!isUuid(jobId) || !isUuid(applicationId)) notFound();
   const a = await getApplication(auth.orgId, applicationId);
   if (!a || a.job_id !== jobId) notFound();
-  const hr = await getHrPanel(auth.orgId, a.candidate_id);
+  const [hr, answers] = await Promise.all([getHrPanel(auth.orgId, a.candidate_id), answersForCandidate(auth.orgId, a.candidate_id)]);
   const s = a.screening;
   const busy = a.screening_status === "pending" || a.screening_status === "processing";
   const capped = s && s.ai_match_level !== a.match_level;
@@ -50,6 +52,7 @@ export default async function ApplicationPage(props: PageProps<"/jobs/[jobId]/ap
       />
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
+          <AnswersCard candidateId={a.candidate_id} items={answers.filter((x) => x.job_id === a.job_id)} canEdit={can(auth.role, "candidate:write")} />
           <section className="rounded-xl border bg-card">
             <div className="flex items-center justify-between border-b px-5 py-4">
               <h2 className="flex items-center gap-2 font-semibold"><Sparkles className="size-4 text-primary" /> AI screening</h2>

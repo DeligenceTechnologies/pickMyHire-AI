@@ -17,6 +17,12 @@ export const POST = route<{ slug: string }>(async (req, { slug }) => {
   });
   const file = form.get("resume");
   if (!(file instanceof File) || file.size === 0) throw new ApiError(400, "Please attach your resume.");
-  await submitApplication(slug, input, { name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) });
+  let answers: unknown = {};
+  try {
+    answers = JSON.parse(String(form.get("answers") ?? "{}"));
+  } catch {
+    throw new ApiError(400, "Invalid answers.");
+  }
+  await submitApplication(slug, input, { name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) }, answers);
   return { ok: true };
 }, { rateLimit: { key: "public-apply", limit: 8, windowMs: 60 * 60_000 } });

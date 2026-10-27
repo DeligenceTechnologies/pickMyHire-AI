@@ -24,6 +24,8 @@ import { getCandidatePipelines } from "@/lib/services/pipeline";
 import { summariesForPipelines } from "@/lib/services/candidate-summary";
 import { getHrPanel } from "@/lib/services/candidate-notes";
 import { HrPanel } from "@/components/candidates/hr-panel";
+import { AnswersCard } from "@/components/applications/answers-card";
+import { answersForCandidate } from "@/lib/services/application-answers";
 
 export default async function CandidatePage(props: PageProps<"/candidates/[candidateId]">) {
   const auth = await requireAuth("candidate:view");
@@ -32,11 +34,12 @@ export default async function CandidatePage(props: PageProps<"/candidates/[candi
   const c = await getCandidate(auth.orgId, candidateId);
   if (!c) notFound();
   const canSchedule = can(auth.role, "interview:write");
-  const [jobs, pipelines, members, hr] = await Promise.all([
+  const [jobs, pipelines, members, hr, answers] = await Promise.all([
     canSchedule ? listJobs(auth.orgId, { status: "active" }) : Promise.resolve([]),
     getCandidatePipelines(auth.orgId, candidateId),
     canSchedule ? listPanelCandidates(auth.orgId) : Promise.resolve([]),
     getHrPanel(auth.orgId, candidateId),
+    answersForCandidate(auth.orgId, candidateId),
   ]);
   const summaryRows = await summariesForPipelines(auth.orgId, candidateId, pipelines);
   const summaries = Object.fromEntries([...summaryRows].map(([jobId, r]) => [jobId, { status: r.status, summary: r.summary, source: "source" in r ? r.source : null }]));
@@ -65,6 +68,7 @@ export default async function CandidatePage(props: PageProps<"/candidates/[candi
             members={members.map((m) => ({ user_id: m.user_id, name: m.name, role: m.role }))} emailLive={env().EMAIL_PROVIDER !== "log"} summaries={summaries} />
         </div>
       )}
+      {answers.length > 0 && <div className="mb-6"><AnswersCard candidateId={c.id} items={answers} canEdit={canWrite} showJob /></div>}
       <div className="mb-6"><HrPanel candidateId={c.id} data={hr} currentUserId={auth.userId} canEdit={canWrite} /></div>
       <div className="grid gap-6 lg:grid-cols-3">
         <section className="rounded-xl border bg-card p-5 lg:col-span-2">

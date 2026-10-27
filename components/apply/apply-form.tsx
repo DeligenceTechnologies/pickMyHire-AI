@@ -8,8 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { validateAnswers, type ApplicationForm } from "@/lib/application-form";
+import { emptyValues, pruneErrors, QuestionFields, type AnswerValues } from "@/components/applications/question-fields";
 
-export function ApplyForm({ slug, company, jobTitle }: { slug: string; company: string; jobTitle: string }) {
+export function ApplyForm({ slug, company, jobTitle, form: questions }: { slug: string; company: string; jobTitle: string; form: ApplicationForm }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [drag, setDrag] = useState(false);
@@ -18,6 +20,9 @@ export function ApplyForm({ slug, company, jobTitle }: { slug: string; company: 
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [answers, setAnswers] = useState<AnswerValues>(emptyValues);
+  const [answerErrors, setAnswerErrors] = useState<Record<string, string>>({});
+  const hasQuestions = Object.values(questions.standard).some((q) => q.enabled) || questions.custom.length > 0;
 
   const pick = (f: File | undefined | null) => {
     if (!f) return;
@@ -45,16 +50,27 @@ export function ApplyForm({ slug, company, jobTitle }: { slug: string; company: 
         e.preventDefault();
         setError(null);
         setFieldErrors({});
+        setAnswerErrors({});
+        const checked = validateAnswers(questions, answers);
+        if (Object.keys(checked.errors).length) {
+          setAnswerErrors(checked.errors);
+          return setError("Please answer the required questions in the right format.");
+        }
         if (!file) return setError("Please attach your resume.");
         const fd = new FormData(e.currentTarget);
         fd.set("resume", file);
         fd.set("consent", consent ? "true" : "false");
+        fd.set("answers", JSON.stringify(answers));
         setBusy(true);
         try {
           const res = await fetch(`/api/public/apply/${slug}`, { method: "POST", body: fd });
           const data = await res.json().catch(() => ({}));
           if (!res.ok) {
-            if (data.issues) setFieldErrors(Object.fromEntries((data.issues as { path: string; message: string }[]).map((i) => [i.path, i.message])));
+            if (data.issues) {
+              const issues = data.issues as { path: string; message: string }[];
+              setFieldErrors(Object.fromEntries(issues.filter((i) => !i.path.startsWith("answers.")).map((i) => [i.path, i.message])));
+              setAnswerErrors(Object.fromEntries(issues.filter((i) => i.path.startsWith("answers.")).map((i) => [i.path.slice(8), i.message])));
+            }
             throw new Error(data.error ?? "Something went wrong. Please try again.");
           }
           setDone(true);
@@ -101,6 +117,13 @@ export function ApplyForm({ slug, company, jobTitle }: { slug: string; company: 
         </div>
         <input ref={fileInput} id="ap-resume" type="file" accept=".pdf,.docx,.txt" className="sr-only" onChange={(e) => pick(e.target.files?.[0])} />
       </div>
+      {hasQuestions && (
+        <fieldset className="space-y-3 border-t pt-4">
+          <legend className="sr-only">Questions about the role</legend>
+          <p className="text-sm font-medium">A few questions about the role</p>
+          <QuestionFields form={questions} values={answers} onChange={(v) => { setAnswerErrors((e) => pruneErrors(e, answers, v)); setAnswers(v); }} errors={answerErrors} idPrefix="ap-q" />
+        </fieldset>
+      )}
       <div className="space-y-1.5">
         <Label htmlFor="ap-note">Anything you&apos;d like us to know? <span className="font-normal text-muted-foreground">(optional)</span></Label>
         <Textarea id="ap-note" name="cover_note" rows={4} maxLength={3000} />
