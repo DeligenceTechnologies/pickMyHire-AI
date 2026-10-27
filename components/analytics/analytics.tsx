@@ -105,6 +105,8 @@ export function Analytics() {
   const pathname = usePathname();
   const [consent, setConsent] = useState<Consent | null | undefined>(undefined);
   const [open, setOpen] = useState(false);
+  const [prefs, setPrefs] = useState(false);
+  const [analytics, setAnalytics] = useState(false);
 
   useEffect(() => {
     queueMicrotask(() => setConsent(readConsent()));
@@ -124,23 +126,54 @@ export function Analytics() {
     writeConsent(c);
     setConsent(c);
     setOpen(false);
+    setPrefs(false);
     if (c === "denied") stopAnalytics();
   };
 
   const visible = consent !== undefined && isBannerPath(pathname) && (open || consent === null);
   if (!visible) return null;
+  const btn = "h-10 rounded-xl px-4 text-sm font-semibold";
+  const outline = `${btn} border border-[#CBD7EA] bg-white text-[#0F1F3A] hover:border-[#0B5BD3]`;
+  const primary = `${btn} bg-[#0B5BD3] text-white hover:bg-[#0A4FB8]`;
   return (
     <section role="region" aria-label="Cookie consent" className="fixed inset-x-0 bottom-0 z-50 p-3 sm:p-4">
-      <div className="mx-auto flex max-w-3xl flex-col gap-3 rounded-2xl border border-[#DCE4F0] bg-white p-4 text-[#0F1F3A] shadow-[0_12px_40px_-12px_rgba(11,30,61,0.35)] sm:flex-row sm:items-center sm:gap-5 sm:p-5">
-        <Cookie className="hidden size-6 shrink-0 text-[#0B5BD3] sm:block" aria-hidden />
-        <p className="flex-1 text-sm leading-relaxed text-[#3D4D6A]">
-          We&apos;d like to use analytics cookies (Google Analytics) to understand how visitors use our website. No advertising, and never on candidate or recruiter pages.{" "}
-          <Link href="/cookies" className="font-medium text-[#0B5BD3] underline-offset-2 hover:underline">Cookie policy</Link>
-        </p>
-        <div className="flex shrink-0 gap-2">
-          <button type="button" onClick={() => choose("denied")} className="h-10 flex-1 rounded-xl border border-[#CBD7EA] bg-white px-5 text-sm font-semibold text-[#0F1F3A] hover:border-[#0B5BD3] sm:flex-none">Decline</button>
-          <button type="button" onClick={() => choose("granted")} className="h-10 flex-1 rounded-xl bg-[#0B5BD3] px-5 text-sm font-semibold text-white hover:bg-[#0A4FB8] sm:flex-none">Accept</button>
-        </div>
+      <div className="mx-auto max-w-3xl rounded-2xl border border-[#DCE4F0] bg-white p-4 text-[#0F1F3A] shadow-[0_12px_40px_-12px_rgba(11,30,61,0.35)] sm:p-5">
+        {prefs ? (
+          <div className="space-y-4">
+            <p className="font-semibold">Cookie preferences</p>
+            <div className="divide-y rounded-xl border border-[#E3EAF5]">
+              <div className="flex items-center justify-between gap-4 p-3">
+                <div><p className="text-sm font-medium">Necessary</p><p className="text-xs text-[#5A6A86]">Required for the website to work.</p></div>
+                <span className="text-xs font-medium text-[#5A6A86]">Always on</span>
+              </div>
+              <label className="flex cursor-pointer items-center justify-between gap-4 p-3">
+                <div><p className="text-sm font-medium">Analytics</p><p className="text-xs text-[#5A6A86]">Helps us improve the website.</p></div>
+                <input type="checkbox" role="switch" aria-label="Analytics cookies" checked={analytics} onChange={(e) => setAnalytics(e.target.checked)}
+                  className="h-5 w-9 cursor-pointer appearance-none rounded-full bg-[#CBD7EA] transition-colors before:block before:size-4 before:translate-x-0.5 before:rounded-full before:bg-white before:transition-transform checked:bg-[#0B5BD3] checked:before:translate-x-[18px]" />
+              </label>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Link href="/cookies" className="text-sm font-medium text-[#0B5BD3] hover:underline">Cookie policy</Link>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setPrefs(false)} className={outline}>Back</button>
+                <button type="button" onClick={() => choose(analytics ? "granted" : "denied")} className={primary}>Save preferences</button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-5">
+            <Cookie className="hidden size-6 shrink-0 text-[#0B5BD3] sm:block" aria-hidden />
+            <p className="flex-1 text-sm leading-relaxed text-[#3D4D6A]">
+              We use cookies to improve your experience.{" "}
+              <Link href="/cookies" className="font-medium text-[#0B5BD3] underline-offset-2 hover:underline">Cookie policy</Link>
+            </p>
+            <div className="grid shrink-0 grid-cols-2 gap-2 sm:flex">
+              <button type="button" onClick={() => { setAnalytics(consent === "granted"); setPrefs(true); }} className={`${outline} col-span-2 sm:col-span-1`}>Preferences</button>
+              <button type="button" onClick={() => choose("denied")} className={outline}>Reject all</button>
+              <button type="button" onClick={() => choose("granted")} className={primary}>Accept all</button>
+            </div>
+          </div>
+        )}
       </div>
     </section>
   );

@@ -23,7 +23,7 @@ test("nothing loads until the visitor accepts, and declining is remembered", asy
   await page.waitForTimeout(800);
   expect(gaRequests).toEqual([]);
   expect(await page.evaluate(() => document.cookie)).not.toMatch(/_ga/);
-  await banner.getByRole("button", { name: "Decline" }).click();
+  await banner.getByRole("button", { name: "Reject all" }).click();
   await expect(banner).toBeHidden();
   await page.reload();
   await page.waitForTimeout(800);
@@ -36,7 +36,7 @@ test("after accepting, analytics runs on public pages only, with clean addresses
   const gaRequests: string[] = [];
   await page.route("**/www.googletagmanager.com/**", (r) => { gaRequests.push(r.request().url()); return r.fulfill({ contentType: "text/javascript", body: "" }); });
   await page.goto("/?utm_source=linkedin&utm_campaign=launch");
-  await page.getByRole("region", { name: "Cookie consent" }).getByRole("button", { name: "Accept" }).click();
+  await page.getByRole("region", { name: "Cookie consent" }).getByRole("button", { name: "Accept all" }).click();
   await expect.poll(() => gaRequests.length).toBe(1);
   expect(gaRequests[0]).toContain(`id=${GA}`);
   expect(await disabled(page)).toBe(false);
@@ -69,13 +69,32 @@ test("after accepting, analytics runs on public pages only, with clean addresses
   expect(JSON.stringify(await config(page))).not.toContain("SECRET");
 });
 
+test("preferences: necessary only, or analytics switched on", async ({ page, context }) => {
+  const gaRequests: string[] = [];
+  await page.route("**/www.googletagmanager.com/**", (r) => { gaRequests.push(r.request().url()); return r.fulfill({ contentType: "text/javascript", body: "" }); });
+  await page.goto("/");
+  const banner = page.getByRole("region", { name: "Cookie consent" });
+  await banner.getByRole("button", { name: "Preferences" }).click();
+  await expect(banner.getByText("Always on")).toBeVisible();
+  await expect(banner.getByRole("switch", { name: "Analytics cookies" })).not.toBeChecked();
+  await banner.getByRole("button", { name: "Save preferences" }).click();
+  await expect(banner).toBeHidden();
+  expect((await context.cookies()).find((c) => c.name === "pmh_consent")?.value).toBe("denied");
+  expect(gaRequests).toEqual([]);
+  await page.getByRole("button", { name: "Cookie settings" }).first().click();
+  await banner.getByRole("button", { name: "Preferences" }).click();
+  await banner.getByRole("switch", { name: "Analytics cookies" }).check();
+  await banner.getByRole("button", { name: "Save preferences" }).click();
+  await expect.poll(() => gaRequests.length).toBe(1);
+});
+
 test("cookie settings let the visitor withdraw consent, which removes analytics cookies", async ({ page, context }) => {
   await page.route("**/www.googletagmanager.com/**", (r) => r.fulfill({ contentType: "text/javascript", body: "" }));
   await context.addCookies([{ name: "pmh_consent", value: "granted", url: "http://localhost:3000" }, { name: "_ga", value: "GA1.1.123.456", url: "http://localhost:3000" }]);
   await page.goto("/demo");
   await expect(page.getByRole("region", { name: "Cookie consent" })).toBeHidden();
   await page.getByRole("button", { name: "Cookie settings" }).first().click();
-  await page.getByRole("region", { name: "Cookie consent" }).getByRole("button", { name: "Decline" }).click();
+  await page.getByRole("region", { name: "Cookie consent" }).getByRole("button", { name: "Reject all" }).click();
   expect(await disabled(page)).toBe(true);
   const cookies = await context.cookies();
   expect(cookies.find((c) => c.name === "_ga")).toBeUndefined();
@@ -91,7 +110,7 @@ test("with the real Google script, nothing is sent from private pages", async ({
   const hits: string[] = [];
   await page.route(/google-analytics\.com\/g\/collect|googletagmanager\.com\/g\/collect/, (r) => { hits.push(r.request().url() + "\n" + (r.request().postData() ?? "")); return r.fulfill({ status: 204, body: "" }); });
   await page.goto("/?utm_source=linkedin");
-  await page.getByRole("region", { name: "Cookie consent" }).getByRole("button", { name: "Accept" }).click();
+  await page.getByRole("region", { name: "Cookie consent" }).getByRole("button", { name: "Accept all" }).click();
   await expect.poll(() => hits.some((h) => h.includes("en=page_view")), { timeout: 20_000 }).toBe(true);
   // Client-side navigation into a private page: Google's own history tracking must stay silent.
   const before = hits.length;

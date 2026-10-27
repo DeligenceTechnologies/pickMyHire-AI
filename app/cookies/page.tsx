@@ -34,7 +34,7 @@ export default async function CookiesPage() {
 
           <section className="space-y-2">
             <h2 className="text-lg font-semibold text-[#0F1F3A]">Analytics, only with your consent</h2>
-            <p>If you click <strong>Accept</strong>, we use Google Analytics on our public pages (the home page, the demo page and job application pages) to count visits and see which pages are useful. If you click <strong>Decline</strong>, or don&apos;t choose, Google Analytics isn&apos;t loaded at all.</p>
+            <p>If you accept analytics cookies (<strong>Accept all</strong>, or switch on Analytics in <strong>Preferences</strong>), we use Google Analytics on our public pages (the home page, the demo page and job application pages) to count visits and see which pages are useful. If you click <strong>Reject all</strong>, or don&apos;t choose, Google Analytics isn&apos;t loaded at all.</p>
             <ul className="list-disc space-y-1 pl-5">
               <li>No advertising or remarketing, and Google signals are switched off.</li>
               <li>Never used on candidate interview pages, in the recruiter workspace, or on sign-in pages.</li>
