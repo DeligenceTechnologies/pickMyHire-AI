@@ -1,100 +1,126 @@
-# PickMyHire.ai — AI Interviewer Platform
+<p align="center">
+  <a href="https://pickmyhire.ai"><img src="public/brand/pickmyhire-logo.png" alt="PickMyHire.ai" height="64"></a>
+</p>
 
-Recruiters create jobs, invite candidates to personalized AI video interviews, and review evidence-backed reports. Every assessment links to timestamped transcript moments and the recording.
+<h3 align="center">Interview every candidate. Review only the evidence.</h3>
 
-**Principle:** the LLM handles language (parsing, question wording, analysis, summaries). The application owns interview state, timing, limits, persistence, permissions and security (see `lib/interview/state-machine.ts`). No AI output ever produces a hire/reject decision.
+<p align="center">
+  AI video interviews and every hiring round in one place, with evidence you can verify.<br>
+  A product of <a href="https://deligence.com"><strong>Deligence Technologies</strong></a>.
+</p>
 
-## Quick start (local)
+<p align="center">
+  <a href="https://pickmyhire.ai"><strong>Website</strong></a> ·
+  <a href="https://pickmyhire.ai/demo"><strong>Watch the demo</strong></a> ·
+  <a href="https://pickmyhire.ai/signup"><strong>Start a free trial</strong></a> ·
+  <a href="https://pickmyhire.ai/login"><strong>Sign in</strong></a>
+</p>
 
-Prerequisites: Node 20.9+ and PostgreSQL 14+. This machine uses Homebrew `postgresql@16`.
+---
 
-```bash
-npm install
-cp .env.example .env.local       # then fill DATABASE_URL and APP_SECRET (see below)
-npm run db:migrate
-npm run dev                      # http://localhost:3000
+## What is PickMyHire.ai?
+
+PickMyHire.ai helps hiring teams interview more candidates in less time, without lowering the bar.
+
+An AI interviewer runs a personalized voice and video interview with every candidate, whenever it suits them. Your team then gets a structured report where **every assessment links to the exact moment in the recording and transcript**. Human interview rounds, scorecards and decisions sit in the same place, from the first application to the shortlist.
+
+**The AI never makes hiring decisions.** It conducts interviews and organizes the evidence; your team decides every round.
+
+<p align="center">
+  <a href="https://pickmyhire.ai/demo"><img src="public/demo/poster.webp" alt="Watch the 4-minute product demo" width="720"></a><br>
+  <sub><a href="https://pickmyhire.ai/demo">Watch the 4-minute demo</a> · or the <a href="https://pickmyhire.ai/demo#walkthrough">full 11-minute product walkthrough</a></sub>
+</p>
+
+## How it works
+
+1. **Create a job.** Paste the description; AI extracts the skills, experience and responsibilities. Set up every interview round for the role, AI or human, in the order you want.
+2. **Share the apply link.** Candidates apply with their resume and answer your questions (expected CTC, notice period, joining date and your own). AI checks each resume against the requirements, and the answers are checked against your budget and limits.
+3. **Invite to an AI interview.** One click, or a bulk invite. Each candidate gets a personal link and interviews from the browser, with nothing to install.
+4. **Review the evidence.** A structured report with strengths and areas to explore, each linked to the moment in the recording.
+5. **Run the next rounds.** Schedule interviews with your panel; each interviewer fills in a scorecard.
+6. **Shortlist.** Once a candidate clears every round, one overall result brings it all together.
+
+## Features
+
+### Applications and screening
+- **Public apply link** per job, for LinkedIn, job boards or your careers page.
+- **AI resume screening** against the job's requirements, with quoted evidence. Match tags are capped by evidence, and nobody is auto-rejected.
+- **Application questions:** Expected and current CTC, notice period, joining date, location, relocation, work mode, plus your own questions in seven answer formats. Switch each on or off and mark it required, per job.
+- **Hiring limits and fit check:** set an internal budget, maximum notice period and other limits. Every candidate is checked against them automatically (Fits limits · Check · Outside limits), so HR only calls about the exceptions.
+- **Filters and bulk invite:** find candidates who match both skills and limits, and invite them in one go.
+
+### The AI interview
+- **Personalized questions** from the job and each candidate's resume, within the structure your team sets in **interview templates** (sections, timing, question counts, follow-up limits, evaluation criteria, interviewer instructions).
+- **Adaptive follow-ups** when an answer leaves a real gap; replies in 2–4 seconds and never cuts off a thinking pause.
+- **Candidate-friendly:** runs in the browser, with captions, the option to type instead of speaking, and automatic resume after a dropped connection.
+- **Identity check (optional, per job):** a photo at the setup check, then face checks during the interview that flag a different face, a second person or no one in view. Runs on the candidate's device, with consent; flags are for review only.
+
+### Reports and decisions
+- **Evidence-backed reports:** section-by-section assessments with an optional 1–5 score; click any evidence and the video jumps to that moment.
+- **Compare candidates** for the same job, side by side.
+- **Human interview rounds** with calendar invites and your Zoom, Meet or Teams link, and a **scorecard** for each interviewer.
+- **Round decisions** (Qualified, Not qualified, On hold), recording who decided and when.
+- **Overall result:** once every round is cleared, one summary of rounds, interviewer scores and key evidence, to support the shortlist.
+- **HR details and notes** for each candidate (CTC, notice period, joining date and free-form notes), shared across every page they appear on.
+
+### For your team
+- **Roles:** Owner, Admin, Recruiter, Interviewer and Viewer, each seeing only what they should.
+- **Your brand:** company logo and colour on candidate pages and emails; branded invitations with calendar files.
+- **Dashboard and notifications** for applications, completed interviews and ready reports.
+- **Downloads:** transcripts, candidate video and interviewer voice.
+- **Help and support** built into the app.
+
+## Trust, privacy and security
+
+- **Humans decide.** No AI output ever makes a hire or reject decision.
+- **Fair by design.** Only job-relevant evidence is assessed. No inference from age, gender, accent, appearance or emotion; salary and other HR details are never shown to the AI.
+- **Consent first.** Candidates see a plain-language notice and give recorded, timestamped consent before anything starts.
+- **Company data isolated** at the database level, with permission checks on every request.
+- **Private by default.** Resumes and recordings are stored privately and open only through short-lived links.
+- **Full audit trail** of report views, recording access, decisions and changes.
+- **Retention controls:** delete recordings automatically after a set time, and delete any candidate's data on request.
+- **Website analytics only with consent,** and only on public pages, never on interview links or inside the app.
+
+## Architecture at a glance
+
+```
+   Recruiters & hiring team                    Candidates
+   (any modern browser)                        (browser: camera + microphone)
+            │                                          │
+            ▼                                          ▼
+   ┌──────────────────────────────────────────────────────────────────┐
+   │                      PickMyHire.ai platform                       │
+   │                                                                   │
+   │   Web app ·  Interview engine (rules, timing, follow-up limits)  │
+   │   AI services: job parsing, resume screening, question planning, │
+   │   answer analysis, evaluation, reports, overall result            │
+   │   Roles & permissions · Audit log · Email (invites, reminders)    │
+   └───────────┬───────────────────────┬──────────────────────┬───────┘
+               ▼                       ▼                      ▼
+     Database & private        AI models (OpenAI):     Email delivery
+     file storage              realtime voice,         (Resend)
+     (Supabase, isolated       transcription,
+     per company)              language models
 ```
 
-`.env.local` for local development is already created in this folder: it has a dedicated **non-superuser** database role, because superusers bypass Row Level Security.
+- **The interview engine is in charge, not the AI.** The platform decides each question, enforces time and follow-up limits, and keeps the interview on track; the AI supplies wording and analysis within those rules.
+- **Live voice** connects the candidate's browser directly to the voice model with a short-lived key, so the platform's AI credentials never leave the server.
+- **Recordings and resumes** are kept in private storage, separated by company.
+- **Hosted** on Render (application) and Supabase (database and storage).
 
-### Enabling live AI
+## Links
 
-Without `OPENAI_API_KEY`, the app runs in **demo mode**. Deterministic heuristics stand in for AI, the interviewer uses the browser's speech synthesis, and candidates type their answers. Demo output is clearly labeled everywhere it appears.
-
-To enable OpenAI:
-
-1. Put your key in `.env.local`: `OPENAI_API_KEY=sk-...`
-2. Restart `npm run dev`.
-
-Models are centralized in `lib/ai/config.ts` and can be overridden with `OPENAI_MODEL_FAST`, `OPENAI_MODEL_REASONING`, `OPENAI_MODEL_REALTIME`, `OPENAI_MODEL_TRANSCRIBE` and `OPENAI_REALTIME_VOICE`.
-
-## Architecture
-
-```
-Recruiter UI (Next.js App Router, server components)      Candidate browser
-        │  route handlers (/api/*) — auth, zod, CSRF,           │ camera + mic, MediaRecorder
-        │  rate limits, audit                                    │ WebRTC ⇄ OpenAI Realtime (ephemeral secret)
-        ▼                                                        ▼
-   Services (lib/services/*)                 InterviewController (lib/interview/controller.ts)
-        │                                     ├─ state machine (pure, unit-tested)
-        │                                     ├─ answer analyzer → follow-up engine (validated)
-        │                                     ├─ transcript + chunked recording persistence
-        ▼                                     └─ post-processing: section evaluation → report
-   PostgreSQL (RLS per organization)   ·   Private storage (local FS or Supabase)   ·   OpenAI
-```
-
-### Live interview loop
-
-1. `POST /api/public/interview/:token/start` creates the first question and returns the line to speak. On refresh or reconnect, the same call resumes the session idempotently.
-2. The browser gets a short-lived client secret (`/realtime-session`) and connects to OpenAI Realtime over WebRTC. The API key never reaches the browser. The session disables automatic responses (`create_response: false`), so the voice model only says the lines the backend gives it.
-3. Candidate speech is transcribed by the realtime session (`audio.input.transcription`). After the candidate stays silent (semantic VAD plus a grace period), or selects **Done answering**, the answer goes to `/answer`.
-4. The controller then:
-   1. Stores the answer. This step is idempotent: there is one answer per question.
-   2. Runs the answer analyzer.
-   3. Asks the follow-up engine only when the rules allow a follow-up.
-   4. Validates the AI's suggestion against the limits: at most 2 follow-ups per question, the section time budget, question minimums and maximums, and the total time cap.
-   5. Advances the state and returns the next line.
-5. Sections are evaluated in the background as they complete. On completion, the recording parts are assembled, the remaining sections are evaluated, and the final report is generated. Each step records its status and can be retried.
-
-### Key directories
-
-| Path | Purpose |
+| | |
 |---|---|
-| `app/(app)/*` | Recruiter app: dashboard, jobs, candidates, interviews (viewer with tabs), templates, settings |
-| `app/interview/[token]/*` | Candidate flow: welcome → consent → device-check → session → completed |
-| `app/api/*` | REST API (recruiter and public candidate routes) |
-| `lib/ai/*` | OpenAI client, one service per AI task, demo-mode fallbacks, model config |
-| `prompts/*/v1.ts` | Versioned prompts; shared safety rules in `prompts/shared.ts` |
-| `lib/interview/*` | State machine, controller, plan builder, recording, processing pipeline |
-| `lib/services/*` | Business logic for accounts, jobs, candidates, templates, interviews, workspace |
-| `lib/database/db.ts` | `withOrg()` / `withSystem()` transaction helpers that set the RLS context |
-| `lib/storage/*` | Storage abstraction: local filesystem with HMAC-signed URLs, or Supabase Storage |
-| `supabase/migrations/*` | SQL schema, RLS policies |
-| `tests/unit`, `tests/integration`, `tests/e2e` | Vitest unit tests, RLS integration test, Playwright end-to-end test |
+| Website | https://pickmyhire.ai |
+| Product demo | https://pickmyhire.ai/demo |
+| Start a free trial | https://pickmyhire.ai/signup |
+| Sign in | https://pickmyhire.ai/login |
+| Cookie policy | https://pickmyhire.ai/cookies |
+| Developer guide | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) |
 
-## Security and privacy
+## About
 
-- **Tenant isolation.** Every tenant table has `organization_id` and a `FORCE ROW LEVEL SECURITY` policy keyed on the transaction-local `app.org_id`. Service code also filters explicitly, and `tests/integration/rls.test.ts` checks the isolation.
-- **Authentication and authorization.** Sessions use scrypt password hashes and hashed session tokens in httpOnly SameSite cookies. Permissions are checked server-side for five roles: owner, admin, recruiter, interviewer and viewer (`lib/auth/permissions.ts`).
-- **Candidate links.** Links use 256-bit random tokens and only a SHA-256 hash is stored, so rotating a link invalidates the old one. The pages send `no-referrer` and `no-store` headers.
-- **Request hardening.** Requests are checked for same-origin (CSRF), rate-limited, validated with zod, and served with secure headers. Error responses are friendly and never include stack traces.
-- **Private storage.** Recordings and resumes are private objects. Access goes through short-lived signed URLs, and every recording access is audited.
-- **Consent.** Consent is stored with its timestamp and version. Retention policies are configurable, and candidates, recordings, transcripts and reports can each be deleted.
-- **Audit log.** It covers lifecycle events, questions, answers, follow-ups, evaluations, report views, evidence views and recording access.
-- **Logging.** Logs are structured, and secrets, resume text and transcripts are redacted.
-- **Platform admin.** The `/admin` area (companies, users, access requests, free-interview quotas, sign-up code) is only for accounts flagged as platform admins. The flag can only be set from the command line, every admin action is written to `platform_audit_logs`, and admins see counts but never candidate videos, transcripts or resumes.
+**PickMyHire.ai** is built and owned by **[Deligence Technologies](https://deligence.com)**, a technology company focused on practical AI.
 
-## Scripts
-
-```bash
-npm run dev          # start the dev server
-npm run db:migrate   # apply SQL migrations
-npm run admin:grant -- you@company.com            # make an existing account a platform admin
-npm run admin:grant -- you@company.com --revoke   # remove it
-npm run typecheck    # next typegen + tsc
-npm run lint
-npm test             # vitest (unit + RLS integration)
-npm run test:e2e     # playwright end-to-end test (demo AI mode, fake camera/mic)
-```
-
-
+© 2026 Deligence Technologies. All rights reserved. PickMyHire.ai and its logo are the property of Deligence Technologies. This repository is proprietary; no part of it may be copied, distributed or used without written permission.
