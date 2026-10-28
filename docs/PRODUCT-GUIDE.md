@@ -103,7 +103,7 @@ After signing in you land on the **Dashboard**:
 - **Recent interviews** with their status;
 - **Jobs needing attention**, such as new applications to review or jobs with no candidates yet.
 
-Use **New job** or **Add candidate** in the top right to get going. The bell icon shows notifications such as new applications and ready reports.
+Use **New job** or **Add candidate** in the top right to get going. If you have a promo code, choose **Have a promo code?** next to them. The bell icon shows notifications such as new applications and ready reports.
 
 ![Dashboard](../public/product-guide/03-dashboard.jpg)
 
@@ -153,6 +153,15 @@ Upload your **company logo**, preview it on light and dark backgrounds, and pick
 How many free interviews you've used and have left, plus interviews and interview minutes over the last 30 days. An interview counts once the candidate completes it; links sent but not finished only hold a slot.
 
 ![Usage](../public/product-guide/10-settings-usage.jpg)
+
+### Promo codes
+
+Got a promo code from us? Owners and Admins can apply it in two places:
+
+- **Settings → Usage → Promo code**: type the code and choose **Apply**;
+- the **Have a promo code?** button at the top of the **Dashboard** (also shown when you run out of free interviews).
+
+A code adds **free interviews**, **extra free-trial days**, or both, and your usage updates straight away. Each code can be used once per company. Trial days apply only to companies on a free trial, and restart a trial that has ended. If a code is wrong, switched off, expired or fully used, you'll see "This code isn't valid or has expired."
 
 ### Audit log
 
@@ -514,6 +523,16 @@ Everyone with an account. From the ⋯ menu on a user:
 - **Delete user** removes the account so the email can sign up again. It shows first which companies they'd be removed from, and any company where they're the only member is deleted too. You confirm by typing their email. Someone who already used a free trial can't start another one with the same email.
 
 ![Users](admin-screens/53-admin-users.jpg)
+
+### Coupons
+
+Promo codes for campaigns. Choose **New coupon** and set:
+
+- the **code** (type one or generate it), the **free interviews** it adds and the **extra trial days** it gives (trial days apply only to companies on a free trial, and restart an ended trial);
+- optionally the **maximum number of companies**, a **valid until** date and a **campaign note**;
+- **On / Off** to stop a code at any time.
+
+Each company can use a code once, and so can each person, even from a new company. Wrong, switched-off, expired and used-up codes all get the same message. Open a coupon to see which companies used it, who applied it and what they received. Unused coupons can be deleted; used ones are switched off instead, so their history is kept.
 
 ### Inquiries, support and settings
 

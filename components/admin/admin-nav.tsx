@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, Inbox, LayoutDashboard, LifeBuoy, ScrollText, Settings, Users } from "lucide-react";
+import { Building2, Inbox, LayoutDashboard, LifeBuoy, ScrollText, Settings, Ticket, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -11,6 +11,7 @@ const NAV = [
   { href: "/admin/support", label: "Support", icon: LifeBuoy },
   { href: "/admin/companies", label: "Companies", icon: Building2 },
   { href: "/admin/users", label: "Users", icon: Users },
+  { href: "/admin/coupons", label: "Coupons", icon: Ticket },
   { href: "/admin/settings", label: "Settings", icon: Settings },
   { href: "/admin/audit", label: "Audit log", icon: ScrollText },
 ];

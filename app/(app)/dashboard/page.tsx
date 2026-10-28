@@ -12,6 +12,7 @@ import { getQuotaStatus } from "@/lib/services/quota";
 import { listMyHumanInterviews } from "@/lib/services/human-interviews";
 import { UpcomingHumanInterviews } from "@/components/hiring/upcoming-human";
 import { timeAgo } from "@/lib/format";
+import { RedeemCouponButton } from "@/components/coupons/redeem-coupon";
 
 export const metadata = { title: "Dashboard" };
 
@@ -29,7 +30,7 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
       <PageHeader
         title={`Welcome back, ${auth.name.split(" ")[0]}`}
         description={`Here's what's happening at ${auth.orgName}.`}
-        actions={<>{can(auth.role, "candidate:write") && <Link href="/candidates?new=1" className={buttonVariants({ variant: "outline" })}>Add candidate</Link>}{can(auth.role, "job:write") && <Link href="/jobs/new" className={buttonVariants()}>New job</Link>}</>}
+        actions={<>{can(auth.role, "usage:view") && quota.quota !== null && <RedeemCouponButton />}{can(auth.role, "candidate:write") && <Link href="/candidates?new=1" className={buttonVariants({ variant: "outline" })}>Add candidate</Link>}{can(auth.role, "job:write") && <Link href="/jobs/new" className={buttonVariants()}>New job</Link>}</>}
       />
       {sp.denied && <p className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300">You don&apos;t have permission to view that page.</p>}
       {quota.plan !== "trial" && quota.remaining !== null && quota.remaining <= 1 && can(auth.role, "interview:write") && (
@@ -40,6 +41,7 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
               ? `You've used all ${quota.quota} free interviews${quota.inProgress ? ` (${quota.inProgress} still in progress)` : ""}. Contact us to add more.`
               : `1 free interview left of ${quota.quota}. Contact us to add more.`}
             {" "}<Link href="/#contact" className="font-medium underline">Contact us</Link>
+            {can(auth.role, "usage:view") && <> or <RedeemCouponButton variant="link" /></>}
           </span>
         </p>
       )}

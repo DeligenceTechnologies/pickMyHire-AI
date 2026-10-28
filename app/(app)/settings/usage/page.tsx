@@ -4,6 +4,7 @@ import { requireAuth } from "@/lib/auth/session";
 import { getUsage } from "@/lib/services/workspace";
 import { getQuotaStatus } from "@/lib/services/quota";
 import { formatDate } from "@/lib/format";
+import { RedeemCouponBox } from "@/components/coupons/redeem-coupon";
 
 export const metadata = { title: "Usage" };
 
@@ -29,9 +30,12 @@ export default async function UsagePage() {
               <span className="bg-primary" style={{ width: `${Math.min(100, (quota.used / Math.max(1, quota.quota)) * 100)}%` }} />
               <span className="bg-primary/40" style={{ width: `${Math.min(100, (quota.inProgress / Math.max(1, quota.quota)) * 100)}%` }} />
             </div>
-            {quota.remaining === 0 && <p className="text-sm text-muted-foreground">You&apos;ve reached your limit. <Link href="/#contact" className="font-medium text-primary hover:underline">Contact us</Link> to add more interviews.</p>}
+            {quota.remaining === 0 && <p className="text-sm text-muted-foreground">You&apos;ve reached your limit. <Link href="/#contact" className="font-medium text-primary hover:underline">Contact us</Link> to add more interviews, or apply a promo code below.</p>}
           </>
         )}
+      </FormCard>
+      <FormCard title="Promo code" description="Got a code from us? Apply it to add free interviews or extra trial days. Each code can be used once per company.">
+        <div className="max-w-md"><RedeemCouponBox /></div>
       </FormCard>
       <div className="grid gap-4 sm:grid-cols-3">
         {[["Interviews completed (30d)", interviews.total], ["Interview minutes (30d)", interviews.minutes], ["AI tokens (30d)", totalTokens.toLocaleString()]].map(([k, v]) => (
