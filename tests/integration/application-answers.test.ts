@@ -46,7 +46,7 @@ describe("application questions", () => {
     await expect(submitApplication(slug, applicant("bad"), resume, { expected_ctc: "lots", custom: {} })).rejects.toMatchObject({
       status: 400,
       issues: expect.arrayContaining([
-        { path: "answers.expected_ctc", message: "Enter a number" },
+        { path: "answers.expected_ctc", message: "Enter a number, e.g. 12.5" },
         { path: "answers.notice_period", message: "This answer is required" },
         { path: "answers.custom.permit01", message: "This answer is required" },
       ]),

@@ -8,7 +8,7 @@ import { log } from "@/lib/logger";
 import { runInBackground } from "@/lib/background";
 import type { JobRequirements } from "@/lib/validation/ai-schemas";
 import { MAX_ROUNDS, RoundInputSchema, saveRounds } from "./rounds";
-import { ApplicationFormSchema, DEFAULT_FORM, HiringLimitsSchema, NO_LIMITS, type ApplicationForm, type HiringLimits } from "@/lib/application-form";
+import { ApplicationFormSchema, DEFAULT_FORM, HiringLimitsSchema, MAX_LPA, NO_LIMITS, type ApplicationForm, type HiringLimits } from "@/lib/application-form";
 
 const list = z.array(z.string().trim().min(1).max(80)).max(40);
 
@@ -34,6 +34,9 @@ export const JobInputSchema = z.object({
 }).refine((j) => j.experience_min == null || j.experience_max == null || j.experience_min <= j.experience_max, {
   message: "Minimum experience cannot exceed maximum",
   path: ["experience_min"],
+}).refine((j) => j.application_form.pay_unit !== "lpa" || [j.hiring_limits.budget_min, j.hiring_limits.budget_max].every((b) => b == null || b <= MAX_LPA), {
+  message: "Enter the budget in lakhs per year, e.g. 12.5 for ₹12,50,000",
+  path: ["hiring_limits", "budget_max"],
 });
 export type JobInput = z.infer<typeof JobInputSchema>;
 

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { PayInput } from "@/components/applications/pay-input";
 import {
   CURRENCIES, PAY_UNIT_LABEL, PAY_UNITS, QUESTION_TYPE_LABEL, QUESTION_TYPES, STANDARD_LABEL, STANDARD_QUESTIONS, WORK_MODE_LABEL, WORK_MODES,
   newQuestionId, payLabel, type ApplicationForm, type CustomQuestion, type HiringLimits, type QuestionType,
@@ -124,11 +125,11 @@ export function HiringLimitsEditor({ value, onChange, form, error }: { value: Hi
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label htmlFor="hl-min">Budget from ({pay})</Label>
-          <Input id="hl-min" inputMode="decimal" value={value.budget_min ?? ""} onChange={(e) => onChange({ ...value, budget_min: num(e.target.value) })} />
+          <PayInput key={`min-${form.pay_unit}`} id="hl-min" value={value.budget_min} onValue={(n) => onChange({ ...value, budget_min: n })} unit={form.pay_unit} currency={form.currency} />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="hl-max">Budget up to ({pay})</Label>
-          <Input id="hl-max" inputMode="decimal" value={value.budget_max ?? ""} onChange={(e) => onChange({ ...value, budget_max: num(e.target.value) })} />
+          <PayInput key={`max-${form.pay_unit}`} id="hl-max" value={value.budget_max} onValue={(n) => onChange({ ...value, budget_max: n })} unit={form.pay_unit} currency={form.currency} />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="hl-notice">Maximum notice period (days)</Label>

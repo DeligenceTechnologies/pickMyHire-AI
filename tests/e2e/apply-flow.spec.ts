@@ -102,7 +102,7 @@ test("public application with AI screening", async ({ page, browser }) => {
   await page.getByRole("link", { name: "Morgan Applicant" }).click();
   await expect(page.getByRole("heading", { name: /AI screening/ })).toBeVisible();
   const answersCard = page.getByRole("region", { name: "Answers and fit" });
-  await expect(answersCard.getByText(/Expects 13 LPA, 8% above the budget/)).toBeVisible();
+  await expect(answersCard.getByText(/Expects 13 LPA: 1 LPA \(8%\) above the budget/)).toBeVisible();
   await expect(answersCard.getByText("Do you have a valid work permit?").first()).toBeVisible();
   if (process.env.E2E_SCREENSHOTS) await answersCard.screenshot({ path: "test-results/answers-card.png" });
   await expect(page.getByRole("cell", { name: /PostgreSQL/ }).first()).toBeVisible();

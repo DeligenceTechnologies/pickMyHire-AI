@@ -3,6 +3,7 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { PayHint } from "./pay-input";
 import {
   NOTICE_LABEL, NOTICE_OPTIONS, STANDARD_LABEL, WORK_MODE_LABEL, WORK_MODES, payLabel,
   type ApplicationForm, type StandardKey,
@@ -54,8 +55,9 @@ export function QuestionFields({ form, values, onChange, errors = {}, idPrefix =
       <div className="grid gap-4 sm:grid-cols-2">
         {(["expected_ctc", "current_ctc"] as const).filter(on).map((k) => (
           <Field key={k} id={id(k)} label={`${STANDARD_LABEL[k]} (${pay})`} required={s[k].required} error={errors[k]}>
-            <Input id={id(k)} inputMode="decimal" placeholder={form.pay_unit === "lpa" ? "e.g. 12" : "e.g. 90000"} value={str(values[k])}
-              onChange={(e) => set(k, e.target.value.replace(/[^\d.,]/g, ""))} aria-invalid={!!errors[k]} />
+            <Input id={id(k)} inputMode="decimal" placeholder={form.pay_unit === "lpa" ? "e.g. 12.5" : form.pay_unit === "year" ? "e.g. 90,000" : "e.g. 7,500"} value={str(values[k])}
+              onChange={(e) => set(k, e.target.value.replace(/[^\d.,]/g, ""))} aria-invalid={!!errors[k]} aria-describedby={`${id(k)}-hint`} />
+            {!errors[k] && <PayHint id={`${id(k)}-hint`} text={str(values[k])} unit={form.pay_unit} currency={form.currency} />}
           </Field>
         ))}
         {on("notice_period") && (

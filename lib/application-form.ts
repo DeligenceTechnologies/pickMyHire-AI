@@ -24,6 +24,64 @@ export function formatPay(amount: number, currency: Currency, unit: PayUnit) {
   return unit === "lpa" ? `${n} LPA` : `${currency} ${n} ${unit === "year" ? "per year" : "per month"}`;
 }
 
+// ---------------------------------------------------------------- reading pay answers
+
+/** Highest believable LPA (₹5 crore a year); anything above is almost always a typing slip. */
+export const MAX_LPA = 500;
+const LAKH = 100_000;
+const SYMBOL: Partial<Record<Currency, string>> = { INR: "₹", USD: "$", EUR: "€", GBP: "£" };
+const money = (n: number, currency: Currency) => {
+  const s = n.toLocaleString(currency === "INR" ? "en-IN" : "en-US", { maximumFractionDigits: 2 });
+  return SYMBOL[currency] ? `${SYMBOL[currency]}${s}` : `${currency} ${s}`;
+};
+
+export type PayReading = { ok: true; value: number; converted: boolean } | { ok: false; error: string };
+
+/**
+ * Read a pay amount typed by a candidate or recruiter, in the job's pay unit.
+ * People often type the full yearly amount in an LPA box (13,00,000 for 13 LPA):
+ * that's converted. Amounts that can't be read safely are refused with a hint,
+ * instead of being saved and breaking the fit check.
+ */
+export function readPay(raw: unknown, unit: PayUnit, currency: Currency): PayReading {
+  const text = String(raw ?? "").trim().replace(/[,\s₹$€£]/g, "").replace(/(lpa|lakhs?|lacs?)$/i, "");
+  if (!/^\d+(\.\d+)?$/.test(text)) return { ok: false, error: unit === "lpa" ? "Enter a number, e.g. 12.5" : "Enter a number" };
+  const n = Number(text);
+  const round = (x: number) => Math.round(x * 100) / 100;
+  if (unit === "lpa") {
+    const example = `Enter it in lakhs per year, e.g. 12.5 for ${money(12.5 * LAKH, currency)}`;
+    if (n <= MAX_LPA) return { ok: true, value: round(n), converted: false };
+    if (n < 1000) return { ok: false, error: `That's more than ${MAX_LPA} lakhs a year. ${example}.` };
+    if (n < LAKH) return { ok: false, error: `This doesn't look like a yearly amount. ${example}.` };
+    const lpa = n / LAKH;
+    if (lpa > MAX_LPA) return { ok: false, error: `That's more than ${MAX_LPA} lakhs a year. ${example}.` };
+    return { ok: true, value: round(lpa), converted: true };
+  }
+  if (unit === "year" && n > 0 && n < 1000) return { ok: false, error: `Enter the full yearly amount, e.g. ${money(90000, currency)} (not 90 or 90k).` };
+  if (unit === "month" && n > 0 && n < 100) return { ok: false, error: `Enter the full monthly amount, e.g. ${money(7500, currency)}.` };
+  if (n > 1e9) return { ok: false, error: "That amount is too large. Check the number." };
+  return { ok: true, value: round(n), converted: false };
+}
+
+/** What the amount means, shown under the box as people type. */
+export function payHint(reading: PayReading, unit: PayUnit, currency: Currency): string | null {
+  if (!reading.ok) return null;
+  const v = reading.value;
+  if (unit === "lpa") return reading.converted ? `Read as ${formatPay(v, currency, unit)} (${money(v * LAKH, currency)} per year)` : `= ${money(v * LAKH, currency)} per year`;
+  return `= ${money(v, currency)} ${unit === "year" ? "per year" : "per month"}`;
+}
+
+/** The hint before anything is typed. */
+export function payPlaceholderHint(unit: PayUnit, currency: Currency) {
+  return unit === "lpa" ? `In lakhs per year: 12.5 means ${money(12.5 * LAKH, currency)}` : unit === "year" ? "The full yearly amount" : "The full monthly amount";
+}
+
+/** Answers saved before readPay existed may hold a full yearly amount in an LPA job. */
+export function storedPay(n: number | null | undefined, unit: PayUnit): number | null {
+  if (n == null || !Number.isFinite(n)) return null;
+  return unit === "lpa" && n >= LAKH ? Math.round((n / LAKH) * 100) / 100 : n;
+}
+
 // ---------------------------------------------------------------- questions
 
 export const STANDARD_QUESTIONS = ["expected_ctc", "current_ctc", "notice_period", "joining_date", "current_location", "relocation", "work_mode"] as const;
@@ -105,10 +163,10 @@ export function readForm(raw: unknown): ApplicationForm {
 
 // ---------------------------------------------------------------- hiring limits (internal)
 
-const money = z.number().finite().min(0).max(1e12).nullable().default(null);
+const amount = z.number().finite().min(0).max(1e12).nullable().default(null);
 export const HiringLimitsSchema = z.object({
-  budget_min: money,
-  budget_max: money,
+  budget_min: amount,
+  budget_max: amount,
   max_notice_days: z.number().int().min(0).max(365).nullable().default(null),
   latest_joining_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().default(null),
   work_mode: z.enum(WORK_MODES).nullable().default(null),
@@ -152,8 +210,8 @@ export function validateAnswers(form: ApplicationForm, raw: Record<string, unkno
     if (!s[key].enabled) continue;
     const v = raw[key];
     if (!need(key, v, s[key].required)) continue;
-    const n = typeof v === "number" ? v : Number(String(v).replace(/,/g, ""));
-    if (!Number.isFinite(n) || n < 0 || n > 1e12) errors[key] = "Enter a number"; else answers[key] = Math.round(n * 100) / 100;
+    const r = readPay(v, form.pay_unit, form.currency);
+    if (!r.ok) errors[key] = r.error; else answers[key] = r.value;
   }
   if (s.notice_period.enabled && need("notice_period", raw.notice_period, s.notice_period.required)) {
     const v = String(raw.notice_period);
@@ -238,12 +296,18 @@ export function computeFit(form: ApplicationForm, limits: HiringLimits, a: Answe
   const items: FitItem[] = [];
   if (!a) return { level: "none", items };
   const pay = (n: number) => formatPay(n, form.currency, form.pay_unit);
-  if (limits.budget_max != null && a.expected_ctc != null) {
-    const over = (a.expected_ctc - limits.budget_max) / (limits.budget_max || 1);
+  const expected = storedPay(a.expected_ctc, form.pay_unit);
+  if (limits.budget_max != null && expected != null) {
     const range = limits.budget_min != null ? `${pay(limits.budget_min)}–${pay(limits.budget_max)}` : `up to ${pay(limits.budget_max)}`;
-    items.push(over <= 0
-      ? { key: "budget", label: "Budget", level: "ok", detail: `Expects ${pay(a.expected_ctc)} (budget ${range})` }
-      : { key: "budget", label: "Budget", level: over <= BUDGET_WARN_RATIO ? "warn" : "fail", detail: `Expects ${pay(a.expected_ctc)}, ${Math.round(over * 100)}% above the budget (${range})` });
+    const over = limits.budget_max > 0 ? (expected - limits.budget_max) / limits.budget_max : expected > 0 ? Infinity : 0;
+    if (over <= 0) items.push({ key: "budget", label: "Budget", level: "ok", detail: `Expects ${pay(expected)} (budget ${range})` });
+    else if (over > 3 || (form.pay_unit === "lpa" && expected > MAX_LPA)) {
+      // Far outside anything realistic: most likely a typing slip, so ask for a check instead of rejecting.
+      items.push({ key: "budget", label: "Budget", level: "warn", detail: `Expects ${pay(expected)}, which looks unusual for a budget of ${range}. Check the answer.` });
+    } else {
+      items.push({ key: "budget", label: "Budget", level: over <= BUDGET_WARN_RATIO ? "warn" : "fail",
+        detail: `Expects ${pay(expected)}: ${pay(Math.round((expected - limits.budget_max) * 100) / 100)} (${Math.max(1, Math.round(over * 100))}%) above the budget (${range})` });
+    }
   }
   const days = noticeDays(a, today);
   if (limits.max_notice_days != null && days != null) {
@@ -278,7 +342,7 @@ export const FIT_LABEL: Record<Fit["level"], string> = { ok: "Fits limits", warn
 
 /** The standard answers as HR details (one shared record per candidate). */
 export function answersToHrDetails(form: ApplicationForm, a: Answers) {
-  const pay = (n: number | null | undefined) => (n == null ? null : formatPay(n, form.currency, form.pay_unit));
+  const pay = (n: number | null | undefined) => { const v = storedPay(n, form.pay_unit); return v == null ? null : formatPay(v, form.currency, form.pay_unit); };
   return {
     current_ctc: pay(a.current_ctc),
     expected_ctc: pay(a.expected_ctc),
@@ -298,7 +362,7 @@ export function newQuestionId() {
 export function describeAnswers(form: ApplicationForm, a: Answers): { label: string; value: string }[] {
   const out: { label: string; value: string }[] = [];
   const s = form.standard;
-  const pay = (n: number | null | undefined) => (n == null ? null : formatPay(n, form.currency, form.pay_unit));
+  const pay = (n: number | null | undefined) => { const v = storedPay(n, form.pay_unit); return v == null ? null : formatPay(v, form.currency, form.pay_unit); };
   const add = (label: string, value: string | null | undefined) => { if (value != null && value !== "") out.push({ label, value }); };
   if (s.expected_ctc.enabled || a.expected_ctc != null) add(STANDARD_LABEL.expected_ctc, pay(a.expected_ctc));
   if (s.current_ctc.enabled || a.current_ctc != null) add(STANDARD_LABEL.current_ctc, pay(a.current_ctc));
