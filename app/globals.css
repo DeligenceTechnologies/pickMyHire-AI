@@ -158,3 +158,8 @@
 .guide .guide-shot { display: block; margin: 1.25rem 0 1.75rem; }
 .guide .guide-shot:hover { text-decoration: none; }
 .guide .guide-shot img { width: 100%; height: auto; border: 1px solid #DCE4F0; border-radius: 0.9rem; box-shadow: 0 10px 30px -12px rgba(15, 31, 58, 0.18); background: #fff; }
+
+/* Video loading overlay: appears only if loading takes more than a moment; the hint after a few seconds. */
+@keyframes video-loading-in { to { opacity: 1; } }
+.video-loading { opacity: 0; animation: video-loading-in 200ms ease 300ms forwards; }
+.video-loading-slow { opacity: 0; animation: video-loading-in 300ms ease 4s forwards; }
