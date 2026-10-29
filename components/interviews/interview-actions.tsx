@@ -21,6 +21,8 @@ export function InterviewActions({ id, status, canWrite, canDelete, canRegenerat
   const [deleteWhat, setDeleteWhat] = useState<null | "recording" | "transcript" | "report" | "all">(null);
   const notStarted = NOT_STARTED.includes(status);
   const finished = FINISHED.includes(status);
+  // Hide the "More actions" button when none of its items apply (e.g. a recruiter on a started interview).
+  const hasMenu = (canWrite && notStarted) || canDelete;
 
   const newLink = async (resend: boolean) => {
     const r = await run<{ link: string }>("link", `/api/interviews/${id}/${resend ? "invite" : "link"}`, { success: resend ? "Invitation sent with a new link" : undefined });
@@ -37,7 +39,7 @@ export function InterviewActions({ id, status, canWrite, canDelete, canRegenerat
           <RefreshCw className={pending === "retry" ? "animate-spin" : ""} /> Regenerate report
         </Button>
       )}
-      {(canWrite || canDelete) && (
+      {hasMenu && (
         <DropdownMenu>
           <DropdownMenuTrigger render={<Button variant="ghost" size="icon" aria-label="More actions" />}><MoreHorizontal /></DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
