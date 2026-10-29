@@ -17,6 +17,8 @@ import type { StoredReport } from "@/lib/interview/processing";
 import type { AnswerAnalysis } from "@/lib/validation/ai-schemas";
 import { DownloadMenu } from "./download-menu";
 import { FaceVerificationCard, type FaceVerification } from "./face-verification-card";
+import { OutcomeAlert, OutcomeCard, useOutcome } from "@/components/interviews/outcome-card";
+import type { OutcomeInput } from "@/lib/interview/outcome";
 import { InterviewTimeline } from "./interview-timeline";
 import { VideoPlayer, type RecordingPart, type VideoPlayerHandle } from "./video-player";
 
@@ -49,9 +51,10 @@ function Card({ title, children, className, action }: { title?: React.ReactNode;
   );
 }
 
-export function InterviewViewer({ detail, initialTab, showScores, canViewRecording, canRegenerate, canViewCandidates, feedback = [], face = null }: {
+export function InterviewViewer({ detail, initialTab, showScores, canViewRecording, canRegenerate, canViewCandidates, feedback = [], face = null, outcome = null }: {
   detail: Detail;
   face?: FaceVerification | null;
+  outcome?: OutcomeInput | null;
   feedback?: InterviewFeedbackRow[];
   initialTab: ViewerTab;
   showScores: boolean;
@@ -176,7 +179,7 @@ export function InterviewViewer({ detail, initialTab, showScores, canViewRecordi
       ) : (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_400px]">
           <div className="min-w-0 space-y-6">
-            {tab === "overview" && <Overview detail={detail} report={report} showScores={showScores} jump={jump} onOpenReport={() => switchTab("report")} canViewCandidates={canViewCandidates} feedback={feedback} face={face} canViewPhotos={canViewRecording} />}
+            {tab === "overview" && <Overview detail={detail} report={report} showScores={showScores} jump={jump} onOpenReport={() => switchTab("report")} canViewCandidates={canViewCandidates} feedback={feedback} face={face} canViewPhotos={canViewRecording} outcomeInput={outcome} />}
             {tab === "report" && <ReportView detail={detail} report={report} showScores={showScores} jump={jump} />}
             {tab === "questions" && <QuestionsView detail={detail} jump={jump} />}
             {tab === "evaluation" && <EvaluationView detail={detail} showScores={showScores} jump={jump} />}
@@ -200,10 +203,12 @@ function Disclaimer({ source }: { source?: string }) {
   );
 }
 
-function Overview({ detail, report, showScores, jump, onOpenReport, canViewCandidates, feedback, face, canViewPhotos }: { detail: Detail; report: StoredReport | null | undefined; showScores: boolean; jump: (ms: number, id?: string | null) => void; onOpenReport: () => void; canViewCandidates: boolean; feedback: InterviewFeedbackRow[]; face: FaceVerification | null; canViewPhotos: boolean }) {
+function Overview({ detail, report, showScores, jump, onOpenReport, canViewCandidates, feedback, face, canViewPhotos, outcomeInput }: { detail: Detail; report: StoredReport | null | undefined; showScores: boolean; jump: (ms: number, id?: string | null) => void; onOpenReport: () => void; canViewCandidates: boolean; feedback: InterviewFeedbackRow[]; face: FaceVerification | null; canViewPhotos: boolean; outcomeInput: OutcomeInput | null }) {
   const completedSections = detail.sections.filter((s) => s.status === "completed").length;
+  const outcome = useOutcome(outcomeInput);
   return (
     <>
+      {outcome && <OutcomeAlert outcome={outcome} />}
       <div className="grid gap-4 sm:grid-cols-3">
         {[
           ["Duration", formatDuration(detail.duration_seconds)],
@@ -266,6 +271,7 @@ function Overview({ detail, report, showScores, jump, onOpenReport, canViewCandi
           ].map(([k, v]) => <div key={String(k)}><dt className="text-xs text-muted-foreground">{k}</dt><dd className="mt-0.5">{v}</dd></div>)}
         </dl>
       </Card>
+      {outcome && <OutcomeCard outcome={outcome} />}
     </>
   );
 }

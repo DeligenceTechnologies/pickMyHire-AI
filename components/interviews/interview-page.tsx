@@ -15,6 +15,7 @@ import { listInterviewFeedback } from "@/lib/services/feedback";
 import { getSettings } from "@/lib/services/workspace";
 import { recoverIfStale } from "@/lib/interview/processing";
 import { getFaceVerification } from "@/lib/interview/face";
+import { getOutcomeInput } from "@/lib/interview/outcome-data";
 import { DecisionControl } from "@/components/hiring/decision-control";
 
 /** Shared server page for /interviews/[id] and its tab sub-routes. */
@@ -22,7 +23,7 @@ export async function InterviewPage({ params, tab }: { params: Promise<{ intervi
   const auth = await requireAuth("interview:view");
   const { interviewId } = await params;
   if (!isUuid(interviewId)) notFound();
-  const [detail, { settings }, feedback, face] = await Promise.all([getInterviewDetail(auth.orgId, interviewId), getSettings(auth.orgId), listInterviewFeedback(auth.orgId, interviewId), getFaceVerification(auth.orgId, interviewId)]);
+  const [detail, { settings }, feedback, face, outcome] = await Promise.all([getInterviewDetail(auth.orgId, interviewId), getSettings(auth.orgId), listInterviewFeedback(auth.orgId, interviewId), getFaceVerification(auth.orgId, interviewId), tab === "overview" ? getOutcomeInput(auth.orgId, interviewId) : null]);
   if (!detail) notFound();
   recoverIfStale(auth.orgId, detail);
   const live = ["in_progress", "completing", "processing"].includes(detail.status)
@@ -55,7 +56,7 @@ export async function InterviewPage({ params, tab }: { params: Promise<{ intervi
           </div>
         </section>
       )}
-      <InterviewViewer detail={detail} initialTab={tab} showScores={settings.show_scores} canViewRecording={can(auth.role, "recording:view")} canRegenerate={can(auth.role, "report:regenerate")} canViewCandidates={can(auth.role, "candidate:view")} feedback={feedback} face={face} />
+      <InterviewViewer detail={detail} initialTab={tab} showScores={settings.show_scores} canViewRecording={can(auth.role, "recording:view")} canRegenerate={can(auth.role, "report:regenerate")} canViewCandidates={can(auth.role, "candidate:view")} feedback={feedback} face={face} outcome={outcome} />
     </>
   );
 }
