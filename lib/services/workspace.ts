@@ -220,7 +220,8 @@ export async function getComparison(orgId: string, jobId: string, roundName?: st
     const round = roundName && rounds.includes(roundName) ? roundName : rounds[0] ?? null;
     const interviews = await tx<{ id: string; candidate_name: string; status: string; duration_seconds: number | null; completed_at: Date | null; attempt: number }[]>`
       select i.id, c.name as candidate_name, i.status, i.duration_seconds, i.completed_at, i.attempt from interviews i join candidates c on c.id = i.candidate_id
-      where i.job_id = ${jobId} and i.organization_id = ${orgId} and i.status not in ('cancelled')
+      -- Only interviews that have ended; invited, in-progress, expired and failed ones have nothing to compare.
+      where i.job_id = ${jobId} and i.organization_id = ${orgId} and i.status in ('completed', 'processing', 'report_ready')
         ${round ? tx`and i.round_name = ${round}` : tx``}
       order by c.name, i.attempt`;
     const ids = interviews.map((i) => i.id);

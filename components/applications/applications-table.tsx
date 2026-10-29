@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/common/states";
+import { ClientPagination, usePaged } from "@/components/common/client-pagination";
 import { api } from "@/lib/client/api";
 import { timeAgo } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -45,6 +46,7 @@ export function ApplicationsTable({ rows, canInvite = false }: { rows: Row[]; ca
     const r = rows.filter((x) => (!top || isTopFit(x)) && (!match || x.match_level === match) && (!fit || x.fit.level === fit) && (!status || x.status === status));
     return sort === "match" ? [...r].sort((a, b) => (ORDER[b.match_level ?? ""] ?? 0) - (ORDER[a.match_level ?? ""] ?? 0)) : r;
   }, [rows, match, top, fit, status, sort]);
+  const paged = usePaged(shown, `${match}|${top}|${fit}|${status}|${sort}`);
   const invitable = shown.filter((r) => r.status === "new");
   const chosen = rows.filter((r) => selected.has(r.id) && r.status === "new");
   const toggle = (id: string, on: boolean) => setSelected((s) => { const n = new Set(s); if (on) n.add(id); else n.delete(id); return n; });
@@ -102,7 +104,7 @@ export function ApplicationsTable({ rows, canInvite = false }: { rows: Row[]; ca
       </div>
       {canInvite && chosen.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-accent/50 px-5 py-2.5">
-          <p className="text-sm">{chosen.length} selected</p>
+          <p className="text-sm">{chosen.length} selected{paged.pages > 1 && " across all pages"}</p>
           <div className="flex gap-2">
             <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>Clear</Button>
             <Button size="sm" onClick={() => setConfirm(true)}><Send /> Invite selected to AI interview</Button>
@@ -115,7 +117,7 @@ export function ApplicationsTable({ rows, canInvite = false }: { rows: Row[]; ca
             <tr>
               {canInvite && (
                 <th className="w-10 px-4 py-2.5">
-                  <Checkbox aria-label="Select all new applications shown" disabled={!invitable.length}
+                  <Checkbox aria-label="Select all new applications matching these filters" disabled={!invitable.length}
                     checked={invitable.length > 0 && invitable.every((r) => selected.has(r.id))}
                     onCheckedChange={(c) => setSelected(c ? new Set(invitable.map((r) => r.id)) : new Set())} />
                 </th>
@@ -125,7 +127,7 @@ export function ApplicationsTable({ rows, canInvite = false }: { rows: Row[]; ca
             </tr>
           </thead>
           <tbody className="divide-y">
-            {shown.map((a) => (
+            {paged.rows.map((a) => (
               <tr key={a.id} className="group relative hover:bg-muted/40">
                 {canInvite && (
                   <td className="relative z-10 px-4 py-3">
@@ -151,6 +153,7 @@ export function ApplicationsTable({ rows, canInvite = false }: { rows: Row[]; ca
         </table>
         {!shown.length && <p className="p-6 text-center text-sm text-muted-foreground">No applications match these filters.</p>}
       </div>
+      <ClientPagination {...paged} />
       <Dialog open={confirm} onOpenChange={(o) => !progress && setConfirm(o)}>
         <DialogContent>
           <DialogHeader>

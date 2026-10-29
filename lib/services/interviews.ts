@@ -36,6 +36,15 @@ export type InterviewListRow = {
 
 export const INTERVIEW_PAGE_SIZE = 25;
 
+/** Interviews in a job that have ended (what the Compare page shows). */
+export async function countCompletedInterviews(orgId: string, jobId: string) {
+  return withOrg(orgId, async (tx) => {
+    const [{ n }] = await tx<{ n: number }[]>`
+      select count(*)::int as n from interviews where organization_id = ${orgId} and job_id = ${jobId} and status in ('completed', 'processing', 'report_ready')`;
+    return n;
+  });
+}
+
 export async function listInterviews(orgId: string, opts: { q?: string; status?: string; jobId?: string; page?: number; from?: string; to?: string } = {}) {
   const q = opts.q?.trim() ? `%${opts.q.trim()}%` : null;
   const page = Math.max(1, opts.page ?? 1);

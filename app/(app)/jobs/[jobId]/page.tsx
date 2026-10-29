@@ -13,7 +13,7 @@ import { can } from "@/lib/auth/permissions";
 import { requireAuth } from "@/lib/auth/session";
 import { employmentTypeLabel, formatDate } from "@/lib/format";
 import { isUuid } from "@/lib/ids";
-import { listInterviews } from "@/lib/services/interviews";
+import { countCompletedInterviews, listInterviews } from "@/lib/services/interviews";
 import { getJob } from "@/lib/services/jobs";
 import { listRounds } from "@/lib/services/rounds";
 import { applyUrl, listApplications } from "@/lib/services/applications";
@@ -30,8 +30,9 @@ export default async function JobPage(props: PageProps<"/jobs/[jobId]">) {
   const job = await getJob(auth.orgId, jobId);
   if (!job) notFound();
   const canSeeCandidates = can(auth.role, "candidate:view");
-  const [interviews, applications, rounds, pipeline] = await Promise.all([
+  const [interviews, completedCount, applications, rounds, pipeline] = await Promise.all([
     listInterviews(auth.orgId, { jobId }),
+    countCompletedInterviews(auth.orgId, jobId),
     canSeeCandidates ? listApplications(auth.orgId, jobId) : Promise.resolve([]),
     listRounds(auth.orgId, jobId),
     canSeeCandidates ? getJobPipeline(auth.orgId, jobId) : Promise.resolve(null),
@@ -82,7 +83,7 @@ export default async function JobPage(props: PageProps<"/jobs/[jobId]">) {
             <div className="flex flex-wrap items-center justify-between gap-2 border-b px-5 py-4">
               <h2 className="font-semibold">AI interviews <span className="ml-1 text-sm font-normal text-muted-foreground">{interviews.total}</span></h2>
               <div className="flex gap-2">
-                {interviews.total > 1 && <Link href={`/jobs/${job.id}/compare`} className={buttonVariants({ variant: "outline" })}><BarChart3 /> Compare</Link>}
+                {completedCount > 1 && <Link href={`/jobs/${job.id}/compare`} className={buttonVariants({ variant: "outline" })}><BarChart3 /> Compare</Link>}
                 {can(auth.role, "interview:write") && job.status !== "closed" && <InviteDialog jobId={job.id} />}
               </div>
             </div>

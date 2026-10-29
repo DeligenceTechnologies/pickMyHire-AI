@@ -29,7 +29,7 @@ export function CompareTable({ columns, rows, showScores }: { columns: string[];
   }, [rows, sortBy, dir]);
   const toggle = (c: string) => { if (sortBy === c) setDir((d) => (d === 1 ? -1 : 1)); else { setSortBy(c); setDir(-1); } };
 
-  if (!rows.length) return <p className="text-sm text-muted-foreground">No interviews for this job yet.</p>;
+  if (!rows.length) return <p className="text-sm text-muted-foreground">No completed interviews to compare yet.</p>;
   return (
     <div className="overflow-x-auto rounded-xl border bg-card">
       <table className="w-full text-sm">

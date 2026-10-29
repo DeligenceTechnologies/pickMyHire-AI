@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { ClientPagination, usePaged } from "@/components/common/client-pagination";
 import { STAGE_LABEL, STAGES, type Stage } from "@/lib/hiring";
 import type { JobPipelineRow, PipelineRound } from "@/lib/services/pipeline";
 import { cn } from "@/lib/utils";
@@ -12,6 +13,7 @@ export function JobPipeline({ rounds, rows }: { rounds: PipelineRound[]; rows: J
   const [tab, setTab] = useState<Stage>("in_progress");
   const counts = Object.fromEntries(STAGES.map((s) => [s, rows.filter((r) => r.stage === s).length])) as Record<Stage, number>;
   const shown = rows.filter((r) => r.stage === tab);
+  const paged = usePaged(shown, tab);
   return (
     <div>
       <div className="flex gap-1 overflow-x-auto border-b px-3" role="tablist" aria-label="Stages">
@@ -27,8 +29,9 @@ export function JobPipeline({ rounds, rows }: { rounds: PipelineRound[]; rows: J
           {tab === "in_progress" ? "No candidates in progress. Invite someone to an interview to start." : `No ${STAGE_LABEL[tab].toLowerCase()} candidates yet.`}
         </p>
       ) : (
+        <>
         <ul className="divide-y">
-          {shown.map((r) => (
+          {paged.rows.map((r) => (
             <li key={r.candidate_id}>
               <Link href={`/candidates/${r.candidate_id}`} className="flex flex-wrap items-center gap-3 px-5 py-3 hover:bg-muted/40">
                 <div className="min-w-0 flex-1">
@@ -43,6 +46,8 @@ export function JobPipeline({ rounds, rows }: { rounds: PipelineRound[]; rows: J
             </li>
           ))}
         </ul>
+        <ClientPagination {...paged} />
+        </>
       )}
       {rounds.length > 0 && (
         <p className="border-t px-5 py-2.5 text-xs text-muted-foreground">Rounds: {rounds.map((r, i) => `${i + 1}. ${r.name}`).join(" · ")}. Hover an icon for its result.</p>
