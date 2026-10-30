@@ -1,4 +1,5 @@
 import "server-only";
+import { classifyReply } from "@/lib/interview/repeat";
 // Deterministic stand-ins used when no OpenAI key is configured (demo mode) and
 // in automated tests. They only reuse data that is actually present in the
 // input; they never fabricate candidate facts. The UI labels demo-mode output.
@@ -164,7 +165,8 @@ export function mockPlan(input: {
 
 export function mockAnalyzeAnswer(answer: string): AnswerAnalysis {
   const words = answer.trim() ? answer.trim().split(/\s+/).length : 0;
-  const clarify = /repeat|clarify|what do you mean|didn'?t (catch|understand)/i.test(answer);
+  const kind = classifyReply(answer);
+  const clarify = kind === "repeat" || kind === "clarify";
   const completeness: AnswerAnalysis["completeness"] = words === 0 ? "no_answer" : words < 15 ? "minimal" : words < 45 ? "partial" : "complete";
   return {
     relevance: words === 0 ? "low" : "medium",

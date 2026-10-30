@@ -29,7 +29,7 @@ export default async function WelcomePage(props: PageProps<"/interview/[token]">
           <div key={t} className="rounded-xl border bg-card p-5"><Icon className="size-5 text-primary" /><p className="mt-3 font-medium">{t}</p><p className="mt-1 text-sm text-muted-foreground">{d}</p></div>
         ))}
       </div>
-      <p className="mt-8 text-sm text-muted-foreground">Find a quiet, well-lit place. If you get disconnected, reopen this link — you&apos;ll continue where you left off.</p>
+      <p className="mt-8 text-sm text-muted-foreground">Find a quiet, well-lit place. If you get disconnected, reopen this link within 10 minutes to continue where you left off. After that, the link closes and your interview is sent as it is.</p>
       <Link href={`/interview/${token}/${step === "device-check" ? "device-check" : "consent"}`} className={`${buttonVariants({ size: "lg" })} mt-8 h-11 px-6`}>Get started</Link>
     </CandidateShell>
   );

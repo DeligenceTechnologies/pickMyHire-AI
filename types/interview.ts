@@ -78,6 +78,10 @@ export const InterviewStateSchema = z.object({
   pending_utterance: PendingUtteranceSchema.nullable(),
   answered_count: z.number().int().min(0),
   last_activity_at: z.string().nullable(),
+  /** Repeats / rephrasings given for the current question (see lib/interview/repeat.ts). */
+  repeats: z.object({ question_id: z.string(), count: z.number().int().min(0) }).nullable().optional(),
+  /** Set when the candidate left a started interview and it was closed (the link no longer works). */
+  ended_reason: z.literal("left").optional(),
 });
 export type InterviewState = z.infer<typeof InterviewStateSchema>;
 

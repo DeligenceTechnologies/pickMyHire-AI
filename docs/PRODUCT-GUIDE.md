@@ -319,7 +319,7 @@ The candidate opens their link and goes through four short steps: **Welcome → 
 
 ### Welcome
 
-The interview's length and parts, what they'll need, and a reminder that people at your company review every interview. If they get disconnected, they reopen the same link and continue where they left off.
+The interview's length and parts, what they'll need, and a reminder that people at your company review every interview. If they get disconnected, they can reopen the same link within 10 minutes and continue where they left off. After 10 minutes the link closes and the interview is sent with the answers given so far.
 
 ![Welcome](../public/product-guide/27-candidate-welcome.jpg)
 
@@ -465,7 +465,8 @@ Open **Help and support** to message the PickMyHire.ai team: report a problem, a
 ## 13. Good to know
 
 - **Interview length.** An interview follows the template's timing. If a candidate takes longer, it continues up to about 1.3 times the planned length, and it never cuts a candidate off in the middle of an answer.
-- **Dropped connections.** Candidates reopen the same link and carry on where they left off; nothing already recorded is lost.
+- **Dropped connections.** Candidates can reopen the same link within 10 minutes and carry on where they left off; nothing already recorded is lost. After 10 minutes the link closes, the interview is marked complete with the answers given so far, and its "How the interview ended" card says the candidate left. Invite them again if you want another attempt.
+- **Repeating a question.** The interviewer tells candidates at the start that they can ask for a question to be repeated or rephrased. Saying "Can you repeat the question?" repeats it; "I didn't understand" gets a simpler wording with the same meaning. Up to 2 per question, and these never count as an answer.
 - **Fairness.** Only job-relevant evidence is assessed. Nothing is inferred from age, gender, accent, appearance or emotion, and salary and HR details never reach the AI.
 - **Nothing is automatic.** Match tags, fit, reports, identity flags and the overall result are there to help your team; no candidate is rejected or advanced without a person deciding.
 - **Your data stays yours.** Each company's data is kept separate, files are private and open only through short-lived links, and every access is in the audit log.

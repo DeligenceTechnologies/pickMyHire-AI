@@ -32,6 +32,8 @@ export type Outcome = {
 
 /** No sign of life for this long while "in progress" means the candidate's page stopped. */
 export const STOPPED_AFTER_MS = 2 * 60_000;
+/** A candidate who leaves a started interview can reopen the link within this long and continue; after that it closes. */
+export const REENTRY_WINDOW_MS = 10 * 60_000;
 
 const ACTIVE = ["in_progress", "completing"];
 const ENDED = ["completed", "processing", "report_ready", "failed"];
@@ -129,7 +131,7 @@ export function describeOutcome(input: OutcomeInput, now = new Date(), fmt: (d: 
         : lastProblem
           ? `The last problem logged before it stopped: ${lastProblem.text.toLowerCase()}.`
           : "No error was logged and the candidate didn't end the interview, so their page most likely stopped: the tab or browser was closed, the computer slept, or the internet connection was lost.";
-    const linkOpen = input.tokenExpiresAt && input.tokenExpiresAt > now;
+    const reentryUntil = new Date(last.getTime() + REENTRY_WINDOW_MS);
     return {
       tone: unreconnected || lastProblem?.tone === "error" ? "error" : "warn",
       title: `Stopped ${span(into)} into the interview`,
@@ -137,7 +139,9 @@ export function describeOutcome(input: OutcomeInput, now = new Date(), fmt: (d: 
         `Nothing has arrived from the candidate's browser since ${fmt(last)}${lastEvent?.type === "media_stopped" ? " (their camera and microphone were switched off)" : ""}.`,
         cause,
         ...(sections ? [sections] : []),
-        linkOpen ? `Their link still works until ${fmt(input.tokenExpiresAt!)}: if they open it again, the interview continues where it stopped.` : "Their link has expired, so they can't continue. Invite them again if needed.",
+        reentryUntil > now
+          ? `If they reopen the link before ${fmt(reentryUntil)}, the interview continues where it stopped. After that it closes with the answers given so far.`
+          : "They didn't come back within 10 minutes, so the interview closes with the answers given so far and the link no longer works.",
         "The recording so far is shown once the interview ends.",
       ],
       problems,
@@ -147,12 +151,13 @@ export function describeOutcome(input: OutcomeInput, now = new Date(), fmt: (d: 
   if (ENDED.includes(input.status)) {
     const length = input.durationSeconds != null ? span(input.durationSeconds) : null;
     const planned = input.plannedMinutes ? ` (planned about ${input.plannedMinutes} min)` : "";
-    const base = { finished: "Finished normally", candidate_ended: "Ended early by the candidate", time_limit: "Ended at the time limit", closed_by_processing: "Closed automatically" } as Record<string, string>;
+    const base = { finished: "Finished normally", candidate_ended: "Ended early by the candidate", time_limit: "Ended at the time limit", closed_by_processing: "Closed automatically", left_unfinished: "The candidate left and didn't return" } as Record<string, string>;
     const why: Record<string, string> = {
       finished: "The AI interviewer completed the interview and closed it.",
       candidate_ended: "The candidate clicked End and confirmed “End the interview now?”. No connection problem forced it.",
       time_limit: "The interview reached its maximum length and was closed after the candidate's last answer.",
       closed_by_processing: "The interview had reached its end, but the candidate's page stopped during the final save, so it was closed automatically.",
+      left_unfinished: `The candidate's page stopped${input.completedAt ? ` at ${fmt(input.completedAt)}` : ""} and they didn't reopen the link within 10 minutes, so the interview was closed with the answers given so far. The link no longer works; invite them again if you'd like another attempt.`,
     };
     const reason = input.endReason ?? "";
     let tone: OutcomeTone = reason === "finished" ? (worst === "error" ? "warn" : "ok") : "warn";

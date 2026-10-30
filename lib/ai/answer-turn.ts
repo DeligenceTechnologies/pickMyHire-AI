@@ -4,12 +4,13 @@ import { log } from "@/lib/logger";
 import { AnswerTurnSchema, type AnswerAnalysis, type FollowupDecision } from "@/lib/validation/ai-schemas";
 import * as prompt from "@/prompts/answer-turn/v1";
 import { AI_CONFIG } from "./config";
+import { classifyReply } from "@/lib/interview/repeat";
 import { mockAnalyzeAnswer, mockFollowup } from "./mock";
 import { runStructured } from "./openai-client";
 
 export const ANSWER_TURN_VERSION = prompt.version;
 
-export type TurnResult = { analysis: AnswerAnalysis & { source: string }; decision: FollowupDecision | null; ms: number };
+export type TurnResult = { analysis: AnswerAnalysis & { source: string; answer_unclear?: boolean }; decision: FollowupDecision | null; ms: number };
 
 /**
  * One fast model call per answer: analysis + an optional follow-up proposal.
@@ -23,7 +24,7 @@ export async function analyzeTurn(input: { orgId: string } & Parameters<typeof p
     const needs = analysis.followup_needed || analysis.candidate_asked_for_clarification;
     const used = Math.max(0, input.alreadyAsked.length - 1);
     return {
-      analysis: { ...analysis, source: "mock" },
+      analysis: { ...analysis, answer_unclear: classifyReply(input.answer) === "unclear", source: "mock" },
       decision: needs ? mockFollowup({ question: input.question, followupsUsed: used, clarification: analysis.candidate_asked_for_clarification }) : null,
       ms: Date.now() - started,
     };

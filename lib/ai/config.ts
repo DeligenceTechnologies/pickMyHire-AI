@@ -35,6 +35,7 @@ export type AIFeature =
   | "answer_analyzer"
   | "followup_engine"
   | "answer_turn"
+  | "question_rephrase"
   | "section_evaluator"
   | "report_generator"
   | "application_screener"

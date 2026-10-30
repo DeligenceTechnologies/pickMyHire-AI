@@ -17,6 +17,14 @@ describe("analyzeTurn (demo mode)", () => {
     expect(t.decision?.action).toBe("follow_up");
     expect(t.analysis.completeness).toBe("minimal");
   });
+  it("flags a repeat request but not a real answer that mentions repeating", async () => {
+    expect((await analyzeTurn({ ...base, answer: "Sorry, can you repeat the question?" })).analysis.candidate_asked_for_clarification).toBe(true);
+    expect((await analyzeTurn({ ...base, answer: "We had to repeat the payment reconciliation every night." })).analysis.candidate_asked_for_clarification).toBe(false);
+  });
+  it("flags filler-only replies as unclear", async () => {
+    expect((await analyzeTurn({ ...base, answer: "Uh... hmm." })).analysis.answer_unclear).toBe(true);
+    expect((await analyzeTurn({ ...base, answer: "Yes." })).analysis.answer_unclear).toBe(false);
+  });
   it("moves on after a complete answer", async () => {
     const t = await analyzeTurn({ ...base, answer: "word ".repeat(60) });
     expect(t.decision).toBeNull();
@@ -26,7 +34,7 @@ describe("analyzeTurn (demo mode)", () => {
 describe("answer turn schema", () => {
   it("accepts a no-follow-up turn and rejects a missing field", () => {
     const ok = { relevance: "high", completeness: "complete", evidence: [], missing_evidence: [], followup_needed: false,
-      candidate_asked_for_clarification: false, summary: "", followup_question: null, followup_reason: "not needed", transition: null };
+      candidate_asked_for_clarification: false, answer_unclear: false, summary: "", followup_question: null, followup_reason: "not needed", transition: null };
     expect(AnswerTurnSchema.safeParse(ok).success).toBe(true);
     const { followup_reason: _r, ...bad } = ok;
     expect(AnswerTurnSchema.safeParse(bad).success).toBe(false);

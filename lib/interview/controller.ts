@@ -29,9 +29,12 @@ import {
   type PendingUtterance,
   type StoredPlan,
 } from "@/types/interview";
-import { advanceState, canTransition, computeAllowed, resolveNextStep, stripThanks, totalPlannedMs } from "./state-machine";
+import { advanceState, canTransition, computeAllowed, resolveNextStep, sanitizeSpoken, stripThanks, totalPlannedMs } from "./state-machine";
 import { processInterview } from "./processing";
 import { hasFaceReference } from "./face";
+import { REENTRY_WINDOW_MS } from "./outcome";
+import { MAX_REPEATS, type RequestKind } from "./repeat";
+import { rephraseQuestion } from "@/lib/ai/question-rephrase";
 
 export const CONSENT_VERSION = "2026-09-v1";
 /** Consent text that also covers the identity (face) check. */
@@ -110,9 +113,67 @@ function progressOf(ctx: { plan: StoredPlan | null; state: InterviewState }): Ca
   };
 }
 
+export const LINK_USED_MESSAGE = "This interview link has already been used and can't be opened again. Please contact the recruiter if you need a new link.";
+
+/** The latest time anything arrived from the candidate's browser during a started interview. */
+async function lastSignalAt(tx: Tx, interviewId: string, state: InterviewState, startedAt: Date): Promise<Date> {
+  const [{ last }] = await tx<{ last: Date | null }[]>`
+    select greatest(
+      (select max(created_at) from interview_events where interview_id = ${interviewId}),
+      (select max(created_at) from transcript_segments where interview_id = ${interviewId}),
+      (select max(c.created_at) from recording_chunks c join recordings r on r.id = c.recording_id where r.interview_id = ${interviewId}),
+      (select max(created_at) from face_checks where interview_id = ${interviewId})
+    ) as last`;
+  const activity = state.last_activity_at ? new Date(state.last_activity_at) : null;
+  return [last, activity, startedAt].filter((d): d is Date => !!d && !Number.isNaN(d.getTime())).sort((a, b) => b.getTime() - a.getTime())[0];
+}
+
+/**
+ * A candidate who leaves a started interview can come back within 10 minutes
+ * (a refresh, a dropped connection) and continue. After that the interview is
+ * closed with the answers given so far, and the link no longer works.
+ * Returns true when the interview is (now, or already) closed this way.
+ * Interviews that haven't started, or ended normally, are never touched.
+ */
+export async function closeIfAbandoned(orgId: string, interviewId: string): Promise<boolean> {
+  const closed = await withOrg(orgId, async (tx) => {
+    const [iv] = await tx<{ status: InterviewStatus; state: unknown; started_at: Date | null }[]>`
+      select status, state, started_at from interviews where id = ${interviewId} and organization_id = ${orgId} for update`;
+    if (!iv) return null;
+    const parsed = InterviewStateSchema.safeParse(iv.state);
+    if (iv.status !== "in_progress" || !iv.started_at || !parsed.success) return parsed.success && parsed.data.ended_reason === "left" ? "already" : null;
+    const state = parsed.data;
+    const last = await lastSignalAt(tx, interviewId, state, iv.started_at);
+    if (Date.now() - last.getTime() < REENTRY_WINDOW_MS) return null;
+    const lastMs = Math.max(0, last.getTime() - iv.started_at.getTime());
+    const duration = Math.round(lastMs / 1000);
+    await tx`update interviews set status = 'completed', completed_at = ${last}, duration_seconds = ${duration} where id = ${interviewId}`;
+    await tx`update interview_sections set status = 'completed', completed_at = ${last}, end_ms = ${lastMs} where interview_id = ${interviewId} and status = 'in_progress'`;
+    await tx`update interview_sections set status = 'skipped' where interview_id = ${interviewId} and status = 'pending'`;
+    await tx`update interviews set state = ${json({ ...state, phase: "finished", pending_utterance: null, ended_reason: "left" })} where id = ${interviewId}`;
+    await audit(tx, { orgId, actorType: "system", action: "interview.completed", entityType: "interview", entityId: interviewId, metadata: { reason: "left_unfinished", duration, left_at: last.toISOString() } });
+    const [info] = await tx<{ candidate: string; job: string }[]>`select c.name as candidate, j.title as job from interviews i
+      join candidates c on c.id = i.candidate_id join jobs j on j.id = i.job_id where i.id = ${interviewId}`;
+    await notify(tx, { orgId, type: "interview.completed", payload: { interview_id: interviewId, candidate: info.candidate, job: info.job, reason: "left_unfinished" } });
+    return "now";
+  });
+  if (closed === "now") {
+    log.info("interview.closed_after_leaving", { interviewId });
+    runInBackground("interview.process", () => processInterview(orgId, interviewId));
+  }
+  return closed !== null;
+}
+
+/** Throws "link already used" if the candidate left this started interview more than 10 minutes ago. */
+async function assertLinkUsable(ctx: InterviewCtx) {
+  const left = ctx.state.ended_reason === "left" || (ctx.status === "in_progress" && await closeIfAbandoned(ctx.orgId, ctx.id));
+  if (left) throw new ApiError(410, LINK_USED_MESSAGE);
+}
+
 /** Candidate-safe public view. Never includes plan questions, criteria or evaluations. */
 export async function getPublicInterview(token: string) {
   const ctx = await resolveToken(token);
+  await assertLinkUsable(ctx);
   return {
     status: ctx.status,
     candidate_first_name: ctx.candidateName.split(" ")[0],
@@ -172,6 +233,7 @@ function composeIntro(ctx: InterviewCtx, plan: StoredPlan, firstQuestion: string
   return `Hi ${first}, I'm ${ctx.interviewerName}, an AI interviewer for the ${ctx.jobTitle} role at ${ctx.companyName}. `
     + `This interview has ${plan.sections.length} parts and takes about ${minutes} minutes. I'll ask one question at a time. `
     + `Take your time, and when you've finished an answer, just pause or select "Done answering". `
+    + `If you'd like me to repeat or rephrase a question at any time, just ask. `
     + `Let's begin with ${plan.sections[0].name.toLowerCase()}. ${firstQuestion}`;
 }
 
@@ -222,6 +284,7 @@ function payload(ctx: InterviewCtx, state: InterviewState, status: InterviewStat
 /** Start (or resume after refresh/reconnect) the live interview. Idempotent. */
 export async function startInterview(token: string): Promise<SessionPayload & { resumed: boolean }> {
   const ctx = await resolveToken(token);
+  await assertLinkUsable(ctx);
   if (FINISHED.includes(ctx.status)) return { ...payload(ctx, ctx.state, ctx.status, ctx.startedAt), finished: true, resumed: true };
   if (!ctx.consentGiven) throw new ApiError(409, "Please give consent first.");
   if (!ctx.plan) throw new ApiError(425, ctx.planStatus === "failed" ? "Your interview couldn't be prepared. Please contact the recruiter." : "Your interview is still being prepared. Please wait a moment.");
@@ -359,7 +422,11 @@ export async function submitAnswer(token: string, input: {
     answer: text,
     priorContext,
   };
-  const fastPath = !allowed.follow_up || !text;
+  // A short reply may be a request to repeat or explain the question that the browser
+  // didn't recognise (e.g. garbled by speech-to-text), so the AI still looks at it.
+  const repeatsLeft = repeatsUsed(state, question.id) < MAX_REPEATS;
+  const checkRequest = !!text && repeatsLeft && text.split(/\s+/).length <= 25;
+  const fastPath = (!allowed.follow_up && !checkRequest) || !text;
   let analysis: (AnswerAnalysis & { source: string }) | null = text ? null : { ...mockAnalyzeAnswer(""), source: "rule" };
   let decision: FollowupDecision | null = null;
   let aiMs = 0;
@@ -372,6 +439,37 @@ export async function submitAnswer(token: string, input: {
     analysis = turn.analysis;
     decision = turn.decision;
     aiMs = turn.ms;
+  }
+  // The candidate asked for the question again, or said nothing usable: ask the same
+  // question again (simpler if they didn't understand) instead of moving on.
+  const askAgain: RequestKind | null = text && repeatsLeft && analysis
+    ? analysis.candidate_asked_for_clarification ? "clarify" : (analysis as { answer_unclear?: boolean }).answer_unclear ? "unclear" : null
+    : null;
+  if (askAgain) {
+    const simpler = askAgain === "clarify"
+      ? sanitizeSpoken(decision?.question) ?? sanitizeSpoken(await rephraseQuestion({
+        orgId: ctx.orgId, jobTitle: ctx.jobTitle, sectionName: section.name, question: question.question_text, intent: question.intent, request: text,
+      }))
+      : null;
+    const again = await withOrg(ctx.orgId, async (tx) => {
+      const [locked] = await tx<{ state: unknown; status: InterviewStatus }[]>`select state, status from interviews where id = ${ctx.id} for update`;
+      const fresh = InterviewStateSchema.parse(locked.state);
+      if (fresh.current_question_id !== question.id || !ACTIVE.includes(locked.status)) return null;
+      // Not an answer: the candidate answers this question again.
+      await tx`delete from interview_answers where question_id = ${question.id}`;
+      const next = { ...fresh, repeats: { question_id: question.id, count: repeatsUsed(fresh, question.id) + 1 } };
+      await saveState(tx, ctx.id, next);
+      await logEventTx(tx, ctx, `again-${question.id}-${next.repeats.count}`, "question_repeated", { kind: askAgain, by: "server" });
+      return { state: next, status: locked.status };
+    });
+    if (again) {
+      const utterance: PendingUtterance = {
+        question_id: question.id,
+        kind: question.parent_question_id ? "followup" : "question",
+        text: againText(askAgain, question.question_text, simpler),
+      };
+      return { ...payload(ctx, again.state, again.status, ctx.startedAt), utterance };
+    }
   }
   const step = resolveNextStep(allowed, decision);
 
@@ -450,6 +548,51 @@ export async function submitAnswer(token: string, input: {
     });
   }
   return payload(ctx, result.state, result.status, ctx.startedAt);
+}
+
+function repeatsUsed(state: InterviewState, questionId: string) {
+  return state.repeats?.question_id === questionId ? state.repeats.count : 0;
+}
+
+function againText(kind: RequestKind, question: string, simpler: string | null) {
+  if (kind === "unclear") return "Sorry, I didn't catch that clearly. Could you please say your answer again?";
+  if (kind === "clarify" && simpler) return `Sure, let me put it more simply. ${simpler}`;
+  return `Sure, here it is again. ${question}`;
+}
+
+/**
+ * The candidate asked to hear the current question again ("repeat"), to have it
+ * explained more simply ("clarify"), or said nothing usable ("unclear"). Their
+ * reply is not an answer and doesn't use a follow-up; up to MAX_REPEATS per
+ * question. Returns utterance: null when no more repeats are allowed (the reply
+ * is then submitted as a normal answer).
+ */
+export async function repeatQuestion(token: string, input: { question_id: string; kind: RequestKind; text: string }): Promise<{ utterance: PendingUtterance | null }> {
+  const ctx = await resolveToken(token);
+  if (ctx.status !== "in_progress" || !ctx.plan) throw new ApiError(409, "The interview is not in progress.");
+  const plan = ctx.plan;
+  const [q] = await withOrg(ctx.orgId, (tx) => tx<{ question_text: string; intent: string | null; parent_question_id: string | null }[]>`
+    select question_text, intent, parent_question_id from interview_questions where id = ${input.question_id} and interview_id = ${ctx.id}`);
+  if (!q) throw new ApiError(404, "Unknown question.");
+  if (ctx.state.current_question_id !== input.question_id || repeatsUsed(ctx.state, input.question_id) >= MAX_REPEATS) return { utterance: null };
+
+  const simpler = input.kind === "clarify"
+    ? sanitizeSpoken(await rephraseQuestion({
+      orgId: ctx.orgId, jobTitle: ctx.jobTitle, sectionName: plan.sections[ctx.state.section_index]?.name ?? "", question: q.question_text, intent: q.intent, request: input.text,
+    }))
+    : null;
+
+  const ok = await withOrg(ctx.orgId, async (tx) => {
+    const [locked] = await tx<{ state: unknown; status: InterviewStatus }[]>`select state, status from interviews where id = ${ctx.id} for update`;
+    const fresh = InterviewStateSchema.parse(locked.state);
+    const used = repeatsUsed(fresh, input.question_id);
+    if (locked.status !== "in_progress" || fresh.current_question_id !== input.question_id || used >= MAX_REPEATS) return false;
+    await saveState(tx, ctx.id, { ...fresh, repeats: { question_id: input.question_id, count: used + 1 } });
+    await logEventTx(tx, ctx, `again-${input.question_id}-${used + 1}`, "question_repeated", { kind: input.kind, by: "browser", rephrased: !!simpler });
+    return true;
+  });
+  if (!ok) return { utterance: null };
+  return { utterance: { question_id: input.question_id, kind: q.parent_question_id ? "followup" : "question", text: againText(input.kind, q.question_text, simpler) } };
 }
 
 /** Finish the interview (normally after the closing line, or candidate ends early). Idempotent. */

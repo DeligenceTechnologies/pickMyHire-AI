@@ -187,6 +187,7 @@ export const matchLevelLabel: Record<MatchLevel, string> = {
 
 /** One-call answer turn: analysis plus an optional follow-up, used live during the interview. */
 export const AnswerTurnSchema = AnswerAnalysisSchema.extend({
+  answer_unclear: z.boolean(),
   followup_question: z.string().nullable(),
   followup_reason: z.string(),
   transition: z.string().nullable(),

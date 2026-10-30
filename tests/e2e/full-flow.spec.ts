@@ -126,6 +126,17 @@ test("recruiter to candidate to report", async ({ page, browser }) => {
       await expect(cand.getByText(question!, { exact: true })).toBeHidden({ timeout: 30_000 });
       continue;
     }
+    if (turn === 2) {
+      // Asking to repeat repeats the question; "didn't understand" rephrases it. Neither counts as the answer.
+      await answer.fill("Sorry, can you repeat the question?");
+      await cand.getByRole("button", { name: "Done answering" }).click();
+      await expect(cand.getByText(/Sure, here it is again\./)).toBeVisible({ timeout: 30_000 });
+      await answer.waitFor({ state: "visible", timeout: 60_000 });
+      await answer.fill("I didn't understand the question.");
+      await cand.getByRole("button", { name: "Done answering" }).click();
+      await expect(cand.getByText(/Sure, let me put it more simply\./)).toBeVisible({ timeout: 30_000 });
+      await answer.waitFor({ state: "visible", timeout: 60_000 });
+    }
     if (turn === 3) {
       // The microphone disconnects mid-interview: the session carries on with another one.
       await cand.evaluate(() => {

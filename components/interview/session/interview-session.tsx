@@ -10,6 +10,7 @@ import { BrandMark } from "@/components/branding/brand-mark";
 import { type Brand, brandStyle } from "@/lib/branding";
 import { formatClock } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { classifyReply, isYes, MAX_REPEATS, type RequestKind } from "@/lib/interview/repeat";
 import { InterviewRecorder, type UploadStatus } from "./recorder";
 import { useFaceMonitor } from "./face-monitor";
 import { BrowserVoice, fetchCredentials, RealtimeVoice, type VoiceCallbacks, type VoiceEngine } from "./voice";
@@ -25,6 +26,8 @@ const nowMs = () => Date.now();
 // only a safety net, with a visible countdown that speaking again cancels.
 /** Silence after the candidate has spoken before the answer is submitted. */
 const SILENCE_SUBMIT_MS = 10_000;
+/** Shorter wait when what they said is only a request to repeat or explain the question. */
+const REQUEST_SILENCE_MS = 2_500;
 /** No answer at all: gently offer to repeat the question… */
 const NO_ANSWER_NUDGE_MS = 20_000;
 /** …and move on with "no answer" after this long. */
@@ -99,6 +102,7 @@ export function InterviewSession({ token, company, job, interviewerName, demoMod
   const lastActivityAt = useRef(0);
   const nudgedRef = useRef(false);
   const ackIndex = useRef(0);
+  const repeats = useRef(new Map<string, number>());
   const finishing = useRef(false);
   const submitting = useRef(false);
   const meterCtx = useRef<AudioContext | null>(null);
@@ -194,6 +198,9 @@ export function InterviewSession({ token, company, job, interviewerName, demoMod
     setSaving(false);
   };
 
+  /** What the candidate said is only a request to repeat / explain the question, or only filler. */
+  const requestIn = (text: string): RequestKind | null => (nudgedRef.current && isYes(text) ? "repeat" : classifyReply(text));
+
   const finish = useCallback(async (reason: "finished" | "candidate_ended" | "time_limit") => {
     if (finishing.current) return;
     finishing.current = true;
@@ -254,18 +261,32 @@ export function InterviewSession({ token, company, job, interviewerName, demoMod
       const now = clock();
       saveSegment({ client_event_id: `typed-${u.question_id}`, speaker: "candidate", text: typedRef.current.trim(), start_ms: answerStart.current ?? now, end_ms: now, question_id: u.question_id });
     }
+    // Only a request to repeat or explain the question (or "yes" to the offer to repeat
+    // it): ask it again instead of treating it as the answer. Falls back to a normal answer.
+    const request = requestIn(text);
+    const asked = repeats.current.get(u.question_id) ?? 0;
+    if (request && asked < MAX_REPEATS) {
+      repeats.current.set(u.question_id, asked + 1);
+      logEvent("repeat_requested", { kind: request });
+      const again = await post<{ utterance: Utterance | null }>(`/api/public/interview/${token}/repeat`, { question_id: u.question_id, kind: request, text: text.slice(0, 2000) }, { retries: 2 })
+        .catch(() => ({ utterance: null }));
+      if (again.utterance && current.current === u && !finishing.current) return void (await ask(again.utterance));
+      if (current.current !== u || finishing.current) { submitting.current = false; return; }
+    }
     logEvent("answer_submitted", { trigger, chars: text.length });
     // Acknowledge right away so the candidate isn't left in silence while the next question is prepared.
-    const ack = text ? ACKS[ackIndex.current++ % ACKS.length] : "Alright, let's continue.";
+    // A short reply phrased as a question may be a request the server will answer, so no "thank you" then.
+    const questionLike = /\?\s*$/.test(text) && text.split(/\s+/).length <= 15;
+    const ack = !text ? "Alright, let's continue." : questionLike ? null : ACKS[ackIndex.current++ % ACKS.length];
     const ackStart = clock();
-    const ackDone = engine.current
+    const ackDone = engine.current && ack
       ? engine.current.speak(ack).then((r) => saveSegment({ client_event_id: `ack-${u.question_id}`, speaker: "interviewer", text: r.transcript, start_ms: ackStart, end_ms: clock(), question_id: u.question_id })).catch(() => {})
       : Promise.resolve();
     const sentAt = Date.now();
     try {
       const [res] = await Promise.all([
         post<Payload>(`/api/public/interview/${token}/answer`, {
-          question_id: u.question_id, text, start_ms: answerStart.current, end_ms: clock(), trigger, ack_spoken: true,
+          question_id: u.question_id, text, start_ms: answerStart.current, end_ms: clock(), trigger, ack_spoken: !!ack,
         }, { retries: 30, onRetry: () => setConnection("reconnecting") }),
         ackDone,
       ]);
@@ -297,7 +318,8 @@ export function InterviewSession({ token, company, job, interviewerName, demoMod
         return;
       }
       if (spoke) {
-        const left = SILENCE_SUBMIT_MS - (now - lastActivityAt.current);
+        const wait = requestIn(parts.current.join(" ")) ? REQUEST_SILENCE_MS : SILENCE_SUBMIT_MS;
+        const left = wait - (now - lastActivityAt.current);
         if (left <= 0) return void submit("silence");
         setCountdown(left <= COUNTDOWN_MS ? { kind: "silence", seconds: Math.ceil(left / 1000) } : null);
         return;
@@ -362,7 +384,7 @@ export function InterviewSession({ token, company, job, interviewerName, demoMod
       }
     }
     reconnecting.current = false;
-    setError("We couldn't reconnect to the interviewer. Your progress is saved — reload this page to continue.");
+    setError("We couldn't reconnect to the interviewer. Your progress is saved — reload this page within 10 minutes to continue.");
     setStage("error");
   };
 

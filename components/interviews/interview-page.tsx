@@ -14,6 +14,8 @@ import { getInterviewDetail } from "@/lib/services/interviews";
 import { listInterviewFeedback } from "@/lib/services/feedback";
 import { getSettings } from "@/lib/services/workspace";
 import { recoverIfStale } from "@/lib/interview/processing";
+import { closeIfAbandoned } from "@/lib/interview/controller";
+import { log } from "@/lib/logger";
 import { getFaceVerification } from "@/lib/interview/face";
 import { getOutcomeInput } from "@/lib/interview/outcome-data";
 import { DecisionControl } from "@/components/hiring/decision-control";
@@ -23,6 +25,8 @@ export async function InterviewPage({ params, tab }: { params: Promise<{ intervi
   const auth = await requireAuth("interview:view");
   const { interviewId } = await params;
   if (!isUuid(interviewId)) notFound();
+  // A started interview the candidate left more than 10 minutes ago is closed before it's shown.
+  await closeIfAbandoned(auth.orgId, interviewId).catch((err) => log.warn("interview.close_abandoned_failed", { interviewId, err }));
   const [detail, { settings }, feedback, face, outcome] = await Promise.all([getInterviewDetail(auth.orgId, interviewId), getSettings(auth.orgId), listInterviewFeedback(auth.orgId, interviewId), getFaceVerification(auth.orgId, interviewId), tab === "overview" ? getOutcomeInput(auth.orgId, interviewId) : null]);
   if (!detail) notFound();
   recoverIfStale(auth.orgId, detail);

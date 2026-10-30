@@ -33,7 +33,7 @@ describe("how an interview ended", () => {
     expect(o.details[0]).toBe("Nothing has arrived from the candidate's browser since 16:13:56.");
     expect(o.details[1]).toMatch(/tab or browser was closed, the computer slept, or the internet connection was lost/);
     expect(o.details).toContain("0 of 4 sections completed; not reached: Experience, Role Fit, Candidate Questions.");
-    expect(o.details.join(" ")).toMatch(/link still works until .* continues where it stopped/);
+    expect(o.details.join(" ")).toMatch(/didn't come back within 10 minutes, so the interview closes/);
     expect(o.problems).toEqual([]);
   });
 
@@ -48,6 +48,19 @@ describe("how an interview ended", () => {
       ["1:40", "The AI voice connection dropped; reconnecting (2 times)"],
       ["1:50", "Voice connection restored (attempt 1)"],
     ]);
+  });
+
+  it("says the candidate can still come back within 10 minutes of stopping", () => {
+    const o = describeOutcome(base({ status: "in_progress", lastSignalAt: at(300) }), at(300 + 5 * 60), fmt)!;
+    expect(o.details.join(" ")).toMatch(/reopen the link before 16:28:19, the interview continues where it stopped/);
+  });
+
+  it("explains an interview closed because the candidate left (Khushi's case after the change)", () => {
+    const o = describeOutcome(base({ endReason: "left_unfinished", completedAt: at(37), durationSeconds: 37, sections: sections(["completed", "skipped", "skipped", "skipped"]) }), at(3600), fmt)!;
+    expect(o.tone).toBe("warn");
+    expect(o.title).toBe("The candidate left and didn't return");
+    expect(o.details[0]).toMatch(/page stopped at 16:13:56 and they didn't reopen the link within 10 minutes/);
+    expect(o.details[1]).toBe("Length: 37 s (planned about 26 min).");
   });
 
   it("is calm while the interview is running", () => {
