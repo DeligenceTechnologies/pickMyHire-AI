@@ -16,6 +16,7 @@ const Schema = z.object({
     invite_expiry_days: z.number().int().min(1).max(90).optional(),
     show_scores: z.boolean().optional(),
     notify_on_completion: z.boolean().optional(),
+    candidate_feedback_email: z.boolean().optional(),
   }).optional(),
 });
 

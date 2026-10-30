@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { api } from "@/lib/client/api";
 import { FormCard } from "./form-card";
 
-type Settings = { interviewer_name: string; invite_expiry_days: number; show_scores: boolean; notify_on_completion: boolean };
+type Settings = { interviewer_name: string; invite_expiry_days: number; show_scores: boolean; notify_on_completion: boolean; candidate_feedback_email: boolean };
 
 export function OrgSettingsForm({ orgName, settings, canEdit, ai }: { orgName: string; settings: Settings; canEdit: boolean; ai: { live: boolean; models: Record<string, string> } }) {
   const router = useRouter();
@@ -33,6 +33,7 @@ export function OrgSettingsForm({ orgName, settings, canEdit, ai }: { orgName: s
         </div>
         <label className="flex items-start gap-3 text-sm"><Switch checked={s.show_scores} disabled={!canEdit} onCheckedChange={(c) => setS({ ...s, show_scores: !!c })} /><span><span className="font-medium">Show 1–5 section scores</span><br /><span className="text-muted-foreground">Only for sections where scoring is enabled in the template. Scores are evidence summaries, never hiring decisions.</span></span></label>
         <label className="flex items-start gap-3 text-sm"><Switch checked={s.notify_on_completion} disabled={!canEdit} onCheckedChange={(c) => setS({ ...s, notify_on_completion: !!c })} /><span><span className="font-medium">Email recruiters when an interview completes</span></span></label>
+        <label className="flex items-start gap-3 text-sm"><Switch checked={s.candidate_feedback_email} disabled={!canEdit} onCheckedChange={(c) => setS({ ...s, candidate_feedback_email: !!c })} /><span><span className="font-medium">Email candidates AI feedback after their interview</span><br /><span className="text-muted-foreground">Candidates always get a short confirmation once their interview is processed. When this is on, it also includes a few lines of AI feedback from their report: strengths and one area to build on, labelled as AI-generated, with no scores or hiring outcome.</span></span></label>
       </FormCard>
       <FormCard title="AI configuration" description="Models are configured server-side (lib/ai/config.ts or OPENAI_MODEL_* environment variables).">
         <p className="text-sm">

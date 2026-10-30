@@ -427,7 +427,7 @@ export default async function Home() {
       <section id="about" className="scroll-mt-20 py-24">
         <div className="mx-auto grid max-w-7xl items-center gap-12 px-5 sm:px-8 lg:grid-cols-[1.2fr_1fr]">
           <div>
-            <SectionHead eyebrow="About us" title="Built by Deligence Technologies" />
+            <SectionHead eyebrow="About us" title="About PickMyHire.ai" />
             <div className="mt-6 space-y-4 text-lg leading-relaxed text-[#4A5874]">
               <p>We&apos;re a technology company focused on practical AI. We built PickMyHire.ai because interviews take the most recruiter time and often give the least reliable signal: rushed calls, inconsistent questions and notes written from memory, round after round.</p>
               <p>PickMyHire.ai makes every round consistent, personalized and verifiable, so your team spends its time on the candidates and decisions that matter.</p>

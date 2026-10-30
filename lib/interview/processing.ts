@@ -10,6 +10,7 @@ import { log } from "@/lib/logger";
 import { assessmentScore, type Assessment, type FinalReport, type SectionEvaluation } from "@/lib/validation/ai-schemas";
 import { runInBackground } from "@/lib/background";
 import { finalizeAllParts } from "./recording";
+import { sendCandidateFollowup } from "./candidate-followup";
 
 type SegmentRow = { id: string; section_id: string | null; speaker: string; text: string; start_time_ms: number; end_time_ms: number };
 
@@ -190,6 +191,8 @@ export async function processInterview(orgId: string, interviewId: string) {
       await tx`update interviews set status = 'completed', processing_error = ${"Report generation failed. The interview data is safe — retry."} where id = ${interviewId}`;
     });
   }
+  // The candidate's confirmation (with AI feedback when the report allows it). Sent once.
+  await sendCandidateFollowup(orgId, interviewId);
 }
 
 /**

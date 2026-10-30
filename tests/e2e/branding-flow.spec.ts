@@ -67,7 +67,7 @@ test("company logo and colour replace platform branding on candidate pages", asy
   for (const url of [`/apply/${slug}`, `/interview/${token}`]) {
     await cp.goto(url);
     await expect(cp.getByRole("img", { name: company }).first()).toBeVisible();
-    await expect(cp.locator("body")).not.toContainText(/PickMyHire|pickmyhire|DeliberateHire|Deligence/);
+    await expect(cp.locator("body")).not.toContainText(/PickMyHire|pickmyhire|DeliberateHire/);
     expect(await cp.title()).not.toMatch(/PickMyHire|DeliberateHire/);
     expect(await cp.locator('link[rel="icon"]').first().getAttribute("href")).toContain(`/api/public/logo/${orgId}`);
   }

@@ -28,7 +28,7 @@ export function Logo({
   );
 }
 
-const COPYRIGHT = `© ${new Date().getFullYear()} Deligence Technologies. All rights reserved.`;
+const COPYRIGHT = `© ${new Date().getFullYear()} PickMyHire.ai. All rights reserved.`;
 
 export function Copyright({ className = "" }: { className?: string }) {
   return <p className={`text-xs text-muted-foreground ${className}`}>{COPYRIGHT}</p>;

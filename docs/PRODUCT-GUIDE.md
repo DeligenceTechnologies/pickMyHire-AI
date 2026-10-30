@@ -137,6 +137,7 @@ Upload your **company logo**, preview it on light and dark backgrounds, and pick
 - **Invitation link validity**: how many days an interview link stays open.
 - **Show 1–5 section scores**: an optional score next to each section's assessment. Scores summarize evidence; they're never hire or reject decisions.
 - **Email recruiters when an interview completes**.
+- **Email candidates AI feedback after their interview** (on by default). Candidates always get a short confirmation once their interview is processed; with this on, it also includes a few lines of AI feedback from their report. See [After the interview](#after-the-interview).
 
 ![Interview settings](../public/product-guide/07-settings-interview.jpg)
 
@@ -307,9 +308,19 @@ To interview someone who didn't apply through the link, choose **Invite candidat
 
 ### The invitation email
 
-Candidates get a branded email with the round, the approximate duration, what they'll need and the link's expiry date. The link is personal and works until it expires.
+Candidates get a branded email with the round, an **About the role** section (the job summary, main responsibilities and key skills the AI extracted when the job was created), the approximate duration, what they'll need and the link's expiry date. The link is personal and works until it expires. Reminders include the same summary.
 
 ![Invitation email](../public/product-guide/30-invitation-email.jpg)
+
+### After the interview
+
+Once the report is ready (usually within a minute), the candidate gets one email: a confirmation that their interview was received and that your team will be in touch. If **Email candidates AI feedback** is on, it also includes a short paragraph of feedback written by AI from their report: one or two specific strengths and one area to build on.
+
+- It's clearly labelled as AI-generated feedback and not a hiring decision.
+- It never includes scores, ratings, comparisons, outcomes or anything about the candidate's voice or appearance; anything that looks like that is filtered out and the email goes without feedback.
+- Very short interviews, or ones the candidate left early, get the confirmation only.
+- It's sent once. Regenerating a report never emails the candidate again.
+- You can see exactly what was sent in **Email sent to the candidate**, near the bottom of the interview's Overview.
 
 ---
 
@@ -549,6 +560,6 @@ Each company can use a code once, and so can each person, even from a new compan
 ---
 
 <p align="center">
-  <strong>PickMyHire.ai</strong> is built and owned by <a href="https://deligence.com"><strong>Deligence Technologies</strong></a>.<br>
-  © 2026 Deligence Technologies. All rights reserved.
+  <strong>PickMyHire.ai</strong> · <a href="https://pickmyhire.ai">pickmyhire.ai</a><br>
+  © 2026 PickMyHire.ai. All rights reserved.
 </p>

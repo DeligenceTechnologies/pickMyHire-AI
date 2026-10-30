@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, CheckCircle2, CircleDashed, Info, Loader2, MessageSquareHeart, PlayCircle, RefreshCw, Sparkles, Star } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CircleDashed, Info, Loader2, Mail, MessageSquareHeart, PlayCircle, RefreshCw, Sparkles, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AssessmentBadge, StatusBadge } from "@/components/common/status-badge";
 import { TranscriptViewer, type Segment } from "@/components/transcript/transcript-viewer";
@@ -219,7 +219,6 @@ function Overview({ detail, report, showScores, jump, onOpenReport, canViewCandi
         ))}
       </div>
       {face && <FaceVerificationCard interviewId={detail.id} face={face} canViewPhotos={canViewPhotos} onJump={(ms) => jump(ms)} />}
-      {feedback.length > 0 && <CandidateFeedbackCard items={feedback} />}
       {report ? (
         <Card title={<span className="flex items-center gap-2"><Sparkles className="size-4 text-primary" /> Summary</span>} action={<Button size="sm" variant="ghost" onClick={onOpenReport}>Full report</Button>}>
           <p className="text-sm leading-relaxed">{report.final.summary}</p>
@@ -272,7 +271,26 @@ function Overview({ detail, report, showScores, jump, onOpenReport, canViewCandi
         </dl>
       </Card>
       {outcome && <OutcomeCard outcome={outcome} />}
+      {detail.candidate_email_sent_at && <CandidateEmailCard sentAt={detail.candidate_email_sent_at} feedback={detail.candidate_feedback} />}
+      {feedback.length > 0 && <CandidateFeedbackCard items={feedback} />}
     </>
+  );
+}
+
+/** What the candidate was emailed after the interview: a confirmation, and the AI feedback when it was included. */
+function CandidateEmailCard({ sentAt, feedback }: { sentAt: Date | string; feedback: string | null }) {
+  return (
+    <Card title={<span className="flex items-center gap-2"><Mail className="size-4 text-primary" /> Email sent to the candidate</span>}>
+      <p className="text-sm text-muted-foreground">
+        Sent {formatDate(sentAt, true)}: a confirmation that their interview was received{feedback ? ", with this AI feedback" : ", without AI feedback"}.
+      </p>
+      {feedback ? (
+        <>
+          <blockquote className="mt-3 border-l-2 border-primary/40 pl-3 text-sm leading-relaxed">{feedback}</blockquote>
+          <p className="mt-3 text-xs text-muted-foreground">Labelled in the email as AI-generated feedback from their answers, not a hiring decision. Turn it off in Settings → Interview.</p>
+        </>
+      ) : null}
+    </Card>
   );
 }
 

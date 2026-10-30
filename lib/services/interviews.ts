@@ -8,7 +8,7 @@ import { companyBrand, emailTemplates, replyToUser, sendEmail } from "@/lib/emai
 import { buildInterviewPlan } from "@/lib/interview/plan";
 import { generateToken, hashToken } from "@/lib/security/tokens";
 import type { StoredPlan, InterviewStatus } from "@/types/interview";
-import type { SectionEvaluation } from "@/lib/validation/ai-schemas";
+import { JobRequirementsSchema, type JobRequirements, type SectionEvaluation } from "@/lib/validation/ai-schemas";
 import { readSettings } from "./org-settings";
 import { assertQuotaAvailable, COUNTED_STATUSES } from "./quota";
 import { isOpen, MAX_ROUNDS } from "./rounds";
@@ -200,14 +200,21 @@ export async function createInterview(orgId: string, userId: string, input: Crea
   return { id: result.id, link };
 }
 
+/** The job's extracted requirements, or null if missing or not in the expected shape (the email then just leaves the section out). */
+function readRequirements(raw: unknown): JobRequirements | null {
+  const r = JobRequirementsSchema.safeParse(raw);
+  return r.success ? r.data : null;
+}
+
 export function interviewLink(token: string) {
   return `${env().APP_URL}/interview/${token}`;
 }
 
 export async function sendInvitation(orgId: string, userId: string, interviewId: string, link: string) {
   const info = await withOrg(orgId, async (tx) => {
-    const [row] = await tx<{ status: string; candidate_name: string; candidate_email: string; job_title: string; org_name: string; minutes: number; token_expires_at: Date | null; round_name: string | null }[]>`
+    const [row] = await tx<{ status: string; candidate_name: string; candidate_email: string; job_title: string; org_name: string; minutes: number; token_expires_at: Date | null; round_name: string | null; requirements: JobRequirements | null }[]>`
       select i.status, c.name as candidate_name, c.email as candidate_email, j.title as job_title, o.name as org_name, i.token_expires_at, i.round_name,
+        j.parsed_requirements as requirements,
         (select coalesce(sum((s.config->>'duration_minutes')::int), 0)::int from interview_sections s where s.interview_id = i.id) as minutes
       from interviews i join candidates c on c.id = i.candidate_id join jobs j on j.id = i.job_id join organizations o on o.id = i.organization_id
       where i.id = ${interviewId} and i.organization_id = ${orgId}`;
@@ -225,6 +232,7 @@ export async function sendInvitation(orgId: string, userId: string, interviewId:
     link,
     expiresAt: info.token_expires_at,
     roundName: info.round_name,
+    role: readRequirements(info.requirements),
   });
   await sendEmail({ to: info.candidate_email, ...tpl, orgId, replyTo: await replyToUser(userId), brand: await companyBrand(orgId) });
 }
@@ -253,18 +261,18 @@ export async function sendReminder(orgId: string, userId: string, interviewId: s
   // Links are stored hashed, so a reminder issues a fresh link.
   const token = generateToken();
   const info = await withOrg(orgId, async (tx) => {
-    const [row] = await tx<{ candidate_name: string; candidate_email: string; job_title: string; org_name: string; round_name: string | null }[]>`
+    const [row] = await tx<{ candidate_name: string; candidate_email: string; job_title: string; org_name: string; round_name: string | null; requirements: JobRequirements | null }[]>`
       update interviews i set secure_token_hash = ${hashToken(token)}, last_reminder_at = now()
       from candidates c, jobs j, organizations o
       where i.id = ${interviewId} and i.organization_id = ${orgId} and c.id = i.candidate_id and j.id = i.job_id and o.id = i.organization_id
         and i.status in ('invited','consent_pending','device_check','ready')
-      returning c.name as candidate_name, c.email as candidate_email, j.title as job_title, o.name as org_name, i.round_name`;
+      returning c.name as candidate_name, c.email as candidate_email, j.title as job_title, o.name as org_name, i.round_name, j.parsed_requirements as requirements`;
     if (!row) throw new ApiError(409, "Reminders can only be sent for interviews that haven't started.");
     await audit(tx, { orgId, userId, action: "interview.reminded", entityType: "interview", entityId: interviewId });
     return row;
   });
   const link = interviewLink(token);
-  const tpl = emailTemplates.reminder({ candidateName: info.candidate_name.split(" ")[0], jobTitle: info.job_title, companyName: info.org_name, link, roundName: info.round_name });
+  const tpl = emailTemplates.reminder({ candidateName: info.candidate_name.split(" ")[0], jobTitle: info.job_title, companyName: info.org_name, link, roundName: info.round_name, role: readRequirements(info.requirements) });
   await sendEmail({ to: info.candidate_email, ...tpl, orgId, replyTo: await replyToUser(userId), brand: await companyBrand(orgId) });
   return link;
 }
@@ -299,11 +307,12 @@ export async function getInterviewDetail(orgId: string, interviewId: string) {
       token_expires_at: Date | null; updated_at: Date; candidate_id: string; candidate_name: string; candidate_email: string; job_id: string; job_title: string;
       template_name: string | null; round_name: string | null; attempt: number;
       decision: "qualified" | "not_qualified" | "on_hold" | null; decision_note: string | null; decided_at: Date | null; decided_by_name: string | null;
+      candidate_email_sent_at: Date | null; candidate_feedback: string | null;
     }[]>`
       select i.id, i.status, i.plan_status, i.plan_error, i.created_at, i.invited_at, i.started_at, i.completed_at, i.duration_seconds, i.round_name, i.attempt,
         i.consent_given, i.consent_timestamp, i.consent_version, i.interview_plan, i.processing_error, i.token_expires_at, i.updated_at,
         c.id as candidate_id, c.name as candidate_name, c.email as candidate_email, j.id as job_id, j.title as job_title,
-        t.name as template_name, i.decision, i.decision_note, i.decided_at, du.name as decided_by_name
+        t.name as template_name, i.decision, i.decision_note, i.decided_at, du.name as decided_by_name, i.candidate_email_sent_at, i.candidate_feedback
       from interviews i join candidates c on c.id = i.candidate_id join jobs j on j.id = i.job_id
       left join interview_templates t on t.id = i.template_id left join users du on du.id = i.decided_by
       where i.id = ${interviewId} and i.organization_id = ${orgId}`;

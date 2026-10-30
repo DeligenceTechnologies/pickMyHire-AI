@@ -172,6 +172,8 @@ export async function deleteInterviewData(orgId: string, userId: string | null, 
     }
     if (what === "report" || what === "all") {
       await tx`delete from interview_reports where interview_id = ${interviewId}`;
+      // The feedback emailed to the candidate came from the report (when it was sent stays, so it's never re-sent).
+      await tx`update interviews set candidate_feedback = null where id = ${interviewId}`;
       await tx`delete from section_evaluations where interview_id = ${interviewId}`;
       await tx`update interview_sections set evaluation = null, summary = null, evaluation_status = null where interview_id = ${interviewId}`;
       await tx`update interviews set status = 'completed' where id = ${interviewId} and status = 'report_ready'`;

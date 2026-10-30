@@ -3,8 +3,8 @@ import { buildTranscriptionPrompt } from "@/prompts/transcription/v1";
 
 describe("transcription prompt", () => {
   it("names the role, company, candidate and the unique terms", () => {
-    const p = buildTranscriptionPrompt({ jobTitle: "Business Development Executive", companyName: "Deligence", candidateName: "Tirth Patel", terms: ["Vesta", "BuildWise", "Airtable", "vesta", "  Upwork  "] });
-    expect(p).toBe("A job interview for the Business Development Executive role at Deligence, with the candidate Tirth Patel. Names and terms that may come up: Vesta, BuildWise, Airtable, Upwork.");
+    const p = buildTranscriptionPrompt({ jobTitle: "Business Development Executive", companyName: "Northwind", candidateName: "Tirth Patel", terms: ["Vesta", "BuildWise", "Airtable", "vesta", "  Upwork  "] });
+    expect(p).toBe("A job interview for the Business Development Executive role at Northwind, with the candidate Tirth Patel. Names and terms that may come up: Vesta, BuildWise, Airtable, Upwork.");
   });
 
   it("skips over-long terms and stays within the size limit", () => {

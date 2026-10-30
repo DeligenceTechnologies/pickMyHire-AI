@@ -5,8 +5,7 @@
 <h3 align="center">Interview every candidate. Review only the evidence.</h3>
 
 <p align="center">
-  AI video interviews and every hiring round in one place, with evidence you can verify.<br>
-  A product of <a href="https://deligence.com"><strong>Deligence Technologies</strong></a>.
+  AI video interviews and every hiring round in one place, with evidence you can verify.
 </p>
 
 <p align="center">
@@ -124,6 +123,6 @@ The **[product guide](docs/PRODUCT-GUIDE.md)** walks through every step with scr
 
 ## About
 
-**PickMyHire.ai** is built and owned by **[Deligence Technologies](https://deligence.com)**, a technology company focused on practical AI.
+**PickMyHire.ai** is AI-assisted hiring software: AI video interviews and every hiring round in one place, with evidence you can verify.
 
-© 2026 Deligence Technologies. All rights reserved. PickMyHire.ai and its logo are the property of Deligence Technologies. This repository is proprietary; no part of it may be copied, distributed or used without written permission.
+© 2026 PickMyHire.ai. All rights reserved. PickMyHire.ai and its logo are the property of PickMyHire.ai. This repository is proprietary; no part of it may be copied, distributed or used without written permission.

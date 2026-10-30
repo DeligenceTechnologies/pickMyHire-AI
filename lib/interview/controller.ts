@@ -230,10 +230,10 @@ export async function completeDeviceCheck(token: string, result: { camera: boole
 function composeIntro(ctx: InterviewCtx, plan: StoredPlan, firstQuestion: string) {
   const minutes = Math.round(totalPlannedMs(plan) / 60_000);
   const first = ctx.candidateName.split(" ")[0];
-  return `Hi ${first}, I'm ${ctx.interviewerName}, an AI interviewer for the ${ctx.jobTitle} role at ${ctx.companyName}. `
-    + `This interview has ${plan.sections.length} parts and takes about ${minutes} minutes. I'll ask one question at a time. `
-    + `Take your time, and when you've finished an answer, just pause or select "Done answering". `
-    + `If you'd like me to repeat or rephrase a question at any time, just ask. `
+  return `Hi ${first}, I'm ${ctx.interviewerName}, the AI interviewer for the ${ctx.jobTitle} role at ${ctx.companyName}. `
+    + `This takes about ${minutes} minutes. When you finish an answer, just pause or select "Done answering". `
+    + `I may take a few seconds to reply or move on, so please wait for me. `
+    + `You can ask me to repeat a question anytime. `
     + `Let's begin with ${plan.sections[0].name.toLowerCase()}. ${firstQuestion}`;
 }
 
