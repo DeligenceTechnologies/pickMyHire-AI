@@ -1,5 +1,42 @@
 # Render Blueprint — https://render.com/docs/blueprint-spec
-# Database: Supabase Postgres (session pooler). Files: Supabase Storage (private bucket).
+# Database: Supabase Postgres (session pooler).
+# Files: Supabase Storage (private bucket) by default; switch STORAGE_DRIVER to r2 for Cloudflare R2.
+# Queue: Render Key Value (Redis) + a background worker that encodes interview recordings.
+
+envVarGroups:
+  - name: ai-interviewer-shared
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: APP_SECRET
+        generateValue: true
+      # --- Storage: supabase | r2 | s3 -------------------------------------
+      - key: STORAGE_DRIVER
+        value: supabase
+      - key: SUPABASE_STORAGE_BUCKET
+        value: interview-private
+      # Secrets — enter these in the Render dashboard (Env Groups).
+      - key: DATABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      # Only needed with STORAGE_DRIVER=r2.
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+      # --- Recording processing --------------------------------------------
+      - key: RECORDING_CRF
+        value: "27"
+      - key: RECORDING_CHUNK_RETENTION_HOURS
+        value: "24"
+
 services:
   - type: web
     name: ai-interviewer
@@ -10,27 +47,45 @@ services:
     startCommand: npm start
     healthCheckPath: /login
     envVars:
-      - key: NODE_VERSION
-        value: "22"
-      - key: STORAGE_DRIVER
-        value: supabase
-      - key: SUPABASE_STORAGE_BUCKET
-        value: interview-private
+      - fromGroup: ai-interviewer-shared
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: ai-interviewer-redis
+          property: connectionString
       - key: AI_PROVIDER
         value: auto
       # Set in the Render dashboard (resend in production, log to only record emails).
       - key: EMAIL_PROVIDER
         sync: false
-      - key: APP_SECRET
-        generateValue: true
-      # Secrets — enter these in the Render dashboard when creating the service.
-      - key: DATABASE_URL
-        sync: false
-      - key: NEXT_PUBLIC_SUPABASE_URL
-        sync: false
-      - key: SUPABASE_SERVICE_ROLE_KEY
-        sync: false
       - key: OPENAI_API_KEY
         sync: false
       - key: APP_URL
         sync: false
+
+  # Encodes finished interviews' chunks into MP4/M4A and cleans up chunks.
+  # Runs ffmpeg: give it its own CPU so encoding never slows the web server.
+  - type: worker
+    name: ai-interviewer-worker
+    runtime: node
+    plan: standard
+    region: singapore
+    buildCommand: npm ci
+    startCommand: npm run worker
+    envVars:
+      - fromGroup: ai-interviewer-shared
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: ai-interviewer-redis
+          property: connectionString
+      - key: RECORDING_WORKER_CONCURRENCY
+        value: "1"
+
+  # BullMQ requires noeviction: an evicted key would silently lose a job.
+  - type: keyvalue
+    name: ai-interviewer-redis
+    plan: starter
+    region: singapore
+    maxmemoryPolicy: noeviction
+    ipAllowList: []

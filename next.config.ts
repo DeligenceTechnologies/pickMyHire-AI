@@ -14,7 +14,8 @@ const nextConfig: NextConfig = {
   // Marketing images rarely change (new files get new names): let browsers and
   // proxies keep resized copies for a week instead of re-requesting them.
   images: { minimumCacheTTL: 7 * 24 * 60 * 60 },
-  serverExternalPackages: ["postgres", "unpdf", "mammoth"],
+  // Native binaries / dynamic requires: load from node_modules at runtime instead of bundling.
+  serverExternalPackages: ["postgres", "unpdf", "mammoth", "bullmq", "ioredis", "@ffmpeg-installer/ffmpeg", "@aws-sdk/client-s3", "@aws-sdk/lib-storage", "@aws-sdk/s3-request-presigner"],
   async headers() {
     return [
       { source: "/:path*", headers: securityHeaders },

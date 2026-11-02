@@ -6,19 +6,28 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "worker": "tsx --conditions=react-server --import ./scripts/load-env.ts scripts/worker.ts",
     "lint": "eslint",
-    "db:migrate": "tsx --env-file=.env.local scripts/migrate.ts",
+    "db:migrate": "tsx --import ./scripts/load-env.ts scripts/migrate.ts",
+    "recordings:backfill": "tsx --conditions=react-server --import ./scripts/load-env.ts scripts/recordings-backfill.ts",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "admin:grant": "tsx --env-file=.env.local scripts/platform-admin.ts"
+    "db:seed": "playwright test -c tests/seed/playwright.config.ts",
+    "admin:grant": "tsx --import ./scripts/load-env.ts scripts/platform-admin.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1161.0",
+    "@aws-sdk/lib-storage": "^3.1161.0",
+    "@aws-sdk/s3-request-presigner": "^3.1161.0",
     "@base-ui/react": "^1.8.0",
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "@hookform/resolvers": "^5.9.1",
     "@vladmandic/face-api": "1.7.15",
+    "bullmq": "^6.5.3",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.4.0",
+    "ioredis": "^6.0.0",
     "lucide-react": "^1.49.0",
     "mammoth": "^1.13.0",
     "marked": "^18.1.2",
@@ -31,6 +40,7 @@
     "server-only": "^0.0.1",
     "shadcn": "^4.21.0",
     "sonner": "^2.0.8",
+    "tsx": "^4.23.15",
     "tw-animate-css": "^1.4.0",
     "unpdf": "^1.8.1",
     "zod": "^4.6.5"
@@ -44,7 +54,6 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.7",
     "tailwindcss": "^4",
-    "tsx": "^4.23.15",
     "typescript": "^5",
     "vitest": "^5.0.2"
   }

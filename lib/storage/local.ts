@@ -1,5 +1,5 @@
 import "server-only";
-import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { hmac } from "@/lib/security/tokens";
 import type { StorageDriver } from "./types";
@@ -21,6 +21,12 @@ export class LocalStorageDriver implements StorageDriver {
     const full = this.resolve(p);
     await mkdir(path.dirname(full), { recursive: true });
     await writeFile(full, data);
+  }
+
+  async putFile(p: string, localFile: string) {
+    const full = this.resolve(p);
+    await mkdir(path.dirname(full), { recursive: true });
+    await copyFile(localFile, full);
   }
 
   async get(p: string) {

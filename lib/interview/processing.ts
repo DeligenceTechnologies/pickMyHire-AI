@@ -9,6 +9,7 @@ import { generateReport, REPORT_VERSION } from "@/lib/ai/report-generator";
 import { log } from "@/lib/logger";
 import { assessmentScore, type Assessment, type FinalReport, type SectionEvaluation } from "@/lib/validation/ai-schemas";
 import { runInBackground } from "@/lib/background";
+import { enqueueInterviewRecordings } from "@/lib/jobs/enqueue-recordings";
 import { finalizeAllParts } from "./recording";
 import { sendCandidateFollowup } from "./candidate-followup";
 
@@ -168,6 +169,8 @@ export async function processInterview(orgId: string, interviewId: string) {
   });
   await withOrg(orgId, (tx) => tx`update interviews set status = 'processing', processing_error = null where id = ${interviewId} and status in ('completed','failed','report_ready')`);
   await finalizeAllParts(orgId, interviewId);
+  // Encode the recording into a playable file in the background (worker / queue); never blocks the report.
+  await enqueueInterviewRecordings(orgId, interviewId);
   const sections = await withOrg(orgId, (tx) => tx<{ id: string; evaluation_status: string | null }[]>`
     select id, evaluation_status from interview_sections where interview_id = ${interviewId} and status = 'completed' order by sort_order`);
   let failures = 0;

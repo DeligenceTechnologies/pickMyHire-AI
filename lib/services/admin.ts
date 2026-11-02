@@ -497,7 +497,7 @@ export async function companyDeletionPreview(orgId: string) {
         (select count(*)::int from jobs where organization_id = o.id) as jobs,
         (select count(*)::int from candidates where organization_id = o.id) as candidates,
         (select count(*)::int from interviews where organization_id = o.id) as interviews,
-        (select coalesce(sum(size), 0)::bigint::float8 from recording_chunks where organization_id = o.id) as recording_bytes
+        (select coalesce(sum(file_size), 0)::bigint::float8 from recordings where organization_id = o.id and status <> 'deleted') as recording_bytes
       from organizations o where o.id = ${orgId}`;
     if (!o) throw new ApiError(404, "Company not found");
     // Members with no other company lose their only workspace: their accounts can go too.

@@ -1,10 +1,13 @@
 import "server-only";
 // Recording is uploaded as numbered chunks per "part" (a part = one
 // MediaRecorder session; a browser refresh starts a new part). Chunks are
-// idempotent by index and are never joined into one big object: they're
-// indexed in recording_chunks and streamed back in order (with HTTP Range
-// support) by /api/recordings/[id]/stream. This keeps every stored object
-// small (storage providers cap object size) and makes finishing instant.
+// idempotent by index and indexed in recording_chunks, so a crash mid-interview
+// loses at most a few seconds.
+//
+// After the interview, a background worker (lib/recordings/pipeline.ts) joins
+// each part into one MP4/M4A that the player streams straight from storage via
+// a signed URL. Until that file is ready, /api/recordings/[id]/stream serves the
+// chunks in order (with HTTP Range support) as a fallback.
 
 import { withOrg } from "@/lib/database/db";
 import { ApiError } from "@/lib/api";
@@ -16,6 +19,8 @@ export const MAX_CHUNK_BYTES = 8 * 1024 * 1024;
 const ALLOWED_MIME = /^video\/webm|^video\/mp4|^audio\/webm|^audio\/mp4/;
 /** Max bytes returned per range response; browsers request the rest as needed. */
 const MAX_RANGE_BYTES = 8 * 1024 * 1024;
+/** Chunks fetched ahead while streaming the chunk fallback. */
+const STREAM_PREFETCH = 6;
 
 export type RecordingTrack = "candidate" | "interviewer";
 
@@ -71,10 +76,12 @@ export async function finalizeRecordingPart(token: string, part: number, input: 
  * indexing existed, or a lost index write). Safe to call repeatedly.
  */
 export async function sealPart(orgId: string, interviewId: string, part: number, input: { duration_ms: number | null; total_chunks: number | null }) {
-  const [rec] = await withOrg(orgId, (tx) => tx<{ id: string; status: string; storage_path: string }[]>`
-    select id, status, storage_path from recordings where interview_id = ${interviewId} and part_index = ${part}`);
+  const [rec] = await withOrg(orgId, (tx) => tx<{ id: string; status: string; storage_path: string; chunks_purged: boolean }[]>`
+    select id, status, storage_path, chunks_purged_at is not null as chunks_purged from recordings where interview_id = ${interviewId} and part_index = ${part}`);
   if (!rec) throw new ApiError(404, "Recording part not found.");
   if (rec.status === "deleted") return { status: "deleted" as const };
+  // Joined into a playable file and chunks cleaned up: nothing left to seal.
+  if (rec.chunks_purged) return { status: "stored" as const };
 
   const files = await storage().listDetailed(paths.recordingChunkPrefix(orgId, interviewId, part));
   const count = await withOrg(orgId, async (tx) => {
@@ -120,21 +127,34 @@ export async function finalizeAllParts(orgId: string, interviewId: string) {
   }
 }
 
-/** Playback URLs for an authorized recruiter. */
+/** Long enough to watch a long interview in one sitting; the player re-requests URLs on reload. */
+const PLAYBACK_URL_TTL_SECONDS = 4 * 60 * 60;
+
+/**
+ * Playback URLs for an authorized recruiter. A part with a ready playable file
+ * gets a signed URL straight to storage (the browser streams and seeks without
+ * touching our server); otherwise it falls back to the chunk stream.
+ */
 export async function recordingUrls(orgId: string, interviewId: string) {
-  const parts = await withOrg(orgId, (tx) => tx<{ id: string; part_index: number; offset_ms: number; storage_path: string; mime_type: string; duration_seconds: number | null; track: RecordingTrack; chunked: boolean }[]>`
+  const parts = await withOrg(orgId, (tx) => tx<{ id: string; part_index: number; offset_ms: number; storage_path: string; mime_type: string; duration_seconds: number | null; track: RecordingTrack; chunked: boolean; playback_path: string | null; playback_mime: string | null }[]>`
     select r.id, r.part_index, r.offset_ms, r.storage_path, r.mime_type, r.duration_seconds, r.track,
-      exists (select 1 from recording_chunks c where c.recording_id = r.id) as chunked
+      exists (select 1 from recording_chunks c where c.recording_id = r.id) as chunked,
+      case when r.playback_status = 'ready' then r.playback_path end as playback_path, r.playback_mime
     from recordings r
     where r.interview_id = ${interviewId} and r.organization_id = ${orgId} and r.status = 'stored' order by r.part_index`);
-  return Promise.all(parts.map(async (p) => ({
-    part_index: p.part_index,
-    track: p.track,
-    offset_ms: p.offset_ms,
-    duration_seconds: p.duration_seconds,
-    mime_type: p.mime_type,
-    url: p.chunked ? `/api/recordings/${p.id}/stream` : await storage().signedUrl(p.storage_path, 60 * 60, p.mime_type),
-  })));
+  return Promise.all(parts.map(async (p) => {
+    const ready = p.playback_path && p.playback_mime;
+    return {
+      part_index: p.part_index,
+      track: p.track,
+      offset_ms: p.offset_ms,
+      duration_seconds: p.duration_seconds,
+      mime_type: ready ? p.playback_mime! : p.mime_type,
+      url: ready
+        ? await storage().signedUrl(p.playback_path!, PLAYBACK_URL_TTL_SECONDS, p.playback_mime!)
+        : p.chunked ? `/api/recordings/${p.id}/stream` : await storage().signedUrl(p.storage_path, PLAYBACK_URL_TTL_SECONDS, p.mime_type),
+    };
+  }));
 }
 
 /**
@@ -180,14 +200,24 @@ export async function streamRecording(orgId: string, recordingId: string, rangeH
     plan.push({ path: c.storage_path, from: Math.max(0, start - cStart), to: Math.min(c.size - 1, end - cStart) });
   }
 
-  let i = 0;
+  // Fetch a few chunks ahead in parallel, but emit them strictly in order.
+  const inflight: Promise<Uint8Array>[] = [];
+  let next = 0;
+  const fill = () => {
+    while (next < plan.length && inflight.length < STREAM_PREFETCH) {
+      const p = plan[next++];
+      const fetching = storage().get(p.path).then((bytes) => bytes.subarray(p.from, p.to + 1));
+      fetching.catch(() => {}); // surfaced when awaited below
+      inflight.push(fetching);
+    }
+  };
   const body = new ReadableStream<Uint8Array>({
     async pull(controller) {
-      if (i >= plan.length) return controller.close();
-      const p = plan[i++];
+      fill();
+      const head = inflight.shift();
+      if (!head) return controller.close();
       try {
-        const bytes = await storage().get(p.path);
-        controller.enqueue(bytes.subarray(p.from, p.to + 1));
+        controller.enqueue(await head);
       } catch (err) {
         log.warn("recording.stream_chunk_failed", { recordingId, err });
         controller.error(err);

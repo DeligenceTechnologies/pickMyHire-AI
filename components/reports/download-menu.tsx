@@ -6,7 +6,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import type { RecordingPart } from "./video-player";
 
 const safe = (s: string) => s.replace(/[^\w .-]+/g, "").trim();
-const ext = (mime: string) => (mime.includes("mp4") ? "mp4" : "webm");
+const ext = (mime: string) => (mime === "audio/mp4" ? "m4a" : mime.includes("mp4") ? "mp4" : "webm");
 
 function save(url: string, filename: string) {
   const a = document.createElement("a");
