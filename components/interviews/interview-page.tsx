@@ -18,6 +18,7 @@ import { closeIfAbandoned } from "@/lib/interview/controller";
 import { log } from "@/lib/logger";
 import { getFaceVerification } from "@/lib/interview/face";
 import { getOutcomeInput } from "@/lib/interview/outcome-data";
+import { recordingForViewer } from "@/lib/interview/recording";
 import { DecisionControl } from "@/components/hiring/decision-control";
 
 /** Shared server page for /interviews/[id] and its tab sub-routes. */
@@ -27,7 +28,13 @@ export async function InterviewPage({ params, tab }: { params: Promise<{ intervi
   if (!isUuid(interviewId)) notFound();
   // A started interview the candidate left more than 10 minutes ago is closed before it's shown.
   await closeIfAbandoned(auth.orgId, interviewId).catch((err) => log.warn("interview.close_abandoned_failed", { interviewId, err }));
-  const [detail, { settings }, feedback, face, outcome] = await Promise.all([getInterviewDetail(auth.orgId, interviewId), getSettings(auth.orgId), listInterviewFeedback(auth.orgId, interviewId), getFaceVerification(auth.orgId, interviewId), tab === "overview" ? getOutcomeInput(auth.orgId, interviewId) : null]);
+  const canViewRecording = can(auth.role, "recording:view");
+  // Recording links come with the page, so the player starts loading the video right away. If this
+  // fails, the player fetches them itself.
+  const recording = canViewRecording
+    ? recordingForViewer(auth.orgId, auth.userId, interviewId).catch((err) => { log.warn("interview.recording_prefetch_failed", { interviewId, err }); return undefined; })
+    : undefined;
+  const [detail, { settings }, feedback, face, outcome, initialRecording] = await Promise.all([getInterviewDetail(auth.orgId, interviewId), getSettings(auth.orgId), listInterviewFeedback(auth.orgId, interviewId), getFaceVerification(auth.orgId, interviewId), tab === "overview" ? getOutcomeInput(auth.orgId, interviewId) : null, recording]);
   if (!detail) notFound();
   recoverIfStale(auth.orgId, detail);
   const live = ["in_progress", "completing", "processing"].includes(detail.status)
@@ -60,7 +67,7 @@ export async function InterviewPage({ params, tab }: { params: Promise<{ intervi
           </div>
         </section>
       )}
-      <InterviewViewer detail={detail} initialTab={tab} showScores={settings.show_scores} canViewRecording={can(auth.role, "recording:view")} canRegenerate={can(auth.role, "report:regenerate")} canViewCandidates={can(auth.role, "candidate:view")} feedback={feedback} face={face} outcome={outcome} />
+      <InterviewViewer detail={detail} initialTab={tab} showScores={settings.show_scores} canViewRecording={canViewRecording} initialRecording={initialRecording} canRegenerate={can(auth.role, "report:regenerate")} canViewCandidates={can(auth.role, "candidate:view")} feedback={feedback} face={face} outcome={outcome} />
     </>
   );
 }

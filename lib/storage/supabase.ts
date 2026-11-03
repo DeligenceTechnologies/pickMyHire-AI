@@ -108,6 +108,14 @@ export class SupabaseStorageDriver implements StorageDriver {
     return res.ok;
   }
 
+  async head(p: string) {
+    const res = await fetch(this.obj(p), { method: "HEAD", headers: this.headers() });
+    if (res.status === 404 || res.status === 400) return null;
+    if (!res.ok) throw new Error(`Storage HEAD failed (${res.status})`);
+    const len = Number(res.headers.get("content-length"));
+    return { size: Number.isFinite(len) && len > 0 ? len : null };
+  }
+
   private async listPage(prefix: string, offset: number): Promise<ListItem[] | null> {
     const res = await fetch(`${this.url}/storage/v1/object/list/${this.bucket}`, {
       method: "POST",

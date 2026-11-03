@@ -70,8 +70,14 @@ services:
     runtime: node
     plan: standard
     region: singapore
-    buildCommand: npm ci
+    # ffmpeg-static downloads its binary in an install script; newer npm/pnpm can skip
+    # dependency install scripts, so run it explicitly (a no-op when already present).
+    # The worker checks the ffmpeg version on start and refuses to run without it.
+    buildCommand: npm ci && node node_modules/ffmpeg-static/install.js
     startCommand: npm run worker
+    # Time to finish the encode in progress on deploy/restart before SIGKILL
+    # (the worker exits on its own at 280 s; an unfinished encode is retried).
+    maxShutdownDelaySeconds: 300
     envVars:
       - fromGroup: ai-interviewer-shared
       - key: REDIS_URL

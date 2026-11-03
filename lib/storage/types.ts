@@ -4,6 +4,8 @@ export interface StorageDriver {
   putFile(path: string, localFile: string, contentType: string): Promise<void>;
   get(path: string): Promise<Uint8Array>;
   exists(path: string): Promise<boolean>;
+  /** Size of a stored object (null if the provider doesn't say), or null if it doesn't exist. */
+  head(path: string): Promise<{ size: number | null } | null>;
   list(prefix: string): Promise<string[]>;
   /** Objects under a prefix with their sizes in bytes, sorted by path. */
   listDetailed(prefix: string): Promise<{ path: string; size: number }[]>;

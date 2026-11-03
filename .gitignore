@@ -46,3 +46,6 @@ next-env.d.ts
 !.env.example
 /test-results/
 /playwright-report/
+
+# npm is the package manager (Render runs `npm ci`): keep package-lock.json only
+pnpm-lock.yaml

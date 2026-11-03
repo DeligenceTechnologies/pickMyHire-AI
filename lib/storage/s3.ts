@@ -94,6 +94,16 @@ export class S3StorageDriver implements StorageDriver {
     }
   }
 
+  async head(p: string) {
+    try {
+      const res = await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: p }));
+      return { size: res.ContentLength ?? null };
+    } catch (err) {
+      if (err instanceof S3ServiceException && (err.$metadata.httpStatusCode === 404 || err.name === "NotFound")) return null;
+      throw err;
+    }
+  }
+
   /** Every object under the prefix, recursively (S3 has no real folders), sorted by key. */
   private async listAll(prefix: string) {
     const out: { path: string; size: number }[] = [];

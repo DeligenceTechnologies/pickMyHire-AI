@@ -161,5 +161,13 @@
 
 /* Video loading overlay: appears only if loading takes more than a moment; the hint after a few seconds. */
 @keyframes video-loading-in { to { opacity: 1; } }
-.video-loading { opacity: 0; animation: video-loading-in 200ms ease 300ms forwards; }
 .video-loading-slow { opacity: 0; animation: video-loading-in 300ms ease 4s forwards; }
+/* Video loading stage: a soft light sweep and a thin indeterminate bar along the top edge. */
+@keyframes video-shimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+.video-shimmer::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 20%, rgb(255 255 255 / 0.05) 50%, transparent 80%); animation: video-shimmer 1.8s ease-in-out infinite; }
+@keyframes video-bar { from { left: -35%; } to { left: 100%; } }
+.video-bar { position: absolute; top: 0; width: 35%; height: 2px; border-radius: 2px; background: rgb(255 255 255 / 0.7); animation: video-bar 1.3s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .video-shimmer::after, .video-bar { animation: none; }
+  .video-bar { left: 0; width: 100%; opacity: 0.3; }
+}

@@ -29,7 +29,9 @@ const EnvSchema = z.object({
   RECORDING_CHUNK_RETENTION_HOURS: z.coerce.number().min(0).max(24 * 90).default(24),
   /** Recordings the worker processes at once (each runs one ffmpeg). */
   RECORDING_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(8).default(1),
-  /** ffmpeg binary; defaults to the one bundled by @ffmpeg-installer/ffmpeg. */
+  /** Allow encoding inside the web server when REDIS_URL is unset in production (not recommended). */
+  RECORDING_INLINE_PROCESSING: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
+  /** ffmpeg binary (5.1+); defaults to the one downloaded by ffmpeg-static. */
   FFMPEG_PATH: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
   AI_PROVIDER: z.enum(["auto", "openai", "mock"]).default("auto"),

@@ -5,11 +5,9 @@
  */
 import { log } from "@/lib/logger";
 import { startRecordingsWorker } from "@/lib/jobs/recordings-worker";
-import { ffmpegPath } from "@/lib/recordings/ffmpeg";
 
 async function main() {
   if (!process.env.REDIS_URL) throw new Error("REDIS_URL is not set: the worker needs Redis");
-  log.info("worker.ffmpeg", { path: ffmpegPath() });
   const stop = await startRecordingsWorker();
 
   let stopping = false;
@@ -17,8 +15,9 @@ async function main() {
     if (stopping) return;
     stopping = true;
     log.info("worker.stopping", { signal });
-    // Render sends SIGTERM and waits before SIGKILL; don't hang forever.
-    const force = setTimeout(() => process.exit(1), 5 * 60_000);
+    // Render sends SIGTERM and waits `maxShutdownDelaySeconds` (300, see render.yaml) before SIGKILL.
+    // Exit just before that; an unfinished encode is picked up again (stalled job / sweep).
+    const force = setTimeout(() => process.exit(1), 280_000);
     force.unref();
     try {
       await stop();

@@ -20,7 +20,21 @@ import { FaceVerificationCard, type FaceVerification } from "./face-verification
 import { OutcomeAlert, OutcomeCard, useOutcome } from "@/components/interviews/outcome-card";
 import type { OutcomeInput } from "@/lib/interview/outcome";
 import { InterviewTimeline } from "./interview-timeline";
-import { VideoPlayer, type RecordingPart, type VideoPlayerHandle } from "./video-player";
+import { VideoPlayer, type RecordingPart, type RefreshRecording, type VideoPlayerHandle } from "./video-player";
+
+/** New parts, but with the URL already in use for any part whose file is the same (same `key`). */
+function keepUnchangedUrls(prev: RecordingPart[] | null, next: RecordingPart[]) {
+  if (!prev) return next;
+  return next.map((p) => {
+    const old = p.key ? prev.find((o) => o.key === p.key) : undefined;
+    return old ? { ...p, url: old.url } : p;
+  });
+}
+
+async function fetchRecording(interviewId: string) {
+  const r = await api<{ parts: RecordingPart[]; voice?: RecordingPart[] }>(`/api/interviews/${interviewId}/recording`);
+  return { parts: r.parts, voice: r.voice ?? [] };
+}
 
 export type ViewerTab = "overview" | "report" | "transcript" | "recording" | "questions" | "evaluation";
 const TABS: { id: ViewerTab; label: string; path: string }[] = [
@@ -51,8 +65,10 @@ function Card({ title, children, className, action }: { title?: React.ReactNode;
   );
 }
 
-export function InterviewViewer({ detail, initialTab, showScores, canViewRecording, canRegenerate, canViewCandidates, feedback = [], face = null, outcome = null }: {
+export function InterviewViewer({ detail, initialTab, showScores, canViewRecording, initialRecording, canRegenerate, canViewCandidates, feedback = [], face = null, outcome = null }: {
   detail: Detail;
+  /** Playback links fetched with the page (undefined: the viewer fetches them). */
+  initialRecording?: { parts: RecordingPart[]; voice: RecordingPart[] };
   face?: FaceVerification | null;
   outcome?: OutcomeInput | null;
   feedback?: InterviewFeedbackRow[];
@@ -66,8 +82,19 @@ export function InterviewViewer({ detail, initialTab, showScores, canViewRecordi
   const pathname = usePathname();
   const [tab, setTab] = useState<ViewerTab>(initialTab);
   const [segments, setSegments] = useState<Segment[] | null>(null);
-  const [parts, setParts] = useState<RecordingPart[] | null>(null);
-  const [voice, setVoice] = useState<RecordingPart[] | null>(null);
+  const [parts, setParts] = useState<RecordingPart[] | null>(initialRecording?.parts ?? null);
+  const [voice, setVoice] = useState<RecordingPart[] | null>(initialRecording?.voice ?? null);
+  // The page re-renders while work is running (auto refresh) and sends fresh links each time. Take them,
+  // but keep the URL of any part whose file hasn't changed, so the video doesn't reload.
+  const [seenRecording, setSeenRecording] = useState(initialRecording);
+  if (initialRecording !== seenRecording) {
+    setSeenRecording(initialRecording);
+    if (initialRecording) {
+      setParts((prev) => keepUnchangedUrls(prev, initialRecording.parts));
+      setVoice((prev) => keepUnchangedUrls(prev, initialRecording.voice));
+    }
+  }
+  const prefetched = initialRecording !== undefined;
   const [recError, setRecError] = useState<string | null>(canViewRecording ? null : "You don't have access to recordings.");
   const [currentMs, setCurrentMs] = useState(0);
   const [focused, setFocused] = useState<string | null>(null);
@@ -80,10 +107,29 @@ export function InterviewViewer({ detail, initialTab, showScores, canViewRecordi
   useEffect(() => {
     if (!started) return;
     api<{ segments: Segment[] }>(`/api/interviews/${detail.id}/transcript`).then((r) => setSegments(r.segments)).catch(() => setSegments([]));
-    if (canViewRecording) {
-      api<{ parts: RecordingPart[]; voice?: RecordingPart[] }>(`/api/interviews/${detail.id}/recording`).then((r) => { setParts(r.parts); setVoice(r.voice ?? []); }).catch((e) => setRecError((e as Error).message));
+    if (!canViewRecording || prefetched) return;
+    // Only the latest request counts (React may run this twice; the details may refresh). A part
+    // whose file hasn't changed keeps its current URL: a new signature alone would reload the video.
+    let current = true;
+    fetchRecording(detail.id).then((r) => {
+      if (!current) return;
+      setParts((prev) => keepUnchangedUrls(prev, r.parts));
+      setVoice((prev) => keepUnchangedUrls(prev, r.voice));
+    }).catch((e) => { if (current) setRecError((e as Error).message); });
+    return () => { current = false; };
+  }, [detail.id, started, canViewRecording, detail.segment_count, prefetched]);
+
+  /** Playback URLs expire after an hour; the player asks for new ones when a load fails. */
+  const refreshRecording = useCallback<RefreshRecording>(async () => {
+    try {
+      const fresh = await fetchRecording(detail.id);
+      setParts(fresh.parts);
+      setVoice(fresh.voice);
+      return fresh;
+    } catch {
+      return null;
     }
-  }, [detail.id, started, canViewRecording, detail.segment_count]);
+  }, [detail.id]);
 
   useEffect(() => {
     if (report) api(`/api/interviews/${detail.id}/audit`, { body: { action: "report_viewed" } }).catch(() => {});
@@ -133,7 +179,7 @@ export function InterviewViewer({ detail, initialTab, showScores, canViewRecordi
 
   const media = (compact: boolean) => (
     <div className={cn("space-y-3", compact && "lg:sticky lg:top-20")}>
-      <VideoPlayer ref={player} parts={parts} voice={voice} error={recError} onTime={setCurrentMs} />
+      <VideoPlayer ref={player} parts={parts} voice={voice} error={recError} onTime={setCurrentMs} onRefresh={refreshRecording} />
       <InterviewTimeline sections={sectionsForTimeline} totalMs={totalMs} currentMs={currentMs} onSeek={(ms) => jump(ms)} />
       {!compact && (
         <div className="flex justify-end">

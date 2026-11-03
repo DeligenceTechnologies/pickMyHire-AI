@@ -42,6 +42,14 @@ export class LocalStorageDriver implements StorageDriver {
     }
   }
 
+  async head(p: string) {
+    try {
+      return { size: (await stat(this.resolve(p))).size };
+    } catch {
+      return null;
+    }
+  }
+
   async list(prefix: string) {
     const dir = this.resolve(prefix.endsWith("/") ? prefix.slice(0, -1) : prefix);
     try {

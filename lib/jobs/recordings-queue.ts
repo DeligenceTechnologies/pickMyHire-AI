@@ -14,8 +14,12 @@ export const RECORDINGS_QUEUE = "recordings";
 export type RecordingJobName = "transcode" | "purge" | "sweep";
 export type RecordingJobData = { orgId: string; recordingId: string } | Record<string, never>;
 
+/**
+ * Retries inside one job (1 min, then 2 min apart). After that the sweep may
+ * queue the part again while it has attempts left (MAX_PLAYBACK_ATTEMPTS, counted in the database).
+ */
 export const defaultJobOptions: JobsOptions = {
-  attempts: 4,
+  attempts: 3,
   backoff: { type: "exponential", delay: 60_000 },
   removeOnComplete: { age: 24 * 3600, count: 5000 },
   removeOnFail: { age: 14 * 24 * 3600 },
@@ -37,16 +41,18 @@ export const jobIds = {
 };
 
 /**
- * Add a job unless one with the same id is already waiting or running. A
- * finished or failed leftover with that id is removed first, so a part can be
- * queued again later (e.g. a retry from the sweep).
+ * Add a job unless one with the same id is already waiting, delayed or running.
+ * A finished or failed leftover with that id is removed first, so a part can be
+ * queued again later (e.g. a retry from the sweep). Safe under races: BullMQ
+ * ignores an add whose job id already exists.
  */
 export async function addUnique(queue: Queue, name: RecordingJobName, jobId: string, data: RecordingJobData, opts: JobsOptions = {}) {
   const existing = await queue.getJob(jobId);
   if (existing) {
     const state = await existing.getState();
-    if (state === "completed" || state === "failed") await existing.remove();
-    else return false;
+    if (state !== "completed" && state !== "failed" && state !== "unknown") return false;
+    // A job that's locked (just picked up) can't be removed; it's running, which is what we want.
+    await existing.remove().catch(() => {});
   }
   await queue.add(name, data, { ...opts, jobId });
   return true;
