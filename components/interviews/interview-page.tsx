@@ -60,7 +60,7 @@ export async function InterviewPage({ params, tab }: { params: Promise<{ intervi
           </div>
         </section>
       )}
-      <InterviewViewer detail={detail} initialTab={tab} showScores={settings.show_scores} canViewRecording={can(auth.role, "recording:view")} canRegenerate={can(auth.role, "report:regenerate")} canViewCandidates={can(auth.role, "candidate:view")} feedback={feedback} face={face} outcome={outcome} />
+      <InterviewViewer detail={detail} initialTab={tab} showScores={settings.show_scores} canViewRecording={can(auth.role, "recording:view")} canRegenerate={can(auth.role, "report:regenerate")} canViewCandidates={can(auth.role, "candidate:view")} canSendFeedback={can(auth.role, "interview:write")} feedback={feedback} face={face} outcome={outcome} />
     </>
   );
 }

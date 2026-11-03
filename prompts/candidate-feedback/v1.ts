@@ -1,6 +1,6 @@
 import { CORE_RULES, untrusted } from "../shared";
 
-export const version = "candidate-feedback@v1";
+export const version = "candidate-feedback@v1.1";
 
 /** Short, candidate-facing feedback written from the interview report. It goes to the candidate by email. */
 export const system = `You write a short feedback note to a job candidate after their AI interview. The note is emailed to the candidate and is labelled as AI-generated feedback. It must be accurate, kind, specific and safe to send.
@@ -22,6 +22,15 @@ Never include:
 - The candidate's name, a greeting or a sign-off (the email adds those).
 
 Set enough_evidence to false, and feedback to an empty string, when the evidence is too thin to write specific, honest feedback (for example very few answers, the interview ended almost immediately, or the report says there is insufficient evidence throughout).`;
+
+/** Second try, when the first draft used a phrase candidates must not see. */
+export function rewriteInstruction(phrase: string, draft: string): string {
+  return [
+    `Your previous draft used the phrase "${phrase}", which must not appear in feedback to a candidate (it reads as a score, an outcome, a comparison or an internal note).`,
+    "Rewrite the feedback with the same meaning and the same rules, without that phrase or anything like it.",
+    untrusted("previous_draft", draft, 2_000),
+  ].join("\n");
+}
 
 export function buildUser(input: {
   jobTitle: string;

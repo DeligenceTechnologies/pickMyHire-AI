@@ -8,7 +8,7 @@ import { companyBrand, emailTemplates, replyToUser, sendEmail } from "@/lib/emai
 import { buildInterviewPlan } from "@/lib/interview/plan";
 import { generateToken, hashToken } from "@/lib/security/tokens";
 import type { StoredPlan, InterviewStatus } from "@/types/interview";
-import { JobRequirementsSchema, type JobRequirements, type SectionEvaluation } from "@/lib/validation/ai-schemas";
+import { JobRequirementsSchema, type JobRequirements, type SectionEvaluation, type SimpleReport } from "@/lib/validation/ai-schemas";
 import { readSettings } from "./org-settings";
 import { assertQuotaAvailable, COUNTED_STATUSES } from "./quota";
 import { isOpen, MAX_ROUNDS } from "./rounds";
@@ -308,11 +308,13 @@ export async function getInterviewDetail(orgId: string, interviewId: string) {
       template_name: string | null; round_name: string | null; attempt: number;
       decision: "qualified" | "not_qualified" | "on_hold" | null; decision_note: string | null; decided_at: Date | null; decided_by_name: string | null;
       candidate_email_sent_at: Date | null; candidate_feedback: string | null;
+      candidate_feedback_draft: string | null; candidate_feedback_held_reason: string | null; candidate_feedback_sent_at: Date | null;
     }[]>`
       select i.id, i.status, i.plan_status, i.plan_error, i.created_at, i.invited_at, i.started_at, i.completed_at, i.duration_seconds, i.round_name, i.attempt,
         i.consent_given, i.consent_timestamp, i.consent_version, i.interview_plan, i.processing_error, i.token_expires_at, i.updated_at,
         c.id as candidate_id, c.name as candidate_name, c.email as candidate_email, j.id as job_id, j.title as job_title,
-        t.name as template_name, i.decision, i.decision_note, i.decided_at, du.name as decided_by_name, i.candidate_email_sent_at, i.candidate_feedback
+        t.name as template_name, i.decision, i.decision_note, i.decided_at, du.name as decided_by_name, i.candidate_email_sent_at, i.candidate_feedback,
+        i.candidate_feedback_draft, i.candidate_feedback_held_reason, i.candidate_feedback_sent_at
       from interviews i join candidates c on c.id = i.candidate_id join jobs j on j.id = i.job_id
       left join interview_templates t on t.id = i.template_id left join users du on du.id = i.decided_by
       where i.id = ${interviewId} and i.organization_id = ${orgId}`;
@@ -331,8 +333,8 @@ export async function getInterviewDetail(orgId: string, interviewId: string) {
         a.transcript_text as answer_text, a.start_ms as answer_start_ms, a.end_ms as answer_end_ms, a.analysis
       from interview_questions q left join interview_answers a on a.question_id = q.id
       where q.interview_id = ${interviewId} order by q.sequence_number`;
-    const [report] = await tx<{ status: string; summary: string | null; report_json: unknown; error: string | null; generated_at: Date | null }[]>`
-      select status, summary, report_json, error, generated_at from interview_reports where interview_id = ${interviewId}`;
+    const [report] = await tx<{ status: string; summary: string | null; report_json: unknown; simple_report: SimpleReport | null; error: string | null; generated_at: Date | null }[]>`
+      select status, summary, report_json, simple_report, error, generated_at from interview_reports where interview_id = ${interviewId}`;
     const recordings = await tx<{ id: string; part_index: number; offset_ms: number; status: string; duration_seconds: number | null; file_size: number; mime_type: string }[]>`
       select id, part_index, offset_ms, status, duration_seconds, file_size::int, mime_type from recordings
       where interview_id = ${interviewId} and status <> 'deleted' order by part_index`;

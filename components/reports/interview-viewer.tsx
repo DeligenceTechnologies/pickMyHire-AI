@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, CheckCircle2, CircleDashed, Info, Loader2, Mail, MessageSquareHeart, PlayCircle, RefreshCw, Sparkles, Star } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, CircleDashed, Info, Loader2, Mail, MessageSquareHeart, MinusCircle, PlayCircle, RefreshCw, Send, ShieldAlert, Sparkles, Star, XCircle } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { AssessmentBadge, StatusBadge } from "@/components/common/status-badge";
 import { TranscriptViewer, type Segment } from "@/components/transcript/transcript-viewer";
@@ -14,7 +15,8 @@ import type { InterviewDetail } from "@/lib/services/interviews";
 import type { InterviewFeedbackRow } from "@/lib/services/feedback";
 import { ISSUE_CATEGORIES } from "@/lib/feedback";
 import type { StoredReport } from "@/lib/interview/processing";
-import type { AnswerAnalysis } from "@/lib/validation/ai-schemas";
+import type { AnswerAnalysis, RequirementStatus, SimpleReport } from "@/lib/validation/ai-schemas";
+import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { DownloadMenu } from "./download-menu";
 import { FaceVerificationCard, type FaceVerification } from "./face-verification-card";
 import { OutcomeAlert, OutcomeCard, useOutcome } from "@/components/interviews/outcome-card";
@@ -22,12 +24,11 @@ import type { OutcomeInput } from "@/lib/interview/outcome";
 import { InterviewTimeline } from "./interview-timeline";
 import { VideoPlayer, type RecordingPart, type VideoPlayerHandle } from "./video-player";
 
-export type ViewerTab = "overview" | "report" | "transcript" | "recording" | "questions" | "evaluation";
+export type ViewerTab = "overview" | "report" | "recording" | "questions" | "evaluation";
 const TABS: { id: ViewerTab; label: string; path: string }[] = [
   { id: "overview", label: "Overview", path: "" },
   { id: "report", label: "Report", path: "/report" },
-  { id: "transcript", label: "Transcript", path: "/transcript" },
-  { id: "recording", label: "Recording", path: "/recording" },
+  { id: "recording", label: "Recording & transcript", path: "/recording" },
   { id: "questions", label: "Questions", path: "/questions" },
   { id: "evaluation", label: "Evaluation", path: "/evaluation" },
 ];
@@ -51,7 +52,7 @@ function Card({ title, children, className, action }: { title?: React.ReactNode;
   );
 }
 
-export function InterviewViewer({ detail, initialTab, showScores, canViewRecording, canRegenerate, canViewCandidates, feedback = [], face = null, outcome = null }: {
+export function InterviewViewer({ detail, initialTab, showScores, canViewRecording, canRegenerate, canViewCandidates, canSendFeedback = false, feedback = [], face = null, outcome = null }: {
   detail: Detail;
   face?: FaceVerification | null;
   outcome?: OutcomeInput | null;
@@ -61,6 +62,8 @@ export function InterviewViewer({ detail, initialTab, showScores, canViewRecordi
   canViewRecording: boolean;
   canRegenerate: boolean;
   canViewCandidates: boolean;
+  /** May approve and send AI feedback that the safety check held back. */
+  canSendFeedback?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -171,7 +174,7 @@ export function InterviewViewer({ detail, initialTab, showScores, canViewRecordi
 
       {!started ? (
         <NotStarted detail={detail} tab={tab} />
-      ) : tab === "recording" || tab === "transcript" ? (
+      ) : tab === "recording" ? (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_420px]">
           <div>{media(false)}</div>
           <TranscriptViewer className="h-[70vh]" segments={segments} currentMs={currentMs} focusedId={focused} onSeek={(ms, id) => jump(ms, id)} sections={detail.sections} />
@@ -179,7 +182,7 @@ export function InterviewViewer({ detail, initialTab, showScores, canViewRecordi
       ) : (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_400px]">
           <div className="min-w-0 space-y-6">
-            {tab === "overview" && <Overview detail={detail} report={report} showScores={showScores} jump={jump} onOpenReport={() => switchTab("report")} canViewCandidates={canViewCandidates} feedback={feedback} face={face} canViewPhotos={canViewRecording} outcomeInput={outcome} />}
+            {tab === "overview" && <Overview detail={detail} report={report} showScores={showScores} jump={jump} onOpenReport={() => switchTab("report")} canViewCandidates={canViewCandidates} canSendFeedback={canSendFeedback} feedback={feedback} face={face} canViewPhotos={canViewRecording} outcomeInput={outcome} />}
             {tab === "report" && <ReportView detail={detail} report={report} showScores={showScores} jump={jump} />}
             {tab === "questions" && <QuestionsView detail={detail} jump={jump} />}
             {tab === "evaluation" && <EvaluationView detail={detail} showScores={showScores} jump={jump} />}
@@ -203,7 +206,7 @@ function Disclaimer({ source }: { source?: string }) {
   );
 }
 
-function Overview({ detail, report, showScores, jump, onOpenReport, canViewCandidates, feedback, face, canViewPhotos, outcomeInput }: { detail: Detail; report: StoredReport | null | undefined; showScores: boolean; jump: (ms: number, id?: string | null) => void; onOpenReport: () => void; canViewCandidates: boolean; feedback: InterviewFeedbackRow[]; face: FaceVerification | null; canViewPhotos: boolean; outcomeInput: OutcomeInput | null }) {
+function Overview({ detail, report, showScores, jump, onOpenReport, canViewCandidates, canSendFeedback, feedback, face, canViewPhotos, outcomeInput }: { detail: Detail; report: StoredReport | null | undefined; showScores: boolean; jump: (ms: number, id?: string | null) => void; onOpenReport: () => void; canViewCandidates: boolean; canSendFeedback: boolean; feedback: InterviewFeedbackRow[]; face: FaceVerification | null; canViewPhotos: boolean; outcomeInput: OutcomeInput | null }) {
   const completedSections = detail.sections.filter((s) => s.status === "completed").length;
   const outcome = useOutcome(outcomeInput);
   return (
@@ -271,24 +274,63 @@ function Overview({ detail, report, showScores, jump, onOpenReport, canViewCandi
         </dl>
       </Card>
       {outcome && <OutcomeCard outcome={outcome} />}
-      {detail.candidate_email_sent_at && <CandidateEmailCard sentAt={detail.candidate_email_sent_at} feedback={detail.candidate_feedback} />}
+      {detail.candidate_email_sent_at && <CandidateEmailCard interviewId={detail.id} sentAt={detail.candidate_email_sent_at} feedback={detail.candidate_feedback}
+        feedbackSentAt={detail.candidate_feedback_sent_at} draft={detail.candidate_feedback_draft} heldReason={detail.candidate_feedback_held_reason} canSend={canSendFeedback} />}
       {feedback.length > 0 && <CandidateFeedbackCard items={feedback} />}
     </>
   );
 }
 
 /** What the candidate was emailed after the interview: a confirmation, and the AI feedback when it was included. */
-function CandidateEmailCard({ sentAt, feedback }: { sentAt: Date | string; feedback: string | null }) {
+function CandidateEmailCard({ interviewId, sentAt, feedback, feedbackSentAt, draft, heldReason, canSend }: {
+  interviewId: string; sentAt: Date | string; feedback: string | null; feedbackSentAt: Date | string | null; draft: string | null; heldReason: string | null; canSend: boolean;
+}) {
+  const router = useRouter();
+  const [confirm, setConfirm] = useState(false);
+  const send = async () => {
+    try {
+      await api(`/api/interviews/${interviewId}/candidate-feedback`, { body: {} });
+      toast.success("Feedback sent to the candidate");
+      router.refresh();
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  };
   return (
     <Card title={<span className="flex items-center gap-2"><Mail className="size-4 text-primary" /> Email sent to the candidate</span>}>
       <p className="text-sm text-muted-foreground">
-        Sent {formatDate(sentAt, true)}: a confirmation that their interview was received{feedback ? ", with this AI feedback" : ", without AI feedback"}.
+        {feedbackSentAt
+          ? <>Sent {formatDate(sentAt, true)}: a confirmation that their interview was received. This AI feedback was reviewed and sent separately on {formatDate(feedbackSentAt, true)}.</>
+          : <>Sent {formatDate(sentAt, true)}: a confirmation that their interview was received{feedback ? ", with this AI feedback" : ", without AI feedback"}.</>}
       </p>
       {feedback ? (
         <>
           <blockquote className="mt-3 border-l-2 border-primary/40 pl-3 text-sm leading-relaxed">{feedback}</blockquote>
           <p className="mt-3 text-xs text-muted-foreground">Labelled in the email as AI-generated feedback from their answers, not a hiring decision. Turn it off in Settings → Interview.</p>
         </>
+      ) : draft ? (
+        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3 dark:border-amber-900 dark:bg-amber-950/40">
+          <p className="flex items-start gap-2 text-sm font-medium text-amber-900 dark:text-amber-200">
+            <ShieldAlert className="mt-0.5 size-4 shrink-0" />
+            <span>AI feedback was held back because it mentioned &ldquo;{heldReason}&rdquo;. Review it before it goes to the candidate.</span>
+          </p>
+          <blockquote className="mt-3 border-l-2 border-amber-400/60 pl-3 text-sm leading-relaxed">{draft}</blockquote>
+          {canSend ? (
+            <div className="mt-3 flex justify-end">
+              <Button size="sm" onClick={() => setConfirm(true)}><Send /> Review & send feedback</Button>
+            </div>
+          ) : <p className="mt-3 text-xs text-muted-foreground">Someone who can manage interviews can review and send it.</p>}
+          {confirm && (
+            <ConfirmDialog
+              open
+              onOpenChange={(o) => !o && setConfirm(false)}
+              title="Send this feedback to the candidate?"
+              description="The candidate gets a short email with exactly the text shown, labelled as AI feedback reviewed by your team. It can only be sent once."
+              confirmLabel="Approve & send"
+              onConfirm={async () => { await send(); setConfirm(false); }}
+            />
+          )}
+        </div>
       ) : null}
     </Card>
   );
@@ -328,10 +370,138 @@ function CandidateFeedbackCard({ items }: { items: InterviewFeedbackRow[] }) {
   );
 }
 
+/** The Report tab: a one-page simple report first, the full detailed report one click away. */
 function ReportView({ detail, report, showScores, jump }: { detail: Detail; report: StoredReport | null | undefined; showScores: boolean; jump: (ms: number, id?: string | null) => void }) {
+  const [view, setView] = useState<"simple" | "detailed">("simple");
   if (!report) {
     return <Card><p className="py-8 text-center text-sm text-muted-foreground">{detail.report?.status === "failed" ? "We couldn't generate the report yet. The interview data is safe — use Retry above." : "The report will appear here once the interview has been processed."}</p></Card>;
   }
+  return (
+    <>
+      <div className="inline-flex rounded-lg border bg-muted/40 p-0.5" role="tablist" aria-label="Report view">
+        {(["simple", "detailed"] as const).map((v) => (
+          <button key={v} role="tab" aria-selected={view === v} onClick={() => setView(v)}
+            className={cn("rounded-md px-3 py-1.5 text-sm font-medium transition-colors", view === v ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>
+            {v === "simple" ? "Simple" : "Detailed"}
+          </button>
+        ))}
+      </div>
+      {view === "simple"
+        ? <SimpleReportView detail={detail} report={report} showScores={showScores} onDetailed={() => setView("detailed")} />
+        : <DetailedReport detail={detail} report={report} showScores={showScores} jump={jump} />}
+    </>
+  );
+}
+
+const REQUIREMENT_STATUS: Record<RequirementStatus, { label: string; icon: typeof CheckCircle2; className: string }> = {
+  shown: { label: "Shown", icon: CheckCircle2, className: "text-emerald-700 bg-emerald-50 dark:text-emerald-300 dark:bg-emerald-950" },
+  partly: { label: "Partly", icon: CircleDashed, className: "text-amber-800 bg-amber-50 dark:text-amber-300 dark:bg-amber-950" },
+  not_shown: { label: "Not shown", icon: XCircle, className: "text-red-700 bg-red-50 dark:text-red-300 dark:bg-red-950" },
+  not_asked: { label: "Not asked", icon: MinusCircle, className: "text-muted-foreground bg-muted" },
+};
+
+/** One page, plain words: the headline, each job requirement, each section, and the top strength and gap. */
+function SimpleReportView({ detail, report, showScores, onDetailed }: { detail: Detail; report: StoredReport; showScores: boolean; onDetailed: () => void }) {
+  const router = useRouter();
+  const [creating, setCreating] = useState(false);
+  const simple = detail.report?.simple_report as SimpleReport | null | undefined;
+
+  const create = async () => {
+    setCreating(true);
+    try {
+      await api(`/api/interviews/${detail.id}/simple-report`, { body: {} });
+      router.refresh();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  if (!simple) {
+    return (
+      <Card>
+        <div className="flex flex-col items-center gap-3 py-8 text-center">
+          <Sparkles className="size-6 text-primary" />
+          <p className="max-w-sm text-sm text-muted-foreground">The simple report gives a one-page read of this interview: each job requirement and section in one line.</p>
+          <Button onClick={create} disabled={creating}>{creating ? <><Loader2 className="animate-spin" /> Creating… (about 10 seconds)</> : <><Sparkles /> Create simple report</>}</Button>
+          <Button variant="ghost" size="sm" onClick={onDetailed}>Open the detailed report <ArrowRight /></Button>
+        </div>
+      </Card>
+    );
+  }
+
+  const counts = simple.requirements.reduce<Record<RequirementStatus, number>>((a, r) => ({ ...a, [r.status]: a[r.status] + 1 }), { shown: 0, partly: 0, not_shown: 0, not_asked: 0 });
+  const sectionBadge = (name: string) => {
+    const s = detail.sections.find((x) => x.name === name);
+    const ev = s && detail.evaluations.find((e) => e.section_id === s.id);
+    return s && ev ? <AssessmentBadge assessment={ev.assessment} score={ev.score} showScore={showScores && s.config.scoring_enabled} /> : null;
+  };
+
+  return (
+    <>
+      <Card>
+        <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">{detail.candidate_name}</span>
+          <span>{detail.job_title}</span>
+          <span>{formatDate(detail.started_at)}</span>
+          <span>{formatDuration(detail.duration_seconds)}</span>
+        </div>
+        <p className="text-base leading-relaxed font-medium">{simple.headline}</p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div className="rounded-lg bg-emerald-50 p-3 dark:bg-emerald-950/50">
+            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">Top strength</p>
+            <p className="mt-1 text-sm">{simple.top_strength}</p>
+          </div>
+          <div className="rounded-lg bg-amber-50 p-3 dark:bg-amber-950/50">
+            <p className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">Main gap</p>
+            <p className="mt-1 text-sm">{simple.main_gap}</p>
+          </div>
+        </div>
+      </Card>
+
+      {simple.requirements.length > 0 && (
+        <Card title="Job requirements" action={<span className="text-xs text-muted-foreground tabular">{counts.shown} of {simple.requirements.length} shown{counts.partly ? `, ${counts.partly} partly` : ""}</span>}>
+          <ul className="divide-y">
+            {simple.requirements.map((r, i) => {
+              const st = REQUIREMENT_STATUS[r.status];
+              return (
+                <li key={i} className="grid gap-1 py-2.5 first:pt-0 last:pb-0 sm:grid-cols-[7.5rem_minmax(0,12rem)_1fr] sm:items-baseline sm:gap-3">
+                  <span className={cn("inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium", st.className)}><st.icon className="size-3.5" /> {st.label}</span>
+                  <span className="text-sm font-medium">{r.requirement}</span>
+                  <span className="text-sm text-muted-foreground">{r.note}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+      )}
+
+      {simple.sections.length > 0 && (
+        <Card title="Interview sections">
+          <ul className="divide-y">
+            {simple.sections.map((s) => (
+              <li key={s.name} className="py-2.5 first:pt-0 last:pb-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-medium">{s.name}</span>
+                  <span className="ml-auto">{sectionBadge(s.name)}</span>
+                </div>
+                <p className="mt-0.5 text-sm text-muted-foreground">{s.note}</p>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0 flex-1"><Disclaimer source={report.generated_by} /></div>
+        <Button variant="outline" size="sm" onClick={onDetailed}>See detailed evaluation <ArrowRight /></Button>
+      </div>
+    </>
+  );
+}
+
+function DetailedReport({ detail, report, showScores, jump }: { detail: Detail; report: StoredReport; showScores: boolean; jump: (ms: number, id?: string | null) => void }) {
   const refJump = (ref: string) => {
     const r = report.refs[ref];
     if (r) jump(r.start_ms, r.segment_id);

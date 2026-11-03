@@ -19,7 +19,7 @@ export type AuditAction =
   | "interview.evaluation_generated" | "interview.report_generated" | "interview.report_viewed"
   | "interview.evidence_viewed" | "interview.recording_accessed" | "interview.transcript_downloaded" | "interview.data_deleted"
   | "plan.coupon_redeemed"
-  | "interview.feedback_submitted" | "interview.issue_reported" | "interview.candidate_emailed"
+  | "interview.feedback_submitted" | "interview.issue_reported" | "interview.candidate_emailed" | "interview.candidate_feedback_sent" | "interview.simple_report_generated"
   | "support.ticket_created" | "support.replied" | "support.status_changed"
   | "settings.updated" | "settings.branding_updated" | "privacy.retention_run";
 

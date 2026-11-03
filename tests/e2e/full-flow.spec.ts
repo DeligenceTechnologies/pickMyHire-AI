@@ -172,6 +172,14 @@ test("recruiter to candidate to report", async ({ page, browser }) => {
   expect((await page.request.get((await photo.getAttribute("src"))!)).headers()["content-type"]).toBe("image/jpeg");
   if (process.env.E2E_SCREENSHOTS) await identity.screenshot({ path: "test-results/identity-check.png" });
   await page.getByRole("tab", { name: "Report" }).click();
+  // The simple report opens first (written right after the detailed one), the detailed one is a click away.
+  await expect(async () => {
+    await page.reload();
+    await page.getByRole("tab", { name: "Report" }).click();
+    await expect(page.getByText("Top strength")).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 30_000 });
+  await expect(page.getByText("Interview sections")).toBeVisible();
+  await page.getByRole("tab", { name: "Detailed" }).click();
   await expect(page.getByText("Candidate interview report")).toBeVisible();
   await expect(page.getByText(/not a hiring recommendation/)).toBeVisible();
   if (process.env.E2E_SCREENSHOTS) await page.screenshot({ path: "test-results/recruiter-report.png", fullPage: true });
@@ -192,7 +200,7 @@ test("recruiter to candidate to report", async ({ page, browser }) => {
   await page.goto(`/interviews/${interviewId}/recording?t=5000`);
   await expect.poll(() => page.evaluate(() => document.querySelector("video")?.currentTime ?? 0), { timeout: 20_000 }).toBeGreaterThanOrEqual(4.5);
   await page.goto(`/interviews/${interviewId}`);
-  await page.getByRole("tab", { name: "Transcript" }).click();
+  await page.getByRole("tab", { name: "Recording & transcript" }).click();
   await expect(page.getByText(LONG_ANSWER.slice(0, 40)).first()).toBeVisible();
   await page.getByRole("tab", { name: "Questions" }).click();
   await expect(page.getByText(/Question/).first()).toBeVisible();

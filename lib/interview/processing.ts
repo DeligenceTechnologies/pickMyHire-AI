@@ -11,6 +11,7 @@ import { assessmentScore, type Assessment, type FinalReport, type SectionEvaluat
 import { runInBackground } from "@/lib/background";
 import { finalizeAllParts } from "./recording";
 import { sendCandidateFollowup } from "./candidate-followup";
+import { buildSimpleReportQuietly } from "./simple-report";
 
 type SegmentRow = { id: string; section_id: string | null; speaker: string; text: string; start_time_ms: number; end_time_ms: number };
 
@@ -141,7 +142,8 @@ export async function generateInterviewReport(orgId: string, interviewId: string
   };
 
   await withOrg(orgId, async (tx) => {
-    await tx`update interview_reports set status = 'completed', summary = ${report.summary}, report_json = ${json(stored)}, generated_at = now(), error = null
+    // The simple report is rewritten from this one right after (an old one would be stale).
+    await tx`update interview_reports set status = 'completed', summary = ${report.summary}, report_json = ${json(stored)}, simple_report = null, generated_at = now(), error = null
       where interview_id = ${interviewId}`;
     await tx`update interviews set status = 'report_ready', processing_error = null where id = ${interviewId}`;
     await audit(tx, { orgId, actorType: "system", action: "interview.report_generated", entityType: "interview", entityId: interviewId, metadata: { source } });
@@ -179,8 +181,10 @@ export async function processInterview(orgId: string, interviewId: string) {
       failures++;
     }
   }
+  let reportReady = false;
   try {
     await generateInterviewReport(orgId, interviewId);
+    reportReady = true;
     if (failures) {
       await withOrg(orgId, (tx) => tx`update interviews set processing_error = ${`${failures} section evaluation(s) failed — retry to complete the report.`} where id = ${interviewId}`);
     }
@@ -191,8 +195,12 @@ export async function processInterview(orgId: string, interviewId: string) {
       await tx`update interviews set status = 'completed', processing_error = ${"Report generation failed. The interview data is safe — retry."} where id = ${interviewId}`;
     });
   }
-  // The candidate's confirmation (with AI feedback when the report allows it). Sent once.
-  await sendCandidateFollowup(orgId, interviewId);
+  // The candidate's confirmation (with AI feedback when the report allows it, sent once),
+  // and the one-page simple report. Independent, so they run side by side; neither throws.
+  await Promise.all([
+    sendCandidateFollowup(orgId, interviewId),
+    reportReady ? buildSimpleReportQuietly(orgId, interviewId) : null,
+  ]);
 }
 
 /**

@@ -90,11 +90,31 @@ describe("candidate feedback safety check", () => {
   it("keeps specific, safe feedback and drops anything with scores, outcomes or internal notes", async () => {
     const { checkFeedback } = await import("@/lib/ai/candidate-feedback");
     const good = "Thank you for taking the time to interview with us. Your hands-on technical SEO work, especially schema and canonical fixes, stood out. One area to build on is linking your work to measurable outcomes such as baselines and results. That habit will help you show which fixes drive the most impact as you grow.";
-    expect(checkFeedback({ enough_evidence: true, feedback: good })).toBe(good);
-    expect(checkFeedback({ enough_evidence: false, feedback: good })).toBeNull();
-    expect(checkFeedback({ enough_evidence: true, feedback: "Too short." })).toBeNull();
-    for (const bad of ["You scored 4/5 on technical SEO.", "We will move forward with your application.", "Compared with other candidates you did well.", "Areas to explore: verify the GSC claims."]) {
-      expect(checkFeedback({ enough_evidence: true, feedback: `${good} ${bad}` })).toBeNull();
+    expect(checkFeedback({ enough_evidence: true, feedback: good })).toEqual({ ok: true, text: good, blocked: null });
+    expect(checkFeedback({ enough_evidence: false, feedback: good })).toMatchObject({ ok: false, blocked: null });
+    expect(checkFeedback({ enough_evidence: true, feedback: "Too short." })).toMatchObject({ ok: false, blocked: null });
+    // Phrases about the candidate's own result, an outcome, a comparison or an internal note are held back, with the phrase.
+    for (const [bad, phrase] of [
+      ["You scored 4/5 on technical SEO.", "You scored"],
+      ["Your score was strong.", "Your score"],
+      ["That earned 8 out of 10.", "8 out of 10"],
+      ["We will move forward with your application.", "move forward"],
+      ["Compared with other candidates you did well.", "Compared with other"],
+      ["Areas to explore: verify the GSC claims.", "Areas to explore"],
+      ["You will be shortlisted soon.", "You will be shortlisted"],
+      ["See you in the next round.", "next round"],
+      ["You seemed nervous at first.", "seemed nervous"],
+    ]) {
+      expect(checkFeedback({ enough_evidence: true, feedback: `${good} ${bad}` })).toMatchObject({ ok: false, blocked: phrase });
+    }
+    // Ordinary job words are fine: this used to hold back feedback for an SEO role.
+    for (const fine of [
+      "You explained how you raised the site's SEO score and Core Web Vitals.",
+      "You described managing app store ratings and reviews.",
+      "You described how the build passed all tests after the migration.",
+      "Your work on shortlisting keywords for the content plan was clear.",
+    ]) {
+      expect(checkFeedback({ enough_evidence: true, feedback: `${good} ${fine}` })).toMatchObject({ ok: true, blocked: null });
     }
   });
 });

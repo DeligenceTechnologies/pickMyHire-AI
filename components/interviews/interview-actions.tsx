@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Ban, Bell, Link2, MoreHorizontal, RefreshCw, Send, Trash2, Wand2 } from "lucide-react";
+import { Ban, Bell, Link2, Loader2, MoreHorizontal, RefreshCw, Send, Trash2, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -61,6 +61,15 @@ export function InterviewActions({ id, status, canWrite, canDelete, canRegenerat
           </DropdownMenuContent>
         </DropdownMenu>
       )}
+      {/* Building a plan takes 20-40 seconds: keep the recruiter informed until it's done. */}
+      <Dialog open={pending === "plan"}>
+        <DialogContent className="sm:max-w-md" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Loader2 className="size-4 animate-spin text-primary" /> Regenerating the question plan</DialogTitle>
+            <DialogDescription>Writing new personalized questions from the job description and the candidate&apos;s resume. This usually takes 20–40 seconds. Please keep this page open.</DialogDescription>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>
       <Dialog open={!!link} onOpenChange={(o) => !o && setLink(null)}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>

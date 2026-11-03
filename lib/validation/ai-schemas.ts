@@ -203,3 +203,16 @@ export const OverallSummarySchema = z.object({
   requirements: z.array(z.object({ requirement: z.string(), evidenced: z.boolean(), source_ids: z.array(z.string()) })),
 });
 export type OverallSummary = z.infer<typeof OverallSummarySchema>;
+
+/** The one-page simple report: requirement and section one-liners in plain words. */
+export const RequirementStatusSchema = z.enum(["shown", "partly", "not_shown", "not_asked"]);
+export type RequirementStatus = z.infer<typeof RequirementStatusSchema>;
+export const SimpleReportOutputSchema = z.object({
+  headline: z.string(),
+  requirements: z.array(z.object({ requirement: z.string(), status: RequirementStatusSchema, note: z.string() })),
+  sections: z.array(z.object({ name: z.string(), note: z.string() })),
+  top_strength: z.string(),
+  main_gap: z.string(),
+});
+export type SimpleReportOutput = z.infer<typeof SimpleReportOutputSchema>;
+export type SimpleReport = SimpleReportOutput & { generated_by: "openai" | "mock"; prompt_version: string; generated_at: string };
