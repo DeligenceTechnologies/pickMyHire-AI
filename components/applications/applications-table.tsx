@@ -1,19 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useState } from "react";
 import { Inbox, Loader2, Send } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/common/states";
-import { ClientPagination, usePaged } from "@/components/common/client-pagination";
+import { ClientPagination } from "@/components/common/client-pagination";
 import { api } from "@/lib/client/api";
 import { timeAgo } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { FIT_LABEL, type Fit } from "@/lib/application-form";
+import {
+  APPLICATIONS_PAGE_SIZE as LIST_PAGE_SIZE, applicationFiltersQuery, filterApplications, isTopFit, parseApplicationFilters, withQuery, type ApplicationFilters,
+} from "@/lib/applications/filters";
 import { APPLICATION_STATUS, MatchBadge } from "./match-badge";
 import { FitBadge } from "./answers-card";
 
@@ -26,27 +29,39 @@ const MATCH_FILTERS = [
   { v: "", l: "All" }, { v: "strong_match", l: "Strong" }, { v: "good_match", l: "Good" }, { v: "partial_match", l: "Partial" },
   { v: "low_match", l: "Low" }, { v: "insufficient_information", l: "Not enough info" },
 ];
-const ORDER: Record<string, number> = { strong_match: 5, good_match: 4, partial_match: 3, low_match: 2, insufficient_information: 1 };
-/** Good or strong on skills, and nothing outside the job's limits. */
-const isTopFit = (r: Row) => (r.match_level === "strong_match" || r.match_level === "good_match") && (r.fit.level === "ok" || r.fit.level === "none");
 
 export function ApplicationsTable({ rows, canInvite = false }: { rows: Row[]; canInvite?: boolean }) {
   const router = useRouter();
-  const [match, setMatch] = useState("");
-  const [top, setTop] = useState(false);
-  const [fit, setFit] = useState("");
-  const [status, setStatus] = useState("");
-  const [sort, setSort] = useState<"recent" | "match">("recent");
+  const pathname = usePathname();
+  const params = useSearchParams();
+  // Filters and page live in the address, so they survive opening an application and coming back.
+  // history.replaceState updates useSearchParams without reloading the page from the server.
+  const filters = parseApplicationFilters(params);
+  const { match, top, fit, status, sort } = filters;
+  const query = applicationFiltersQuery(filters);
+  const setFilters = (patch: Partial<ApplicationFilters>) =>
+    window.history.replaceState(null, "", withQuery(pathname, applicationFiltersQuery({ ...filters, ...patch }))); // back to page 1
+  const setMatch = (v: string) => setFilters({ match: v as ApplicationFilters["match"] });
+  const setTop = (v: boolean) => setFilters({ top: v });
+  const setFit = (v: string) => setFilters({ fit: v as ApplicationFilters["fit"] });
+  const setStatus = (v: string) => setFilters({ status: v });
+  const setSort = (v: ApplicationFilters["sort"]) => setFilters({ sort: v });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirm, setConfirm] = useState(false);
   const [sendEmail, setSendEmail] = useState(true);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
-  const shown = useMemo(() => {
-    const r = rows.filter((x) => (!top || isTopFit(x)) && (!match || x.match_level === match) && (!fit || x.fit.level === fit) && (!status || x.status === status));
-    return sort === "match" ? [...r].sort((a, b) => (ORDER[b.match_level ?? ""] ?? 0) - (ORDER[a.match_level ?? ""] ?? 0)) : r;
-  }, [rows, match, top, fit, status, sort]);
-  const paged = usePaged(shown, `${match}|${top}|${fit}|${status}|${sort}`);
+  const shown = filterApplications(rows, filters); // the React Compiler memoizes this
+  const pages = Math.max(1, Math.ceil(shown.length / LIST_PAGE_SIZE));
+  const page = Math.min(Math.max(1, Number(params.get("page")) || 1), pages);
+  const setPage = (p: number) => {
+    const q = new URLSearchParams(query);
+    if (p > 1) q.set("page", String(p));
+    window.history.replaceState(null, "", withQuery(pathname, q.toString()));
+  };
+  const paged = { page, pages, setPage, pageSize: LIST_PAGE_SIZE, total: shown.length, rows: shown.slice((page - 1) * LIST_PAGE_SIZE, page * LIST_PAGE_SIZE) };
+  // The application page gets the same filters, for Previous / Next and the way back to this exact list.
+  const listQuery = page > 1 ? `${query}${query ? "&" : ""}page=${page}` : query;
   const invitable = shown.filter((r) => r.status === "new");
   const chosen = rows.filter((r) => selected.has(r.id) && r.status === "new");
   const toggle = (id: string, on: boolean) => setSelected((s) => { const n = new Set(s); if (on) n.add(id); else n.delete(id); return n; });
@@ -96,7 +111,7 @@ export function ApplicationsTable({ rows, canInvite = false }: { rows: Row[]; ca
             <option value="">All statuses</option>
             {Object.entries(APPLICATION_STATUS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
-          <select aria-label="Sort" value={sort} onChange={(e) => setSort(e.target.value as "recent" | "match")} className="h-7 rounded-md border border-input bg-background px-2 text-xs">
+          <select aria-label="Sort" value={sort} onChange={(e) => setSort(e.target.value as ApplicationFilters["sort"])} className="h-7 rounded-md border border-input bg-background px-2 text-xs">
             <option value="recent">Newest first</option>
             <option value="match">By AI match</option>
           </select>
@@ -135,7 +150,7 @@ export function ApplicationsTable({ rows, canInvite = false }: { rows: Row[]; ca
                   </td>
                 )}
                 <td className="px-4 py-3">
-                  <Link href={`/jobs/${a.job_id}/applications/${a.id}`} className="font-medium after:absolute after:inset-0 group-hover:text-primary">{a.candidate_name}</Link>
+                  <Link href={withQuery(`/jobs/${a.job_id}/applications/${a.id}`, listQuery)} className="font-medium after:absolute after:inset-0 group-hover:text-primary">{a.candidate_name}</Link>
                   <p className="text-xs text-muted-foreground">{a.candidate_email}</p>
                 </td>
                 <td className="px-4 py-3">
