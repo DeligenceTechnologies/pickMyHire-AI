@@ -13,7 +13,7 @@ import { FormCard } from "./form-card";
 
 type Settings = { interviewer_name: string; invite_expiry_days: number; show_scores: boolean; notify_on_completion: boolean; candidate_feedback_email: boolean };
 
-export function OrgSettingsForm({ orgName, settings, canEdit, ai }: { orgName: string; settings: Settings; canEdit: boolean; ai: { live: boolean; models: Record<string, string> } }) {
+export function OrgSettingsForm({ orgName, settings, canEdit, ai }: { orgName: string; settings: Settings; canEdit: boolean; ai: { live: boolean; models: Record<string, string> | null } }) {
   const router = useRouter();
   const [name, setName] = useState(orgName);
   const [s, setS] = useState(settings);
@@ -35,11 +35,13 @@ export function OrgSettingsForm({ orgName, settings, canEdit, ai }: { orgName: s
         <label className="flex items-start gap-3 text-sm"><Switch checked={s.notify_on_completion} disabled={!canEdit} onCheckedChange={(c) => setS({ ...s, notify_on_completion: !!c })} /><span><span className="font-medium">Email recruiters when an interview completes</span></span></label>
         <label className="flex items-start gap-3 text-sm"><Switch checked={s.candidate_feedback_email} disabled={!canEdit} onCheckedChange={(c) => setS({ ...s, candidate_feedback_email: !!c })} /><span><span className="font-medium">Email candidates AI feedback after their interview</span><br /><span className="text-muted-foreground">Candidates always get a short confirmation once their interview is processed. When this is on, it also includes a few lines of AI feedback from their report: strengths and one area to build on, labelled as AI-generated, with no scores or hiring outcome.</span></span></label>
       </FormCard>
-      <FormCard title="AI configuration" description="Models are configured server-side (lib/ai/config.ts or OPENAI_MODEL_* environment variables).">
+      <FormCard title="AI connection" description={ai.models ? "Platform admin only: models are configured server-side (lib/ai/config.ts or OPENAI_MODEL_* environment variables)." : "The AI that runs your interviews and reports."}>
         <p className="text-sm">
-          Status: {ai.live ? <span className="font-medium text-emerald-700 dark:text-emerald-400">Live — OpenAI connected</span> : <span className="font-medium text-amber-700 dark:text-amber-400">Demo mode — set OPENAI_API_KEY in .env.local and restart the server</span>}
+          Status: {ai.live
+            ? <span className="font-medium text-emerald-700 dark:text-emerald-400">Connected</span>
+            : <span className="font-medium text-amber-700 dark:text-amber-400">{ai.models ? "Demo mode — set OPENAI_API_KEY in .env.local and restart the server" : "Not connected — please contact support"}</span>}
         </p>
-        <dl className="grid gap-2 text-sm sm:grid-cols-2">{Object.entries(ai.models).map(([k, v]) => <div key={k} className="flex justify-between gap-2 rounded-lg bg-muted/50 px-3 py-1.5"><dt className="text-muted-foreground">{k}</dt><dd className="font-mono text-xs">{v}</dd></div>)}</dl>
+        {ai.models && <dl className="grid gap-2 text-sm sm:grid-cols-2">{Object.entries(ai.models).map(([k, v]) => <div key={k} className="flex justify-between gap-2 rounded-lg bg-muted/50 px-3 py-1.5"><dt className="text-muted-foreground">{k}</dt><dd className="font-mono text-xs">{v}</dd></div>)}</dl>}
       </FormCard>
     </>
   );

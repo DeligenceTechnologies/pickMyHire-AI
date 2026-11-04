@@ -17,6 +17,8 @@ export default async function UsagePage() {
   const auth = await requireAuth("usage:view");
   const [{ byFeature, interviews }, quota] = await Promise.all([getUsage(auth.orgId), getQuotaStatus(auth.orgId)]);
   const totalTokens = byFeature.reduce((a, f) => a + f.input_tokens + f.output_tokens, 0);
+  // The per-feature breakdown (latency, provider) is internal: only the platform admin sees it.
+  const admin = auth.isPlatformAdmin;
   return (
     <>
       <FormCard title="Free interviews" description={quota.quota === null ? "Your plan has unlimited interviews." : `An interview counts once the candidate completes it (since ${formatDate(quota.countedFrom)}). Interviews sent but not finished hold a slot.`}>
@@ -42,7 +44,8 @@ export default async function UsagePage() {
           <div key={String(k)} className="rounded-xl border bg-card p-4"><p className="text-xs text-muted-foreground">{k}</p><p className="mt-1 text-2xl font-semibold tabular">{v}</p></div>
         ))}
       </div>
-      <FormCard title="AI calls by feature" description="Last 30 days. Realtime audio usage is billed by OpenAI per session minute and isn't tokenized here.">
+      {admin && (
+      <FormCard title="AI calls by feature" description="Platform admin only. Last 30 days. Realtime audio usage is billed by OpenAI per session minute and isn't tokenized here.">
         {byFeature.length === 0 ? <p className="text-sm text-muted-foreground">No AI usage recorded yet.</p> : (
           <table className="w-full text-sm">
             <thead className="text-left text-xs text-muted-foreground"><tr><th className="pb-2 font-medium">Feature</th><th className="pb-2 text-right font-medium">Calls</th><th className="pb-2 text-right font-medium">Failures</th><th className="pb-2 text-right font-medium">Tokens in / out</th><th className="pb-2 text-right font-medium">Avg latency</th></tr></thead>
@@ -54,6 +57,7 @@ export default async function UsagePage() {
           </table>
         )}
       </FormCard>
+      )}
     </>
   );
 }

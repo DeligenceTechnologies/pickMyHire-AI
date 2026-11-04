@@ -200,7 +200,7 @@ function Disclaimer({ source }: { source?: string }) {
       <Info className="mt-0.5 size-3.5 shrink-0" />
       <span>
         AI-generated summary of interview evidence to support your review. It is not a hiring recommendation — verify evidence in the recording and transcript before making decisions.
-        {source === "mock" && <strong className="ml-1 text-amber-700 dark:text-amber-400">Generated in demo mode (no OpenAI key): heuristic only.</strong>}
+        {source === "mock" && <strong className="ml-1 text-amber-700 dark:text-amber-400">Generated in demo mode: heuristic only.</strong>}
       </span>
     </p>
   );
@@ -269,7 +269,7 @@ function Overview({ detail, report, showScores, jump, onOpenReport, canViewCandi
             ["Completed", formatDate(detail.completed_at, true)],
             ["Consent", detail.consent_given ? `Given ${formatDate(detail.consent_timestamp, true)} (v${detail.consent_version})` : "Not given"],
             ["Recording", detail.recordings.length ? `${detail.recordings.filter((r) => r.status === "stored").length}/${detail.recordings.length} part(s) stored` : "None"],
-            ["Plan", detail.interview_plan ? `${detail.interview_plan.generated_by === "mock" ? "Demo-mode" : "AI"} plan · ${detail.interview_plan.prompt_version}` : "—"],
+            ["Plan", detail.interview_plan ? `${detail.interview_plan.generated_by === "mock" ? "Demo-mode" : "AI"} plan` : "—"],
           ].map(([k, v]) => <div key={String(k)}><dt className="text-xs text-muted-foreground">{k}</dt><dd className="mt-0.5">{v}</dd></div>)}
         </dl>
       </Card>

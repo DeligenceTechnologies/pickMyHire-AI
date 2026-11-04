@@ -38,7 +38,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           <div className="flex-1" />
           {!live && (
             <Link href="/settings/interview" className="hidden rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800 ring-1 ring-amber-200 sm:inline dark:bg-amber-950 dark:text-amber-300 dark:ring-amber-900">
-              Demo mode — add OPENAI_API_KEY to enable live AI
+              {auth.isPlatformAdmin ? "Demo mode — add OPENAI_API_KEY to enable live AI" : "AI not connected — please contact support"}
             </Link>
           )}
           <NotificationBell />
