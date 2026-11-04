@@ -226,10 +226,10 @@ export default async function Home() {
       {/* Product demo */}
       <section id="demo" className="scroll-mt-20 py-24">
         <div className="mx-auto max-w-5xl px-5 sm:px-8">
-          <SectionHead center eyebrow="Product demo" title="See PickMyHire.ai in action" intro="A 4-minute walkthrough: a real AI interview, then every round from job to shortlist, with the identity check, human interviews and the overall result." />
+          <SectionHead center eyebrow="Product demo" title="See PickMyHire.ai in action" intro="A 3-minute walkthrough: a real AI interview, then every round from job to shortlist, with the identity check, human interviews and the overall result." />
           <DemoVideo className="mt-12" />
           <p className="mt-4 text-center text-sm text-[#7A8AA6]">Recorded with sample data, apart from the real candidate interview.</p>
-          <p className="mt-3 text-center text-base text-[#3D4D6A]">Want the full product walkthrough? <Link href="/demo#walkthrough" className="inline-flex items-center gap-1 font-semibold text-[#0B5BD3] hover:underline">Watch the 11-minute version <ArrowRight className="size-4" /></Link></p>
+          <p className="mt-3 text-center text-base text-[#3D4D6A]">Want the full product walkthrough? <Link href="/demo#walkthrough" className="inline-flex items-center gap-1 font-semibold text-[#0B5BD3] hover:underline">Watch the 13-minute version <ArrowRight className="size-4" /></Link></p>
         </div>
       </section>
 

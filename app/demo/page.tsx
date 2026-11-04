@@ -11,10 +11,10 @@ import { getTrialSettings } from "@/lib/services/platform";
 
 export const metadata: Metadata = {
   title: { absolute: "Product demo · PickMyHire.ai" },
-  description: "Watch a 4-minute walkthrough of PickMyHire.ai: a real AI video interview, then every round from job to shortlist, with the identity check, human interviews and the overall result.",
+  description: "Watch a 3-minute walkthrough of PickMyHire.ai: a real AI video interview, then every round from job to shortlist, with the identity check, human interviews and the overall result.",
   openGraph: {
     title: "PickMyHire.ai · Product demo",
-    description: "A 4-minute walkthrough: a real AI interview, then every round from job to shortlist.",
+    description: "A 3-minute walkthrough: a real AI interview, then every round from job to shortlist.",
     images: ["/demo/og.jpg"],
   },
 };
@@ -38,11 +38,11 @@ export default async function DemoPage() {
         <p className="text-center text-sm font-semibold tracking-[0.18em] text-[#0B5BD3] uppercase">Product demo</p>
         <h1 className="mt-3 text-center text-3xl font-bold tracking-tight text-balance sm:text-5xl">See PickMyHire.ai in action</h1>
         <p className="mx-auto mt-4 max-w-2xl text-center text-lg leading-relaxed text-[#4A5874]">
-          A 4-minute walkthrough: a real AI interview, then every round from job to shortlist, with the identity check, human interviews and the overall result.
+          A 3-minute walkthrough: a real AI interview, then every round from job to shortlist, with the identity check, human interviews and the overall result.
         </p>
         <DemoVideo className="mt-10" />
         <p className="mt-3 text-center text-xs text-[#7A8AA6]">Recorded with sample data, apart from the real candidate interview.</p>
-        <p className="mt-3 text-center text-base text-[#3D4D6A]">Want every detail? <a href="#walkthrough" className="font-semibold text-[#0B5BD3] hover:underline">Watch the full 11-minute product walkthrough ↓</a></p>
+        <p className="mt-3 text-center text-base text-[#3D4D6A]">Want every detail? <a href="#walkthrough" className="font-semibold text-[#0B5BD3] hover:underline">Watch the full 13-minute product walkthrough ↓</a></p>
 
         <div className="mt-12 grid gap-10 md:grid-cols-[1.2fr_1fr]">
           <section>
@@ -80,7 +80,7 @@ export default async function DemoPage() {
         <section id="walkthrough" className="mt-20 scroll-mt-24">
           <h2 className="text-center text-2xl font-bold tracking-tight sm:text-3xl">Full product walkthrough</h2>
           <p className="mx-auto mt-3 max-w-2xl text-center text-base leading-relaxed text-[#4A5874]">
-            The 11-minute version: every screen in detail, from creating a job and screening applicants to the AI interview, the report, human rounds, scorecards and the shortlist.
+            The 13-minute version: every screen in detail, from creating a job, application questions and screening applicants to the AI interview, the simple and detailed reports, human rounds, scorecards, the overall result and the shortlist.
           </p>
           <DemoVideo className="mt-8" video={WALKTHROUGH_VIDEO} />
           <p className="mt-3 text-center text-xs text-[#7A8AA6]">Recorded with sample data, apart from the real candidate interview.</p>

@@ -27,8 +27,8 @@ An AI interviewer runs a personalized voice and video interview with every candi
 **The AI never makes hiring decisions.** It conducts interviews and organizes the evidence; your team decides every round.
 
 <p align="center">
-  <a href="https://pickmyhire.ai/demo"><img src="public/demo/poster.webp" alt="Watch the 4-minute product demo" width="720"></a><br>
-  <sub><a href="https://pickmyhire.ai/demo">Watch the 4-minute demo</a> · or the <a href="https://pickmyhire.ai/demo#walkthrough">full 11-minute product walkthrough</a></sub>
+  <a href="https://pickmyhire.ai/demo"><img src="public/demo/poster.webp" alt="Watch the 3-minute product demo" width="720"></a><br>
+  <sub><a href="https://pickmyhire.ai/demo">Watch the 3-minute demo</a> · or the <a href="https://pickmyhire.ai/demo#walkthrough">full 13-minute product walkthrough</a></sub>
 </p>
 
 ## How it works
