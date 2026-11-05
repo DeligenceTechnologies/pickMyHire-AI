@@ -2,7 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { ApiError } from "@/lib/api";
 import { audit, notify } from "@/lib/audit";
-import type { Role } from "@/lib/auth/permissions";
+import { can, type Role } from "@/lib/auth/permissions";
 import { json, withOrg, type Tx } from "@/lib/database/db";
 import { companyBrand, emailTemplates, failedRecipients, replyToUser, sendEmail } from "@/lib/email";
 import { env } from "@/lib/env";
@@ -315,34 +315,54 @@ export async function saveScorecard(orgId: string, userId: string, id: string, i
   });
 }
 
+/** Why a human interview is on someone's dashboard. */
+export type HumanCardKind = "scorecard_needed" | "ready_to_decide" | "upcoming";
+
 export type HumanListRow = {
   id: string; job_id: string; job_title: string; candidate_id: string; candidate_name: string; round_name: string; status: HumanStatus;
-  scheduled_at: Date; duration_minutes: number; timezone: string; location_type: LocationType; location: string | null; on_panel: boolean; my_scorecard_submitted: boolean;
+  scheduled_at: Date; duration_minutes: number; timezone: string; location_type: LocationType; location: string | null;
+  on_panel: boolean; my_scorecard_submitted: boolean;
   /** The interview's end time has passed. */
   is_past: boolean;
-  /** The round decision is made (scorecards are locked). */
-  decided: boolean;
+  /** Panel members, and how many of them have submitted a scorecard. */
+  panel_size: number; submitted: number;
+  kind: HumanCardKind;
 };
 
 /**
- * Upcoming (and today's) human interviews, plus ones still waiting for this
- * person's scorecard. Interviewers see only those they're on the panel of.
+ * The dashboard's human-interview card: only what still needs this person.
+ * - scorecard_needed: they're on the panel, the interview is over (or marked completed) and their scorecard isn't in.
+ * - ready_to_decide: everyone on the panel has submitted and no round decision is made yet (people who can decide).
+ * - upcoming: scheduled and not over yet (interviewers: only their own).
+ * Something drops off once it's done: scorecard submitted, decision made, interview over, cancelled or a no-show.
  */
 export async function listMyHumanInterviews(orgId: string, viewer: { userId: string; role: Role }) {
   const onlyMine = viewer.role === "interviewer";
+  const canDecide = can(viewer.role, "decision:write");
   return withOrg(orgId, (tx) => tx<HumanListRow[]>`
-    select h.id, h.job_id, j.title as job_title, h.candidate_id, c.name as candidate_name, h.round_name, h.status, h.scheduled_at, h.duration_minutes,
-      h.timezone, h.location_type, h.location, (h.scheduled_at + make_interval(mins => h.duration_minutes)) < now() as is_past, h.decision is not null as decided,
-      exists (select 1 from human_interview_panel p where p.human_interview_id = h.id and p.user_id = ${viewer.userId}) as on_panel,
-      exists (select 1 from human_interview_scorecards s where s.human_interview_id = h.id and s.user_id = ${viewer.userId} and s.submitted_at is not null) as my_scorecard_submitted
-    from human_interviews h join jobs j on j.id = h.job_id join candidates c on c.id = h.candidate_id
-    where h.organization_id = ${orgId}
-      and h.status in ('scheduled', 'completed')
-      and (h.scheduled_at > now() - interval '12 hours'
-        or exists (select 1 from human_interview_panel p where p.human_interview_id = h.id and p.user_id = ${viewer.userId} and h.decision is null
-                   and not exists (select 1 from human_interview_scorecards s where s.human_interview_id = h.id and s.user_id = ${viewer.userId} and s.submitted_at is not null)))
-      ${onlyMine ? tx`and exists (select 1 from human_interview_panel p where p.human_interview_id = h.id and p.user_id = ${viewer.userId})` : tx``}
-    order by h.scheduled_at
+    select * from (
+      select b.*,
+        case
+          when b.on_panel and not b.my_scorecard_submitted and (b.status = 'completed' or b.is_past) then 'scorecard_needed'
+          when ${canDecide} and b.status = 'completed' and b.panel_size > 0 and b.submitted >= b.panel_size then 'ready_to_decide'
+          when b.status = 'scheduled' and not b.is_past and (b.on_panel or not ${onlyMine}) then 'upcoming'
+        end as kind
+      from (
+        select h.id, h.job_id, j.title as job_title, h.candidate_id, c.name as candidate_name, h.round_name, h.status, h.scheduled_at,
+          h.duration_minutes, h.timezone, h.location_type, h.location,
+          (h.scheduled_at + make_interval(mins => h.duration_minutes)) < now() as is_past,
+          exists (select 1 from human_interview_panel p where p.human_interview_id = h.id and p.user_id = ${viewer.userId}) as on_panel,
+          exists (select 1 from human_interview_scorecards s where s.human_interview_id = h.id and s.user_id = ${viewer.userId} and s.submitted_at is not null) as my_scorecard_submitted,
+          (select count(*)::int from human_interview_panel p where p.human_interview_id = h.id) as panel_size,
+          (select count(*)::int from human_interview_scorecards s join human_interview_panel p on p.human_interview_id = s.human_interview_id and p.user_id = s.user_id
+            where s.human_interview_id = h.id and s.submitted_at is not null) as submitted
+        from human_interviews h join jobs j on j.id = h.job_id join candidates c on c.id = h.candidate_id
+        where h.organization_id = ${orgId} and h.status in ('scheduled', 'completed') and h.decision is null
+      ) b
+    ) r
+    where r.kind is not null
+    -- Things to act on first (oldest first), then what's coming up (soonest first).
+    order by case r.kind when 'upcoming' then 1 else 0 end, r.scheduled_at
     limit 20`);
 }
 
