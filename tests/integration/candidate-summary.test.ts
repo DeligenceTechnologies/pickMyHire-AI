@@ -44,7 +44,7 @@ beforeAll(async () => {
   const humanRound = (await listRounds(orgId, jobId)).find((r) => r.kind === "human")!.id;
   humanId = (await scheduleHumanInterview(orgId, owner, {
     jobId, candidateId, roundId: humanRound, scheduledAt: new Date(Date.now() + 86_400_000).toISOString(), durationMinutes: 45, timezone: "Asia/Kolkata",
-    locationType: "video", location: null, interviewerIds: [interviewer], message: null, sendEmail: false,
+    locationType: "video", location: "https://meet.google.com/abc-defg-hij", interviewerIds: [interviewer], message: null, sendEmail: false,
   })).id;
   await saveScorecard(orgId, interviewer, humanId, {
     ratings: [{ criterion: "System design", rating: 4 }, { criterion: "Communication", rating: 5, comment: "Explains trade-offs clearly" }],

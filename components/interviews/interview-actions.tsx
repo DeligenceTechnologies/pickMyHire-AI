@@ -25,7 +25,7 @@ export function InterviewActions({ id, status, canWrite, canDelete, canRegenerat
   const hasMenu = (canWrite && notStarted) || canDelete;
 
   const newLink = async (resend: boolean) => {
-    const r = await run<{ link: string }>("link", `/api/interviews/${id}/${resend ? "invite" : "link"}`, { success: resend ? "Invitation sent with a new link" : undefined });
+    const r = await run<{ link: string }>("link", `/api/interviews/${id}/${resend ? "invite" : "link"}`, { success: resend ? "Invitation sent with a new link" : undefined, emailFix: "Copy the new link below and send it yourself, or try again later." });
     if (r) setLink(r.link);
   };
 
@@ -45,7 +45,7 @@ export function InterviewActions({ id, status, canWrite, canDelete, canRegenerat
           <DropdownMenuContent align="end" className="w-56">
             {canWrite && notStarted && <DropdownMenuItem onClick={() => newLink(false)}><Link2 /> Get a new link</DropdownMenuItem>}
             {canWrite && ["invited", "consent_pending", "device_check", "ready"].includes(status) && (
-              <DropdownMenuItem onClick={async () => { const r = await run<{ link: string }>("remind", `/api/interviews/${id}/remind`, { success: "Reminder sent" }); if (r) setLink(r.link); }}><Bell /> Send reminder</DropdownMenuItem>
+              <DropdownMenuItem onClick={async () => { const r = await run<{ link: string }>("remind", `/api/interviews/${id}/remind`, { success: "Reminder sent", emailFix: "Copy the new link below and send it yourself, or try again later." }); if (r) setLink(r.link); }}><Bell /> Send reminder</DropdownMenuItem>
             )}
             {canWrite && notStarted && <DropdownMenuItem onClick={() => run("plan", `/api/interviews/${id}/plan`, { success: "Interview plan regenerated" })}><Wand2 /> Regenerate question plan</DropdownMenuItem>}
             {canWrite && notStarted && status !== "expired" && <DropdownMenuItem onClick={() => run("cancel", `/api/interviews/${id}/cancel`, { success: "Interview cancelled" })}><Ban /> Cancel interview</DropdownMenuItem>}

@@ -1,6 +1,6 @@
 import "server-only";
 import { env } from "@/lib/env";
-import { withSystem } from "@/lib/database/db";
+import { json, withSystem } from "@/lib/database/db";
 import { log } from "@/lib/logger";
 import { logoUrl } from "@/lib/branding";
 import { renderEmailHtml, type EmailBrand, type EmailCta } from "./html";
@@ -102,7 +102,19 @@ function provider(): EmailProvider {
   return env().EMAIL_PROVIDER === "resend" ? resendProvider : logProvider;
 }
 
-export async function sendEmail(msg: EmailMessage): Promise<{ ok: boolean }> {
+/** One email's result: which address it was for, and whether the provider accepted it. */
+export type EmailResult = { ok: boolean; to: string };
+
+/** The addresses whose email failed, for an action's response (`emailFailed`), so the screen can say so. */
+export const failedRecipients = (results: (EmailResult | null | undefined)[]) =>
+  results.filter((r): r is EmailResult => !!r && !r.ok).map((r) => r.to);
+
+/**
+ * Send one email. Never throws: a failure is recorded in the email outbox (with the reason),
+ * the company's owners and admins get an in-app notice, and the result says it failed so the
+ * action that sent it can tell the person who clicked.
+ */
+export async function sendEmail(msg: EmailMessage): Promise<EmailResult> {
   const p = provider();
   let status = "sent";
   let error: string | null = null;
@@ -113,13 +125,37 @@ export async function sendEmail(msg: EmailMessage): Promise<{ ok: boolean }> {
     error = err instanceof Error ? err.message : "send failed";
     log.warn("email.send_failed", { provider: p.name, error });
   }
-  // The outbox notes the reply-to and attachments too, so they're visible under Settings → Notifications.
+  // The outbox notes the reply-to and attachments too, so they're visible under Settings → Email outbox.
   const extras = [msg.replyTo && `Reply-to: ${msg.replyTo}`, ...(msg.attachments ?? []).map((a) => `Attached: ${a.filename}`)].filter(Boolean);
   const logged = extras.length ? `${msg.text}\n\n---\n${extras.join("\n")}` : msg.text;
-  await withSystem((tx) => tx`
-    insert into email_outbox (organization_id, to_email, subject, body_text, provider, status, error)
-    values (${msg.orgId ?? null}, ${msg.to}, ${msg.subject}, ${logged}, ${p.name}, ${status}, ${error})`);
-  return { ok: status === "sent" };
+  try {
+    await withSystem((tx) => tx`
+      insert into email_outbox (organization_id, to_email, subject, body_text, provider, status, error)
+      values (${msg.orgId ?? null}, ${msg.to}, ${msg.subject}, ${logged}, ${p.name}, ${status}, ${error})`);
+  } catch (err) {
+    // Recording is secondary: a sent email must never turn into an error for the action that sent it.
+    log.warn("email.outbox_failed", { error: err instanceof Error ? err.message : String(err) });
+  }
+  if (status !== "sent" && msg.orgId) await noticeEmailFailure(msg.orgId, msg.to, msg.subject);
+  return { ok: status === "sent", to: msg.to };
+}
+
+/**
+ * Tell the company's owners and admins (bell notification) that an email failed, at most once an
+ * hour each, so a provider outage doesn't flood them. Never throws.
+ */
+async function noticeEmailFailure(orgId: string, to: string, subject: string) {
+  try {
+    await withSystem((tx) => tx`
+      insert into notifications (organization_id, user_id, type, payload)
+      select ${orgId}, m.user_id, 'email.failed', ${json({ to, subject })}
+      from organization_members m
+      where m.organization_id = ${orgId} and m.role in ('owner', 'admin')
+        and not exists (select 1 from notifications n where n.organization_id = ${orgId} and n.user_id = m.user_id
+          and n.type = 'email.failed' and n.created_at > now() - interval '1 hour')`);
+  } catch (err) {
+    log.warn("email.failure_notice_failed", { error: err instanceof Error ? err.message : String(err) });
+  }
 }
 
 /**

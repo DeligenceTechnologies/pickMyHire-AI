@@ -4,9 +4,9 @@ import { ApiError } from "@/lib/api";
 import { audit, notify } from "@/lib/audit";
 import type { Role } from "@/lib/auth/permissions";
 import { json, withOrg, type Tx } from "@/lib/database/db";
-import { companyBrand, emailTemplates, replyToUser, sendEmail } from "@/lib/email";
+import { companyBrand, emailTemplates, failedRecipients, replyToUser, sendEmail } from "@/lib/email";
 import { env } from "@/lib/env";
-import { DECISION_LABEL, DECISIONS, formatInZone, LOCATION_LABEL, LOCATION_TYPES, MAX_CRITERIA, type Decision, type HumanStatus, type LocationType } from "@/lib/hiring";
+import { checkLocation, DECISION_LABEL, DECISIONS, formatInZone, LOCATION_LABEL, LOCATION_TYPES, MAX_CRITERIA, type Decision, type HumanStatus, type LocationType } from "@/lib/hiring";
 import { buildIcs } from "@/lib/ics";
 import { ensurePipeline } from "./pipeline";
 
@@ -152,15 +152,24 @@ async function emailEveryone(h: HumanInterview, kind: "invite" | "rescheduled" |
   const whenText = `${formatInZone(h.scheduled_at, h.timezone, { withYear: true })} (${h.duration_minutes} minutes)`;
   const base = { jobTitle: h.job_title, companyName: h.company_name, roundName: h.round_name, when: whenText, where: where(h), reason: reason ?? null };
   const toCandidate = emailTemplates.humanInterview({ ...base, kind, name: h.candidate_name.split(" ")[0], message: h.message, with: h.panel.map((p) => p.name).join(", ") });
-  await sendEmail({ to: h.candidate_email, ...toCandidate, orgId, replyTo, brand, attachments: ics("candidate") });
+  const results = [await sendEmail({ to: h.candidate_email, ...toCandidate, orgId, replyTo, brand, attachments: ics("candidate") })];
   for (const p of h.panel) {
     const t = emailTemplates.humanInterview({ ...base, kind, name: p.name.split(" ")[0], message: null, with: h.candidate_name, link: interviewLink(h.id), team: true });
-    await sendEmail({ to: p.email, ...t, orgId, replyTo, brand, attachments: ics("team") });
+    results.push(await sendEmail({ to: p.email, ...t, orgId, replyTo, brand, attachments: ics("team") }));
   }
+  return failedRecipients(results);
+}
+
+/** The meeting link, phone number or address the interview type needs (400 when missing or invalid). */
+function requireLocation(type: LocationType, location: string | null | undefined) {
+  const r = checkLocation(type, location);
+  if (r.error !== undefined) throw new ApiError(400, r.error, "location_required");
+  return r.value;
 }
 
 /** Schedule a human interview for a job's human round. */
 export async function scheduleHumanInterview(orgId: string, userId: string, input: z.infer<typeof CreateHumanSchema>) {
+  const location = requireLocation(input.locationType, input.location);
   const id = await withOrg(orgId, async (tx) => {
     const [job] = await tx<{ id: string; title: string; status: string }[]>`select id, title, status from jobs where id = ${input.jobId} and organization_id = ${orgId}`;
     if (!job) throw new ApiError(404, "Job not found");
@@ -190,7 +199,7 @@ export async function scheduleHumanInterview(orgId: string, userId: string, inpu
       insert into human_interviews (organization_id, job_id, candidate_id, round_id, round_name, criteria, guide, attempt, scheduled_at, duration_minutes,
         timezone, location_type, location, message, history, created_by)
       values (${orgId}, ${job.id}, ${cand.id}, ${round.id}, ${round.name}, ${json(round.criteria)}, ${round.guide}, ${attempt}, ${input.scheduledAt},
-        ${input.durationMinutes}, ${input.timezone}, ${input.locationType}, ${input.location || null}, ${input.message || null}, ${json(history)}, ${userId})
+        ${input.durationMinutes}, ${input.timezone}, ${input.locationType}, ${location}, ${input.message || null}, ${json(history)}, ${userId})
       returning id`;
     for (const uid of new Set(input.interviewerIds)) {
       await tx`insert into human_interview_panel (human_interview_id, user_id, organization_id) values (${row.id}, ${uid}, ${orgId})`;
@@ -201,8 +210,8 @@ export async function scheduleHumanInterview(orgId: string, userId: string, inpu
     return row.id;
   });
   const h = (await withOrg(orgId, (tx) => load(tx, orgId, id)))!;
-  if (input.sendEmail) await emailEveryone(h, "invite", orgId, userId);
-  return { id };
+  const emailFailed = input.sendEmail ? await emailEveryone(h, "invite", orgId, userId) : [];
+  return { id, emailFailed };
 }
 
 async function change(orgId: string, userId: string, id: string, fn: (tx: Tx, h: HumanInterview) => Promise<void>) {
@@ -218,11 +227,12 @@ async function change(orgId: string, userId: string, id: string, fn: (tx: Tx, h:
 const push = (tx: Tx, id: string, item: HistoryItem) => tx`update human_interviews set history = history || ${json([item])} where id = ${id}`;
 
 export async function rescheduleHumanInterview(orgId: string, userId: string, id: string, input: z.infer<typeof ScheduleSchema> & { reason?: string | null }) {
+  const location = requireLocation(input.locationType, input.location);
   const h = await change(orgId, userId, id, async (tx, h) => {
     if (h.status !== "scheduled") throw new ApiError(409, "Only scheduled interviews can be rescheduled.");
     await loadPanel(tx, orgId, input.interviewerIds);
     await tx`update human_interviews set scheduled_at = ${input.scheduledAt}, duration_minutes = ${input.durationMinutes}, timezone = ${input.timezone},
-      location_type = ${input.locationType}, location = ${input.location || null}, message = ${input.message || null}, sequence = sequence + 1 where id = ${id}`;
+      location_type = ${input.locationType}, location = ${location}, message = ${input.message || null}, sequence = sequence + 1 where id = ${id}`;
     const before = new Set(h.panel.map((p) => p.user_id));
     await tx`delete from human_interview_panel where human_interview_id = ${id} and user_id <> all(${input.interviewerIds})`;
     for (const uid of new Set(input.interviewerIds)) {
@@ -232,7 +242,7 @@ export async function rescheduleHumanInterview(orgId: string, userId: string, id
     await push(tx, id, { type: "rescheduled", at: new Date().toISOString(), by: userId, from: h.scheduled_at.toISOString(), to: input.scheduledAt, ...(input.reason ? { reason: input.reason.slice(0, 300) } : {}) });
     await audit(tx, { orgId, userId, action: "human_interview.rescheduled", entityType: "human_interview", entityId: id, metadata: { from: h.scheduled_at, to: input.scheduledAt } });
   });
-  if (input.sendEmail) await emailEveryone(h, "rescheduled", orgId, userId, input.reason);
+  return { emailFailed: input.sendEmail ? await emailEveryone(h, "rescheduled", orgId, userId, input.reason) : [] };
 }
 
 export async function cancelHumanInterview(orgId: string, userId: string, id: string, input: { reason: string; sendEmail: boolean }) {
@@ -242,7 +252,7 @@ export async function cancelHumanInterview(orgId: string, userId: string, id: st
     await push(tx, id, { type: "cancelled", at: new Date().toISOString(), by: userId, reason: input.reason.slice(0, 300) });
     await audit(tx, { orgId, userId, action: "human_interview.cancelled", entityType: "human_interview", entityId: id, metadata: { reason: input.reason.slice(0, 300) } });
   });
-  if (input.sendEmail) await emailEveryone(h, "cancelled", orgId, userId, input.reason);
+  return { emailFailed: input.sendEmail ? await emailEveryone(h, "cancelled", orgId, userId, input.reason) : [] };
 }
 
 /** Record what happened: completed, no-show, or back to scheduled (undo). */

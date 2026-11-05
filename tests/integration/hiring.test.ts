@@ -151,6 +151,19 @@ describe("hiring decisions and human interviews", () => {
     await cancelHumanInterview(orgId, owner, second, { reason: "Not needed", sendEmail: false });
   });
 
+  it("refuses an interview without the link, phone number or address its type needs", async () => {
+    const extra = (n: string) => ({ roundId: undefined, extra: { name: `Check ${n} ${id}`, criteria: ["Communication"] } });
+    await expect(schedule({ ...extra("a"), locationType: "video", location: null })).rejects.toMatchObject({ status: 400, message: expect.stringMatching(/meeting link/) });
+    await expect(schedule({ ...extra("b"), locationType: "phone", location: "  " })).rejects.toMatchObject({ status: 400, message: expect.stringMatching(/phone number/) });
+    await expect(schedule({ ...extra("c"), locationType: "in_person", location: "" })).rejects.toMatchObject({ status: 400, message: expect.stringMatching(/address/) });
+    await expect(schedule({ ...extra("d"), locationType: "phone", location: "call me" })).rejects.toMatchObject({ status: 400 });
+    const ok = await schedule({ ...extra("e"), locationType: "video", location: "zoom.us/j/777" });
+    expect((await getHumanInterview(orgId, ok.id, { userId: owner, role: "owner" }))!.location).toBe("https://zoom.us/j/777");
+    await expect(rescheduleHumanInterview(orgId, owner, ok.id, { scheduledAt: at(4), durationMinutes: 30, timezone: "UTC", locationType: "in_person", location: null, interviewerIds: [owner], message: null, sendEmail: false }))
+      .rejects.toMatchObject({ status: 400, message: expect.stringMatching(/address/) });
+    await cancelHumanInterview(orgId, owner, ok.id, { reason: "Test", sendEmail: false });
+  });
+
   it("needs either a job round or an extra interview, not both", () => {
     const base = { jobId, candidateId, scheduledAt: at(1), durationMinutes: 30, timezone: "UTC", locationType: "video", interviewerIds: [owner] };
     expect(CreateHumanSchema.safeParse(base).success).toBe(false);

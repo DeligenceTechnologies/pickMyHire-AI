@@ -62,7 +62,7 @@ test("round decisions, human interview and shortlist", async ({ page }) => {
   await progress.getByRole("button", { name: "Schedule", exact: true }).click();
   const dlg = page.getByRole("dialog");
   await expect(dlg.getByRole("heading", { name: "Schedule Panel" })).toBeVisible();
-  await dlg.getByLabel("Meeting link, phone number or address").fill("https://zoom.us/j/987654");
+  await dlg.getByLabel("Meeting link").fill("https://zoom.us/j/987654");
   await dlg.getByText("Rory Recruiter").click();
   if (process.env.E2E_SCREENSHOTS) await page.screenshot({ path: "test-results/hiring-3-schedule-dialog.png", fullPage: true });
   await dlg.getByRole("button", { name: "Schedule interview" }).click();
@@ -133,7 +133,7 @@ test("round decisions, human interview and shortlist", async ({ page }) => {
   const extra = page.getByRole("dialog");
   await expect(extra.getByRole("heading", { name: "Schedule an extra interview" })).toBeVisible();
   await extra.getByLabel("Interview name").fill("Founder chat");
-  await extra.getByLabel("Meeting link, phone number or address").fill("https://meet.google.com/abc-defg-hij");
+  await extra.getByLabel("Meeting link").fill("https://meet.google.com/abc-defg-hij");
   await extra.getByText("Rory Recruiter").click();
   if (process.env.E2E_SCREENSHOTS) await page.screenshot({ path: "test-results/hiring-7-extra-interview.png", fullPage: true });
   await extra.getByRole("button", { name: "Schedule interview" }).click();

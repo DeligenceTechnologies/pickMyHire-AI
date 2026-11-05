@@ -18,6 +18,42 @@ export const LOCATION_TYPES = ["video", "phone", "in_person"] as const;
 export type LocationType = (typeof LOCATION_TYPES)[number];
 export const LOCATION_LABEL: Record<LocationType, string> = { video: "Video call", phone: "Phone call", in_person: "In person" };
 
+/** The detail each kind of interview needs, as asked for in the schedule form. */
+export const LOCATION_FIELD: Record<LocationType, { label: string; placeholder: string; hint: string }> = {
+  video: { label: "Meeting link", placeholder: "https://meet.google.com/abc-defg-hij", hint: "Zoom, Google Meet, Teams or any other video link." },
+  phone: { label: "Phone number", placeholder: "+91 98765 43210", hint: "The number the candidate should call, or the number you'll call them on. Include the country code." },
+  in_person: { label: "Address", placeholder: "4th floor, 12 MG Road, Pune 411001", hint: "Where the candidate should come, with floor or room if it helps." },
+};
+
+const PHONE = /^\+?[\d\s().-]+(?:\s*(?:ext\.?|x)\s*\d{1,6})?$/i;
+
+/**
+ * Check the meeting link, phone number or address for an interview (form and server use the same rule).
+ * A link typed without "https://" is accepted and returned with it.
+ */
+export function checkLocation(type: LocationType, raw: string | null | undefined): { value: string; error?: undefined } | { error: string; value?: undefined } {
+  const v = (raw ?? "").trim();
+  if (type === "video") {
+    if (!v) return { error: "Add the meeting link for this video call." };
+    const withScheme = /^[a-z][a-z\d+.-]*:\/\//i.test(v) ? v : `https://${v}`;
+    try {
+      const u = new URL(withScheme);
+      if ((u.protocol === "https:" || u.protocol === "http:") && /^[^\s.]+(\.[^\s.]+)+$/.test(u.hostname) && !/\s/.test(v)) return { value: withScheme };
+    } catch { /* not a link */ }
+    return { error: "Enter a valid meeting link, e.g. https://meet.google.com/abc-defg-hij" };
+  }
+  if (type === "phone") {
+    if (!v) return { error: "Add the phone number for this phone call." };
+    const main = v.split(/\s*(?:ext\.?|x)\s*\d/i)[0];
+    const digits = main.replace(/\D/g, "").length;
+    if (!PHONE.test(v) || digits < 7 || digits > 15) return { error: "Enter a valid phone number, e.g. +91 98765 43210" };
+    return { value: v };
+  }
+  if (!v) return { error: "Add the address for this in-person interview." };
+  if (v.length < 5 || !/\p{L}/u.test(v)) return { error: "Enter the full address, e.g. 4th floor, 12 MG Road, Pune." };
+  return { value: v };
+}
+
 export const DEFAULT_CRITERIA = ["Technical skills", "Problem solving", "Communication", "Culture and values fit"];
 export const MAX_CRITERIA = 12;
 

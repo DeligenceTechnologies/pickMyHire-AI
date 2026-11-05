@@ -62,7 +62,7 @@ export function HumanActions({ id, status, candidateName, roundName, inviteText,
           <DialogFooter>
             <Button variant="outline" onClick={() => setCancelling(false)}>Keep interview</Button>
             <Button variant="destructive" disabled={!reason.trim() || !!pending}
-              onClick={async () => { const ok = await run("cancel", `/api/human-interviews/${id}`, { method: "PATCH", body: { action: "cancel", reason: reason.trim(), sendEmail: notify }, success: "Interview cancelled" }); if (ok) setCancelling(false); }}>
+              onClick={async () => { const ok = await run("cancel", `/api/human-interviews/${id}`, { method: "PATCH", body: { action: "cancel", reason: reason.trim(), sendEmail: notify }, success: "Interview cancelled", emailFix: "Let them know yourself that it's cancelled." }); if (ok) setCancelling(false); }}>
               {pending === "cancel" && <Loader2 className="animate-spin" />} Cancel interview
             </Button>
           </DialogFooter>

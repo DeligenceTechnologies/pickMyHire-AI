@@ -11,7 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { api, type ClientApiError } from "@/lib/client/api";
-import { DEFAULT_CRITERIA, LOCATION_LABEL, LOCATION_TYPES, utcToZoned, zonedToUtc, type LocationType } from "@/lib/hiring";
+import { toastEmailResult } from "@/lib/client/email-result";
+import { checkLocation, DEFAULT_CRITERIA, LOCATION_FIELD, LOCATION_LABEL, LOCATION_TYPES, utcToZoned, zonedToUtc, type LocationType } from "@/lib/hiring";
 import { TagInput } from "@/components/common/tag-input";
 import { cn } from "@/lib/utils";
 
@@ -25,7 +26,7 @@ type Mode =
 const selectClass = "h-9 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 const DURATIONS = [15, 30, 45, 60, 75, 90, 120];
 const COMMON_ZONES = ["Asia/Kolkata", "UTC", "Europe/London", "Europe/Berlin", "Asia/Dubai", "Asia/Singapore", "Australia/Sydney", "America/New_York", "America/Chicago", "America/Los_Angeles"];
-const PLACEHOLDER: Record<LocationType, string> = { video: "Zoom, Google Meet or Teams link", phone: "Phone number to call", in_person: "Office address" };
+const NO_LOCATIONS: Record<LocationType, string> = { video: "", phone: "", in_person: "" };
 
 /** Tomorrow's date in `timeZone` (called when the dialog opens, not while rendering). */
 function tomorrowIn(timeZone: string) {
@@ -47,7 +48,9 @@ export function ScheduleDialog({ mode, members, emailLive, trigger }: { mode: Mo
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [v, setV] = useState({ date: "", time: "10:00", duration: 45, timezone: "UTC", locationType: "video" as LocationType, location: "", message: "", interviewers: [] as string[], reason: "", sendEmail: true });
+  // One box per type, so a link typed for a video call isn't checked as an address after switching.
+  const [v, setV] = useState({ date: "", time: "10:00", duration: 45, timezone: "UTC", locationType: "video" as LocationType, locations: NO_LOCATIONS, message: "", interviewers: [] as string[], reason: "", sendEmail: true });
+  const [locationError, setLocationError] = useState<string | null>(null);
   const set = (patch: Partial<typeof v>) => setV((x) => ({ ...x, ...patch }));
   const extra = mode.kind === "create" && !mode.roundId;
   const [extraRound, setExtraRound] = useState({ name: "", criteria: DEFAULT_CRITERIA, guide: "" });
@@ -56,37 +59,44 @@ export function ScheduleDialog({ mode, members, emailLive, trigger }: { mode: Mo
     if (mode.kind === "reschedule") {
       const i = mode.initial;
       const z = utcToZoned(i.scheduledAt, i.timezone);
-      setV({ date: z.date, time: z.time, duration: i.durationMinutes, timezone: i.timezone, locationType: i.locationType, location: i.location ?? "", message: i.message ?? "", interviewers: i.interviewerIds, reason: "", sendEmail: true });
+      setV({ date: z.date, time: z.time, duration: i.durationMinutes, timezone: i.timezone, locationType: i.locationType, locations: { ...NO_LOCATIONS, [i.locationType]: i.location ?? "" }, message: i.message ?? "", interviewers: i.interviewerIds, reason: "", sendEmail: true });
     } else {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
       const tomorrow = tomorrowIn(tz);
-      setV({ date: tomorrow, time: "10:00", duration: 45, timezone: tz, locationType: "video", location: "", message: "", interviewers: [], reason: "", sendEmail: true });
+      setV({ date: tomorrow, time: "10:00", duration: 45, timezone: tz, locationType: "video", locations: NO_LOCATIONS, message: "", interviewers: [], reason: "", sendEmail: true });
       setExtraRound({ name: "", criteria: DEFAULT_CRITERIA, guide: "" });
     }
+    setLocationError(null);
     setOpen(true);
   };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const where = checkLocation(v.locationType, v.locations[v.locationType]);
+    if (where.error !== undefined) {
+      setLocationError(where.error);
+      document.getElementById("hi-location")?.focus();
+      return;
+    }
     if (!v.interviewers.length) return toast.error("Choose at least one interviewer.");
     if (extra && !extraRound.criteria.length) return toast.error("Add at least one skill to rate.");
     setBusy(true);
     try {
       const values = {
         scheduledAt: zonedToUtc(v.date, v.time, v.timezone), durationMinutes: v.duration, timezone: v.timezone, locationType: v.locationType,
-        location: v.location.trim() || null, message: v.message.trim() || null, interviewerIds: v.interviewers, sendEmail: v.sendEmail,
+        location: where.value, message: v.message.trim() || null, interviewerIds: v.interviewers, sendEmail: v.sendEmail,
       };
       if (mode.kind === "create") {
         const round = mode.roundId
           ? { roundId: mode.roundId }
           : { extra: { name: extraRound.name.trim(), criteria: extraRound.criteria, guide: extraRound.guide.trim() || null } };
-        const res = await api<{ id: string }>("/api/human-interviews", { body: { ...values, ...round, jobId: mode.jobId, candidateId: mode.candidateId } });
-        toast.success(`${mode.roundId ? mode.roundName : extraRound.name.trim()} interview scheduled`);
+        const res = await api<{ id: string; emailFailed?: string[] }>("/api/human-interviews", { body: { ...values, ...round, jobId: mode.jobId, candidateId: mode.candidateId } });
+        toastEmailResult(res, `${mode.roundId ? mode.roundName : extraRound.name.trim()} interview scheduled`, "Use “Copy invite” and the calendar files on the next page to send it yourself.");
         setOpen(false);
         router.push(`/interviews/human/${res.id}`);
       } else {
-        await api(`/api/human-interviews/${mode.id}`, { method: "PATCH", body: { ...values, action: "reschedule", reason: v.reason.trim() || null } });
-        toast.success("Interview rescheduled");
+        const res = await api(`/api/human-interviews/${mode.id}`, { method: "PATCH", body: { ...values, action: "reschedule", reason: v.reason.trim() || null } });
+        toastEmailResult(res, "Interview rescheduled", "Use “Copy invite” and the calendar files on this page to send the new time yourself.");
         setOpen(false);
         router.refresh();
       }
@@ -141,13 +151,22 @@ export function ScheduleDialog({ mode, members, emailLive, trigger }: { mode: Mo
                 <legend className="mb-1.5 text-sm font-medium">Where<span aria-hidden="true" className="ml-0.5 text-destructive">*</span></legend>
                 <div className="flex flex-wrap gap-2">
                   {LOCATION_TYPES.map((t) => (
-                    <button key={t} type="button" onClick={() => set({ locationType: t })} aria-pressed={v.locationType === t}
+                    <button key={t} type="button" onClick={() => { set({ locationType: t }); setLocationError(null); }} aria-pressed={v.locationType === t}
                       className={cn("rounded-lg border px-3 py-1.5 text-sm", v.locationType === t ? "border-primary bg-primary/5 font-medium text-primary" : "hover:bg-muted")}>
                       {LOCATION_LABEL[t]}
                     </button>
                   ))}
                 </div>
-                <Input aria-label="Meeting link, phone number or address" value={v.location} maxLength={500} onChange={(e) => set({ location: e.target.value })} placeholder={PLACEHOLDER[v.locationType]} />
+                <div className="space-y-1.5 pt-1">
+                  <Label htmlFor="hi-location" required>{LOCATION_FIELD[v.locationType].label}</Label>
+                  <Input id="hi-location" aria-required="true" maxLength={500} autoComplete="off"
+                    type={v.locationType === "phone" ? "tel" : "text"} inputMode={v.locationType === "video" ? "url" : v.locationType === "phone" ? "tel" : "text"}
+                    value={v.locations[v.locationType]} placeholder={LOCATION_FIELD[v.locationType].placeholder}
+                    aria-invalid={!!locationError} aria-describedby="hi-location-help"
+                    onChange={(e) => { set({ locations: { ...v.locations, [v.locationType]: e.target.value } }); if (locationError) setLocationError(null); }}
+                    onBlur={() => { const t = v.locations[v.locationType]; if (t.trim()) setLocationError(checkLocation(v.locationType, t).error ?? null); }} />
+                  <p id="hi-location-help" className={cn("text-xs", locationError ? "text-destructive" : "text-muted-foreground")}>{locationError ?? LOCATION_FIELD[v.locationType].hint}</p>
+                </div>
               </fieldset>
               <fieldset className="space-y-1.5">
                 <legend className="mb-1.5 text-sm font-medium">Interviewers<span aria-hidden="true" className="ml-0.5 text-destructive">*</span></legend>

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { CheckCircle2, Loader2, Send, Upload } from "lucide-react";
 import { toast } from "sonner";
+import { toastEmailResult } from "@/lib/client/email-result";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -124,9 +125,9 @@ export function InviteDialog({ jobId, candidateId, candidateName, jobs, triggerL
           throw e;
         }
       }
-      const res = await api<{ id: string; link: string }>("/api/interviews", { body: { jobId: selectedJob, candidateId: cid, sendInvite, ...choice } });
+      const res = await api<{ id: string; link: string; emailFailed?: string[] }>("/api/interviews", { body: { jobId: selectedJob, candidateId: cid, sendInvite, ...choice } });
       setLink(res.link);
-      toast.success(sendInvite ? "Invitation sent" : "Interview created");
+      toastEmailResult(res, sendInvite ? "Invitation sent" : "Interview created", "The interview was created: copy the link below and send it yourself, or use “Resend invitation” later.");
       router.refresh();
     } catch (err) {
       setError((err as Error).message);

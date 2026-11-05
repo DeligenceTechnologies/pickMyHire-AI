@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatInZone, utcToZoned, zonedToUtc } from "@/lib/hiring";
+import { checkLocation, formatInZone, utcToZoned, zonedToUtc } from "@/lib/hiring";
 import { buildIcs } from "@/lib/ics";
 import { roundResults, allQualified, type PipelineRound, type RoundEntry } from "@/lib/services/pipeline";
 
@@ -56,5 +56,31 @@ describe("round results", () => {
   it("ignores cancelled interviews", () => {
     const res = roundResults(rounds, [entry({ decision: "qualified", decided_at: new Date() }), entry({ kind: "human", round_id: "r2", status: "cancelled" })]);
     expect(res[1].state).toBe("none");
+  });
+});
+
+describe("interview location: what each type needs", () => {
+  it("video call needs a real link; a link without https:// gets it", () => {
+    expect(checkLocation("video", "https://meet.google.com/abc-defg-hij")).toEqual({ value: "https://meet.google.com/abc-defg-hij" });
+    expect(checkLocation("video", "  zoom.us/j/123456  ")).toEqual({ value: "https://zoom.us/j/123456" });
+    expect(checkLocation("video", "https://teams.microsoft.com/l/meetup-join/19%3a")).toHaveProperty("value");
+    for (const bad of ["", "   ", null, undefined]) expect(checkLocation("video", bad).error).toMatch(/Add the meeting link/);
+    for (const bad of ["zoom", "meet google com", "ftp://files.example.com", "https://localhost", "javascript:alert(1)", "https://zoom.us/j/1 2"]) {
+      expect(checkLocation("video", bad).error, bad).toMatch(/valid meeting link/);
+    }
+  });
+
+  it("phone call needs a phone number of 7–15 digits", () => {
+    for (const ok of ["+91 98765 43210", "(415) 555-0132", "+1-415-555-0132", "020 7946 0958", "+44 20 7946 0958 ext. 204", "9876543210 x12"]) {
+      expect(checkLocation("phone", ok), ok).toEqual({ value: ok });
+    }
+    expect(checkLocation("phone", "").error).toMatch(/Add the phone number/);
+    for (const bad of ["12345", "call me", "+91 98765 43210 9876 54321", "https://zoom.us/j/1"]) expect(checkLocation("phone", bad).error, bad).toMatch(/valid phone number/);
+  });
+
+  it("in person needs an address", () => {
+    expect(checkLocation("in_person", "12 MG Road, Pune")).toEqual({ value: "12 MG Road, Pune" });
+    expect(checkLocation("in_person", " ").error).toMatch(/Add the address/);
+    expect(checkLocation("in_person", "123").error).toMatch(/full address/);
   });
 });

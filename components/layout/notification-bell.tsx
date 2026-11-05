@@ -19,6 +19,7 @@ const label = (n: N) =>
   : n.type === "human_interview.assigned" ? `You're interviewing ${n.payload.candidate} (${n.payload.round}, ${n.payload.job})${n.payload.at && n.payload.tz ? ` on ${formatInZone(n.payload.at, n.payload.tz)}` : ""}`
   : n.type === "human_interview.scorecard" ? `${n.payload.interviewer} submitted a scorecard for ${n.payload.candidate} (${n.payload.round})${n.payload.recommendation ? `: ${DECISION_LABEL[n.payload.recommendation as keyof typeof DECISION_LABEL] ?? ""}` : ""}`
   : n.type === "support.reply" ? `PickMyHire.ai support replied: ${n.payload.subject}`
+  : n.type === "email.failed" ? `An email couldn't be sent: “${n.payload.subject}” to ${n.payload.to}. Open the email outbox for the reason.`
   : n.type;
 
 export function NotificationBell() {
@@ -52,7 +53,7 @@ export function NotificationBell() {
           {items.length === 0 && <p className="px-3 py-6 text-center text-sm text-muted-foreground">You&apos;re all caught up.</p>}
           {items.map((n) => (
             <div key={n.id} className="group relative border-b last:border-0 hover:bg-muted">
-              <Link href={n.payload.ticket_id ? `/help/${n.payload.ticket_id}` : n.payload.application_id ? `/jobs/${n.payload.job_id}/applications/${n.payload.application_id}` : n.payload.human_interview_id ? `/interviews/human/${n.payload.human_interview_id}` : n.payload.interview_id ? `/interviews/${n.payload.interview_id}` : "/dashboard"} className="block py-2.5 pr-9 pl-3 text-sm">
+              <Link href={n.type === "email.failed" ? "/settings/notifications" : n.payload.ticket_id ? `/help/${n.payload.ticket_id}` : n.payload.application_id ? `/jobs/${n.payload.job_id}/applications/${n.payload.application_id}` : n.payload.human_interview_id ? `/interviews/human/${n.payload.human_interview_id}` : n.payload.interview_id ? `/interviews/${n.payload.interview_id}` : "/dashboard"} className="block py-2.5 pr-9 pl-3 text-sm">
                 <p className={n.read_at ? "text-muted-foreground" : "font-medium"}>{label(n)}</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">{timeAgo(n.created_at)}</p>
               </Link>

@@ -14,8 +14,8 @@ export const PATCH = route<{ id: string }>(async (req, { id }) => {
   const auth = await requireApiAuth("interview:write");
   const hid = uuidParam(id);
   const input = await body(req, Schema);
-  if (input.action === "reschedule") await rescheduleHumanInterview(auth.orgId, auth.userId, hid, input);
-  else if (input.action === "cancel") await cancelHumanInterview(auth.orgId, auth.userId, hid, input);
-  else await setHumanOutcome(auth.orgId, auth.userId, hid, input.status);
+  if (input.action === "reschedule") return { ok: true, ...(await rescheduleHumanInterview(auth.orgId, auth.userId, hid, input)) };
+  if (input.action === "cancel") return { ok: true, ...(await cancelHumanInterview(auth.orgId, auth.userId, hid, input)) };
+  await setHumanOutcome(auth.orgId, auth.userId, hid, input.status);
   return { ok: true };
 });

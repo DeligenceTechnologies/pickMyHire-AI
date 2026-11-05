@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { EmptyState } from "@/components/common/states";
 import { ClientPagination } from "@/components/common/client-pagination";
 import { api } from "@/lib/client/api";
+import { emailFailedIn, toastEmailResult } from "@/lib/client/email-result";
 import { timeAgo } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { FIT_LABEL, type Fit } from "@/lib/application-form";
@@ -69,9 +70,11 @@ export function ApplicationsTable({ rows, canInvite = false }: { rows: Row[]; ca
   const inviteAll = async () => {
     setProgress({ done: 0, total: chosen.length });
     const failed: string[] = [];
+    const notEmailed: string[] = [];
     for (const [i, r] of chosen.entries()) {
       try {
-        await api(`/api/applications/${r.id}/invite`, { body: { sendInvite: sendEmail } });
+        const res = await api(`/api/applications/${r.id}/invite`, { body: { sendInvite: sendEmail } });
+        notEmailed.push(...emailFailedIn(res));
       } catch (e) {
         failed.push(`${r.candidate_name}: ${(e as Error).message}`);
         if ((e as { status?: number }).status === 402 || /quota|free interviews|limit/i.test((e as Error).message)) break;
@@ -82,7 +85,8 @@ export function ApplicationsTable({ rows, canInvite = false }: { rows: Row[]; ca
     setConfirm(false);
     setSelected(new Set());
     const ok = chosen.length - failed.length;
-    if (ok) toast.success(`${ok} ${ok === 1 ? "applicant" : "applicants"} invited`);
+    if (ok) toastEmailResult({ emailFailed: notEmailed }, `${ok} ${ok === 1 ? "applicant" : "applicants"} invited`,
+      "Their interviews were created: open each one and use “Resend invitation”, or copy its link.");
     if (failed.length) toast.error(failed.slice(0, 3).join("\n"));
     router.refresh();
   };

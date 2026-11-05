@@ -152,9 +152,17 @@ export async function dismissNotifications(orgId: string, userId: string, id: st
 }
 
 export async function listOutbox(orgId: string) {
-  return withOrg(orgId, (tx) => tx<{ id: string; to_email: string; subject: string; body_text: string; provider: string; status: string; created_at: Date }[]>`
-    select id, to_email, subject, body_text, provider, status, created_at from email_outbox
+  return withOrg(orgId, (tx) => tx<{ id: string; to_email: string; subject: string; body_text: string; provider: string; status: string; error: string | null; created_at: Date }[]>`
+    select id, to_email, subject, body_text, provider, status, error, created_at from email_outbox
     where organization_id = ${orgId} order by created_at desc limit 30`);
+}
+
+/** Emails the provider refused in the last 30 days, for the outbox summary. */
+export async function countFailedEmails(orgId: string) {
+  const [r] = await withOrg(orgId, (tx) => tx<{ failed: number; last: Date | null }[]>`
+    select count(*)::int as failed, max(created_at) as last from email_outbox
+    where organization_id = ${orgId} and status <> 'sent' and created_at > now() - interval '30 days'`);
+  return r;
 }
 
 /** Targeted deletion of one kind of interview data. */

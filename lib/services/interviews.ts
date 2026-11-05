@@ -4,7 +4,7 @@ import { audit } from "@/lib/audit";
 import { ApiError } from "@/lib/api";
 import { runInBackground } from "@/lib/background";
 import { env } from "@/lib/env";
-import { companyBrand, emailTemplates, replyToUser, sendEmail } from "@/lib/email";
+import { companyBrand, emailTemplates, failedRecipients, replyToUser, sendEmail } from "@/lib/email";
 import { buildInterviewPlan } from "@/lib/interview/plan";
 import { generateToken, hashToken } from "@/lib/security/tokens";
 import type { StoredPlan, InterviewStatus } from "@/types/interview";
@@ -196,8 +196,8 @@ export async function createInterview(orgId: string, userId: string, input: Crea
 
   runInBackground("interview.plan", () => buildInterviewPlan(orgId, result.id));
   const link = interviewLink(token);
-  if (input.sendInvite) await sendInvitation(orgId, userId, result.id, link);
-  return { id: result.id, link };
+  const sent = input.sendInvite ? await sendInvitation(orgId, userId, result.id, link) : null;
+  return { id: result.id, link, emailFailed: failedRecipients([sent]) };
 }
 
 /** The job's extracted requirements, or null if missing or not in the expected shape (the email then just leaves the section out). */
@@ -234,7 +234,7 @@ export async function sendInvitation(orgId: string, userId: string, interviewId:
     roundName: info.round_name,
     role: readRequirements(info.requirements),
   });
-  await sendEmail({ to: info.candidate_email, ...tpl, orgId, replyTo: await replyToUser(userId), brand: await companyBrand(orgId) });
+  return sendEmail({ to: info.candidate_email, ...tpl, orgId, replyTo: await replyToUser(userId), brand: await companyBrand(orgId) });
 }
 
 /** Rotate the secure token (old link stops working) and optionally re-send the invite. */
@@ -253,8 +253,8 @@ export async function rotateLink(orgId: string, userId: string, interviewId: str
     if (!row) throw new ApiError(409, "A new link can't be issued for this interview.");
   });
   const link = interviewLink(token);
-  if (resend) await sendInvitation(orgId, userId, interviewId, link);
-  return link;
+  const sent = resend ? await sendInvitation(orgId, userId, interviewId, link) : null;
+  return { link, emailFailed: failedRecipients([sent]) };
 }
 
 export async function sendReminder(orgId: string, userId: string, interviewId: string) {
@@ -273,8 +273,8 @@ export async function sendReminder(orgId: string, userId: string, interviewId: s
   });
   const link = interviewLink(token);
   const tpl = emailTemplates.reminder({ candidateName: info.candidate_name.split(" ")[0], jobTitle: info.job_title, companyName: info.org_name, link, roundName: info.round_name, role: readRequirements(info.requirements) });
-  await sendEmail({ to: info.candidate_email, ...tpl, orgId, replyTo: await replyToUser(userId), brand: await companyBrand(orgId) });
-  return link;
+  const sent = await sendEmail({ to: info.candidate_email, ...tpl, orgId, replyTo: await replyToUser(userId), brand: await companyBrand(orgId) });
+  return { link, emailFailed: failedRecipients([sent]) };
 }
 
 export async function cancelInterview(orgId: string, userId: string, interviewId: string) {

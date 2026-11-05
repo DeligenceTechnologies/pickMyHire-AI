@@ -86,7 +86,7 @@ export function TeamManager({ members, invites, me, assignable, canManage }: {
           )}
           <DialogFooter>
             {link ? <Button onClick={() => setOpen(false)}>Done</Button> : (
-              <Button disabled={!!pending || !email} onClick={async () => { const r = await run<{ link: string }>("invite", "/api/organizations/members", { body: { email, role }, success: "Invitation sent" }); if (r) setLink(r.link); }}>
+              <Button disabled={!!pending || !email} onClick={async () => { const r = await run<{ link: string }>("invite", "/api/organizations/members", { body: { email, role }, success: "Invitation sent", emailFix: "Copy the invite link below and send it to them yourself." }); if (r) setLink(r.link); }}>
                 {pending === "invite" && <Loader2 className="animate-spin" />}Send invitation
               </Button>
             )}

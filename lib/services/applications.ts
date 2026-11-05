@@ -223,10 +223,10 @@ export async function inviteApplicant(orgId: string, userId: string, application
   round: Omit<CreateInterviewInput, "jobId" | "candidateId" | "sendInvite"> = {}) {
   const app = await getApplication(orgId, applicationId);
   if (!app) throw new ApiError(404, "Application not found");
-  const { id, link } = await createInterview(orgId, userId, { ...round, jobId: app.job_id, candidateId: app.candidate_id, sendInvite });
+  const { id, link, emailFailed } = await createInterview(orgId, userId, { ...round, jobId: app.job_id, candidateId: app.candidate_id, sendInvite });
   await withOrg(orgId, async (tx) => {
     await tx`update job_applications set status = 'interview_invited', interview_id = ${id}, reviewed_by = ${userId}, reviewed_at = now() where id = ${applicationId}`;
     await audit(tx, { orgId, userId, action: "application.interview_invited", entityType: "application", entityId: applicationId, metadata: { interview_id: id } });
   });
-  return { interviewId: id, link };
+  return { interviewId: id, link, emailFailed };
 }
