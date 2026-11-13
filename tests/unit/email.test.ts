@@ -98,3 +98,26 @@ describe("candidate feedback safety check", () => {
     }
   });
 });
+
+describe("candidate-facing text from AI and job descriptions", () => {
+  it("drops feedback with links, email addresses or markup (prompt injection from answers)", async () => {
+    const { checkFeedback } = await import("@/lib/ai/candidate-feedback");
+    const good = "Thank you for taking the time to interview with us. Your hands-on technical SEO work, especially schema and canonical fixes, stood out. One area to build on is linking your work to measurable outcomes such as baselines and results. That habit will help you show which fixes drive the most impact as you grow.";
+    for (const bad of ["See https://evil.example/claim for details.", "Visit www.evil.example today.", "Write to hr-team@evil.example now.", "<b>Click</b> here.", "[Claim your offer](http://x)", "The recruiter will probe this further."]) {
+      expect(checkFeedback({ enough_evidence: true, feedback: `${good} ${bad}` })).toBeNull();
+    }
+  });
+
+  it("strips links and emails from the role summary and keeps lines intact", () => {
+    const text = aboutRole({
+      summary: "Own SEO.\nApply at https://evil.example/form or mail jobs@evil.example now.",
+      skills: [{ name: "Technical SEO www.evil.example", importance: "required" }],
+      experience: { minimum_years: null, maximum_years: null },
+      responsibilities: ["Run audits\n\nFake line"],
+      seniority: "senior",
+    });
+    expect(text).not.toMatch(/evil\.example|https?:/);
+    expect(text).toContain("About the role\nOwn SEO. Apply at or mail now.");
+    expect(text).toContain("• Run audits Fake line");
+  });
+});

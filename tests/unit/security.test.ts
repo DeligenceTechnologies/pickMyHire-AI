@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { assignableRoles, can } from "@/lib/auth/permissions";
 import { hashPassword, verifyPassword } from "@/lib/security/password";
-import { rateLimit } from "@/lib/security/rate-limit";
+import { clientIp, isRateLimited, rateLimit } from "@/lib/security/rate-limit";
+import { safeNext } from "@/lib/security/safe-redirect";
 import { generateToken, hashToken, isWellFormedToken } from "@/lib/security/tokens";
 
 describe("permissions", () => {
@@ -69,5 +70,47 @@ describe("rate limit", () => {
     const key = `t-${Math.random()}`;
     for (let i = 0; i < 3; i++) expect(rateLimit(key, 3, 1000).ok).toBe(true);
     expect(rateLimit(key, 3, 1000).ok).toBe(false);
+  });
+});
+
+describe("rate limit hardening", () => {
+  it("peeks without counting, for limits that count only failures", () => {
+    const key = `peek-${Math.random()}`;
+    for (let i = 0; i < 5; i++) expect(isRateLimited(key, 2, 1000).limited).toBe(false);
+    rateLimit(key, 2, 1000);
+    rateLimit(key, 2, 1000);
+    expect(isRateLimited(key, 2, 1000).limited).toBe(true);
+  });
+
+  it("can't be reset by flooding new keys", () => {
+    const key = `victim-${Math.random()}`;
+    for (let i = 0; i < 3; i++) rateLimit(key, 3, 60_000);
+    for (let i = 0; i < 60_000; i++) rateLimit(`flood-${i}-${Math.random()}`, 3, 60_000);
+    expect(rateLimit(key, 3, 60_000).ok).toBe(false);
+  });
+});
+
+describe("client IP", () => {
+  const h = (xff: string, extra: Record<string, string> = {}) => new Headers({ "x-forwarded-for": xff, ...extra });
+  it("uses the entry the trusted proxy appended, not the one the client sent", () => {
+    expect(clientIp(h("6.6.6.6, 1.2.3.4"), { hops: 1 })).toBe("1.2.3.4");
+    expect(clientIp(h("6.6.6.6, 1.2.3.4, 10.0.0.1"), { hops: 2 })).toBe("1.2.3.4");
+    expect(clientIp(h("1.2.3.4"), { hops: 3 })).toBe("1.2.3.4");
+  });
+  it("prefers the edge's own client-IP header when configured", () => {
+    expect(clientIp(h("6.6.6.6", { "cf-connecting-ip": "1.2.3.4" }), { header: "cf-connecting-ip" })).toBe("1.2.3.4");
+  });
+  it("keeps the old behaviour when nothing is configured", () => {
+    expect(clientIp(h("1.2.3.4, 10.0.0.1"), {})).toBe("1.2.3.4");
+    expect(clientIp(new Headers(), {})).toBe("local");
+  });
+});
+
+describe("post-login redirect", () => {
+  it("allows same-site paths only", () => {
+    expect(safeNext("/jobs/1?tab=rounds#x")).toBe("/jobs/1?tab=rounds#x");
+    for (const bad of ["//evil.com", "/\\evil.com", "/\tevil.com", "/\t/evil.com", "https://evil.com", "javascript:alert(1)", "", null]) {
+      expect(safeNext(bad)).toBeNull();
+    }
   });
 });

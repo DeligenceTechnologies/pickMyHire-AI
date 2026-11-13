@@ -19,7 +19,7 @@ const report = {
   sections: [], refs: {},
 };
 
-async function interview(opts: { completedAgoHours?: number; answers?: number; endedReason?: "left"; feedbackSetting?: boolean } = {}) {
+async function interview(opts: { completedAgoHours?: number; answers?: number; endedReason?: "left"; feedbackSetting?: boolean; reportStatus?: "completed" | "failed" } = {}) {
   n += 1;
   const email = `cand${n}-${id}@followup.test`;
   const ivId = await withSystem(async (tx) => {
@@ -39,7 +39,9 @@ async function interview(opts: { completedAgoHours?: number; answers?: number; e
         values (${orgId}, ${iv.id}, ${s.id}, ${`Q${i}`}, ${`Q${i}`}, ${i + 1}) returning id`;
       await tx`insert into interview_answers (organization_id, interview_id, question_id, transcript_text) values (${orgId}, ${iv.id}, ${q.id}, 'An answer about schema markup.')`;
     }
-    await tx`insert into interview_reports (organization_id, interview_id, status, report_json) values (${orgId}, ${iv.id}, 'completed', ${json(report)})`;
+    const status = opts.reportStatus ?? "completed";
+    if (status === "failed") await tx`update interviews set status = 'completed' where id = ${iv.id}`;
+    await tx`insert into interview_reports (organization_id, interview_id, status, report_json) values (${orgId}, ${iv.id}, ${status}, ${status === "completed" ? json(report) : null})`;
     return iv.id;
   });
   return { ivId, email };
@@ -97,5 +99,33 @@ describe("email to the candidate after the interview", () => {
     await sendCandidateFollowup(orgId, ivId);
     expect(await outbox(email)).toHaveLength(0);
     expect((await saved(ivId)).sent).toBeNull();
+  });
+
+  it("waits for a failed report, then sends with feedback once the retry succeeds", async () => {
+    const { ivId, email } = await interview({ reportStatus: "failed" });
+    await sendCandidateFollowup(orgId, ivId);
+    expect(await outbox(email)).toHaveLength(0);
+    expect((await saved(ivId)).sent).toBeNull();
+
+    await withSystem(async (tx) => {
+      await tx`update interview_reports set status = 'completed', report_json = ${json(report)} where interview_id = ${ivId}`;
+      await tx`update interviews set status = 'report_ready' where id = ${ivId}`;
+    });
+    await sendCandidateFollowup(orgId, ivId);
+    const mails = await outbox(email);
+    expect(mails).toHaveLength(1);
+    expect(mails[0].body_text).toContain("Feedback on your interview");
+    expect((await saved(ivId)).sent).not.toBeNull();
+  });
+
+  it("leaves a claim another run holds alone, and retries one that was abandoned", async () => {
+    const { ivId, email } = await interview();
+    await withSystem((tx) => tx`update interviews set candidate_email_claimed_at = now() where id = ${ivId}`);
+    await sendCandidateFollowup(orgId, ivId);
+    expect(await outbox(email)).toHaveLength(0);
+
+    await withSystem((tx) => tx`update interviews set candidate_email_claimed_at = now() - interval '1 hour' where id = ${ivId}`);
+    await sendCandidateFollowup(orgId, ivId);
+    expect(await outbox(email)).toHaveLength(1);
   });
 });

@@ -7,6 +7,17 @@ const securityHeaders = [
   // Camera/mic are needed on the candidate interview pages only (same origin).
   { key: "Permissions-Policy", value: "camera=(self), microphone=(self), geolocation=(), payment=()" },
   { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+  // The parts of a CSP that can't break scripts, styles, media or AI/WebRTC connections:
+  // no plugins, no <base> hijacking, forms only post here, and no framing (clickjacking).
+  // A full nonce-based script-src needs every page rendered dynamically and browser
+  // testing of the interview room (face models, recording, realtime), so it's a separate step.
+  {
+    key: "Content-Security-Policy",
+    value: ["object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'none'",
+      ...(process.env.NODE_ENV === "production" ? ["upgrade-insecure-requests"] : [])].join("; "),
+  },
+  // HTTPS only for a year (browsers ignore it on plain-HTTP localhost). No "preload": that can't be undone quickly.
+  ...(process.env.NODE_ENV === "production" ? [{ key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" }] : []),
 ];
 
 const nextConfig: NextConfig = {

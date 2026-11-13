@@ -191,7 +191,8 @@ export async function processInterview(orgId: string, interviewId: string) {
       await tx`update interviews set status = 'completed', processing_error = ${"Report generation failed. The interview data is safe — retry."} where id = ${interviewId}`;
     });
   }
-  // The candidate's confirmation (with AI feedback when the report allows it). Sent once.
+  // The candidate's confirmation (with AI feedback when the company allows it). Sent once, and
+  // only after the report is ready: a failed report waits for the retry.
   await sendCandidateFollowup(orgId, interviewId);
 }
 

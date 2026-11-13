@@ -1,0 +1,635 @@
+Index: lib/security/rate-limit.ts
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>// In-memory sliding-window limiter. Adequate for a single Node instance;\n// swap for Redis/Upstash when running multiple instances.\nconst buckets = new Map<string, number[]>();\n\nexport function rateLimit(key: string, limit: number, windowMs: number): { ok: boolean; retryAfterSec: number } {\n  const now = Date.now();\n  const hits = (buckets.get(key) ?? []).filter((t) => now - t < windowMs);\n  if (hits.length >= limit) {\n    buckets.set(key, hits);\n    return { ok: false, retryAfterSec: Math.ceil((windowMs - (now - hits[0])) / 1000) };\n  }\n  hits.push(now);\n  buckets.set(key, hits);\n  if (buckets.size > 50_000) buckets.clear();\n  return { ok: true, retryAfterSec: 0 };\n}\n\nexport function clientIp(headers: Headers): string {\n  return headers.get(\"x-forwarded-for\")?.split(\",\")[0]?.trim() || headers.get(\"x-real-ip\") || \"local\";\n}\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/lib/security/rate-limit.ts b/lib/security/rate-limit.ts
+--- a/lib/security/rate-limit.ts	(revision b78e40ee62758608964bc9015bdc90cae40956a0)
++++ b/lib/security/rate-limit.ts	(date 1793773145521)
+@@ -1,20 +1,86 @@
+ // In-memory sliding-window limiter. Adequate for a single Node instance;
+ // swap for Redis/Upstash when running multiple instances.
+ const buckets = new Map<string, number[]>();
++/** Longest window seen, so a sweep never drops hits another limit still counts. */
++let longestWindowMs = 0;
++const MAX_KEYS = 50_000;
++
++/** Drop keys whose hits have all expired. Never clears live counters, so flooding new keys can't reset anyone's limit. */
++function sweep(now: number) {
++  for (const [key, hits] of buckets) {
++    if (!hits.length || now - hits[hits.length - 1] >= longestWindowMs) buckets.delete(key);
++  }
++  // Still full of live keys (a flood): drop single-hit keys first (what a flood of new
++  // keys looks like), oldest first, so counters that are close to a limit survive.
++  // Trims to 90% so the next sweep isn't on the very next request.
++  if (buckets.size > MAX_KEYS) {
++    let excess = buckets.size - Math.floor(MAX_KEYS * 0.9);
++    for (const pass of [1, Infinity]) {
++      for (const [key, hits] of buckets) {
++        if (excess <= 0) return;
++        if (hits.length <= pass) {
++          buckets.delete(key);
++          excess--;
++        }
++      }
++    }
++  }
++}
+ 
+ export function rateLimit(key: string, limit: number, windowMs: number): { ok: boolean; retryAfterSec: number } {
+   const now = Date.now();
++  if (windowMs > longestWindowMs) longestWindowMs = windowMs;
+   const hits = (buckets.get(key) ?? []).filter((t) => now - t < windowMs);
+   if (hits.length >= limit) {
+     buckets.set(key, hits);
+-    return { ok: false, retryAfterSec: Math.ceil((windowMs - (now - hits[0])) / 1000) };
++    return { ok: false, retryAfterSec: Math.max(1, Math.ceil((windowMs - (now - hits[0])) / 1000)) };
+   }
+   hits.push(now);
+   buckets.set(key, hits);
+-  if (buckets.size > 50_000) buckets.clear();
++  if (buckets.size > MAX_KEYS) sweep(now);
+   return { ok: true, retryAfterSec: 0 };
+ }
+ 
+-export function clientIp(headers: Headers): string {
+-  return headers.get("x-forwarded-for")?.split(",")[0]?.trim() || headers.get("x-real-ip") || "local";
++/** Whether `key` is over its limit, without counting this call (for "count only failures" limits). */
++export function isRateLimited(key: string, limit: number, windowMs: number): { limited: boolean; retryAfterSec: number } {
++  const now = Date.now();
++  const hits = (buckets.get(key) ?? []).filter((t) => now - t < windowMs);
++  if (hits.length < limit) return { limited: false, retryAfterSec: 0 };
++  return { limited: true, retryAfterSec: Math.max(1, Math.ceil((windowMs - (now - hits[0])) / 1000)) };
++}
++
++/** Test helper: forget every counter. */
++export function resetRateLimits() {
++  buckets.clear();
++  longestWindowMs = 0;
++}
++
++/**
++ * The caller's IP for rate limiting.
++ *
++ * The left of X-Forwarded-For is whatever the client sent, so it can't be trusted on its own:
++ * - CLIENT_IP_HEADER names a header your edge sets and clients can't override
++ *   (for example "cf-connecting-ip" behind Cloudflare, "true-client-ip").
++ * - Otherwise TRUSTED_PROXY_HOPS (the number of proxies in front of the app) picks the
++ *   X-Forwarded-For entry the outermost trusted proxy appended.
++ * - With neither set, the old behaviour (left-most entry) is kept so a deploy never
++ *   puts every user behind one shared IP by mistake.
++ */
++export function clientIp(headers: Headers, cfg: { header?: string; hops?: number } = ipConfig()): string {
++  if (cfg.header) {
++    const v = headers.get(cfg.header)?.trim();
++    if (v) return v;
++  }
++  const chain = (headers.get("x-forwarded-for") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
++  if (chain.length) {
++    if (cfg.hops && cfg.hops > 0) return chain[Math.max(0, chain.length - cfg.hops)];
++    return chain[0];
++  }
++  return headers.get("x-real-ip")?.trim() || "local";
++}
++
++function ipConfig(): { header?: string; hops?: number } {
++  const header = process.env.CLIENT_IP_HEADER?.trim().toLowerCase() || undefined;
++  const hops = Number(process.env.TRUSTED_PROXY_HOPS);
++  return { header, hops: Number.isInteger(hops) && hops > 0 ? hops : undefined };
+ }
+Index: lib/interview/processing.ts
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>import \"server-only\";\n// Post-interview pipeline: finalize recording → evaluate sections → report.\n// Every step is idempotent and records its status so it can be retried.\n\nimport { json, withOrg } from \"@/lib/database/db\";\nimport { audit, notify } from \"@/lib/audit\";\nimport { evaluateSection, EVALUATOR_VERSION, type EvalSegment } from \"@/lib/ai/section-evaluator\";\nimport { generateReport, REPORT_VERSION } from \"@/lib/ai/report-generator\";\nimport { log } from \"@/lib/logger\";\nimport { assessmentScore, type Assessment, type FinalReport, type SectionEvaluation } from \"@/lib/validation/ai-schemas\";\nimport { runInBackground } from \"@/lib/background\";\nimport { finalizeAllParts } from \"./recording\";\nimport { sendCandidateFollowup } from \"./candidate-followup\";\n\ntype SegmentRow = { id: string; section_id: string | null; speaker: string; text: string; start_time_ms: number; end_time_ms: number };\n\nasync function loadSegments(orgId: string, interviewId: string) {\n  const rows = await withOrg(orgId, (tx) => tx<SegmentRow[]>`\n    select id, section_id, speaker::text, text, start_time_ms, end_time_ms from transcript_segments\n    where interview_id = ${interviewId} order by start_time_ms, sequence_number`);\n  // Stable interview-wide refs (S1, S2, ...) shared by evaluations and the report.\n  return rows.map((r, i) => ({ ...r, ref: `S${i + 1}` }));\n}\n\nfunction toEvalSegments(rows: (SegmentRow & { ref: string })[]): EvalSegment[] {\n  return rows.map((r) => ({ ref: r.ref, speaker: r.speaker, text: r.text, start: r.start_time_ms, end: r.end_time_ms }));\n}\n\nexport async function evaluateInterviewSection(orgId: string, interviewId: string, sectionId: string) {\n  const [ctx] = await withOrg(orgId, (tx) => tx<{ name: string; objective: string; config: { evaluation_criteria?: string[]; scoring_enabled?: boolean }; job_title: string; status: string }[]>`\n    select s.name, s.objective, s.config, j.title as job_title, s.status from interview_sections s\n    join interviews i on i.id = s.interview_id join jobs j on j.id = i.job_id\n    where s.id = ${sectionId} and s.interview_id = ${interviewId}`);\n  if (!ctx) return;\n  await withOrg(orgId, (tx) => tx`update interview_sections set evaluation_status = 'processing' where id = ${sectionId}`);\n\n  const all = await loadSegments(orgId, interviewId);\n  const segments = all.filter((s) => s.section_id === sectionId);\n  try {\n    const { evaluation, source } = await evaluateSection({\n      orgId,\n      jobTitle: ctx.job_title,\n      sectionName: ctx.name,\n      objective: ctx.objective,\n      criteria: ctx.config.evaluation_criteria ?? [],\n      segments: toEvalSegments(segments),\n    });\n    const byRef = new Map(all.map((s) => [s.ref, s]));\n    const score = ctx.config.scoring_enabled ? assessmentScore[evaluation.assessment] : null;\n\n    await withOrg(orgId, async (tx) => {\n      await tx`delete from section_evaluations where section_id = ${sectionId}`;\n      const [ev] = await tx<{ id: string }[]>`\n        insert into section_evaluations (organization_id, interview_id, section_id, assessment, score, summary, strengths, concerns, prompt_version)\n        values (${orgId}, ${interviewId}, ${sectionId}, ${evaluation.assessment}, ${score}, ${evaluation.summary},\n          ${json(evaluation.strengths)}, ${json(evaluation.concerns)}, ${source === \"openai\" ? EVALUATOR_VERSION : \"demo-heuristic\"})\n        returning id`;\n      for (const e of evaluation.evidence) {\n        // Prefer the real segment's timestamps over model-reported ones.\n        const seg = e.segment_ref ? byRef.get(e.segment_ref) : undefined;\n        await tx`insert into evaluation_evidence (organization_id, evaluation_id, transcript_segment_id, timestamp_start_ms, timestamp_end_ms, evidence_text)\n          values (${orgId}, ${ev.id}, ${seg?.id ?? null}, ${seg?.start_time_ms ?? Math.max(0, e.timestamp_start_ms)},\n            ${seg?.end_time_ms ?? Math.max(0, e.timestamp_end_ms)}, ${`${e.quote_or_paraphrase}${e.supports ? ` — ${e.supports}` : \"\"}`})`;\n      }\n      await tx`update interview_sections set evaluation = ${json({ ...evaluation, source })}, summary = ${evaluation.summary},\n        evaluation_status = 'completed' where id = ${sectionId}`;\n      await audit(tx, { orgId, actorType: \"system\", action: \"interview.evaluation_generated\", entityType: \"interview_section\", entityId: sectionId, metadata: { source } });\n    });\n  } catch (err) {\n    log.warn(\"evaluation.failed\", { interviewId, sectionId, err });\n    await withOrg(orgId, (tx) => tx`update interview_sections set evaluation_status = 'failed' where id = ${sectionId}`);\n    throw err;\n  }\n}\n\nexport type StoredReport = {\n  version: 1;\n  generated_by: \"openai\" | \"mock\";\n  prompt_version: string;\n  final: FinalReport;\n  sections: {\n    section_id: string;\n    name: string;\n    objective: string;\n    status: string;\n    assessment: Assessment | null;\n    score: number | null;\n    summary: string | null;\n  }[];\n  refs: Record<string, { segment_id: string; start_ms: number; end_ms: number }>;\n};\n\nexport async function generateInterviewReport(orgId: string, interviewId: string) {\n  const data = await withOrg(orgId, async (tx) => {\n    await tx`insert into interview_reports (organization_id, interview_id, status) values (${orgId}, ${interviewId}, 'processing')\n      on conflict (interview_id) do update set status = 'processing', error = null, attempts = interview_reports.attempts + 1`;\n    const [iv] = await tx<{ job_title: string; parsed_requirements: unknown; interview_plan: unknown }[]>`\n      select j.title as job_title, j.parsed_requirements, i.interview_plan from interviews i join jobs j on j.id = i.job_id where i.id = ${interviewId}`;\n    const sections = await tx<{ id: string; name: string; objective: string; status: string; evaluation: (SectionEvaluation & { source?: string }) | null }[]>`\n      select id, name, objective, status, evaluation from interview_sections where interview_id = ${interviewId} order by sort_order`;\n    const evals = await tx<{ section_id: string; assessment: Assessment; score: number | null }[]>`\n      select section_id, assessment, score from section_evaluations where interview_id = ${interviewId}`;\n    return { iv, sections, evals };\n  });\n  const all = await loadSegments(orgId, interviewId);\n\n  const evaluated = data.sections.filter((s) => s.evaluation);\n  const { report, source } = await generateReport({\n    orgId,\n    jobTitle: data.iv.job_title,\n    requirements: data.iv.parsed_requirements,\n    sections: evaluated.map((s) => ({\n      name: s.name,\n      objective: s.objective,\n      assessment: s.evaluation!.assessment,\n      summary: s.evaluation!.summary,\n      strengths: s.evaluation!.strengths,\n      concerns: s.evaluation!.concerns,\n      evidence: s.evaluation!.evidence,\n    })),\n  });\n\n  const refs: StoredReport[\"refs\"] = {};\n  for (const s of all) refs[s.ref] = { segment_id: s.id, start_ms: s.start_time_ms, end_ms: s.end_time_ms };\n  // Correct any model-reported timestamps using the real segment refs.\n  report.key_evidence = report.key_evidence.map((e) => {\n    const r = e.segment_ref ? refs[e.segment_ref] : undefined;\n    return r ? { ...e, timestamp_start_ms: r.start_ms, timestamp_end_ms: r.end_ms } : e;\n  });\n\n  const stored: StoredReport = {\n    version: 1,\n    generated_by: source,\n    prompt_version: source === \"openai\" ? REPORT_VERSION : \"demo-heuristic\",\n    final: report,\n    sections: data.sections.map((s) => {\n      const ev = data.evals.find((e) => e.section_id === s.id);\n      return { section_id: s.id, name: s.name, objective: s.objective, status: s.status, assessment: ev?.assessment ?? null, score: ev?.score ?? null, summary: s.evaluation?.summary ?? null };\n    }),\n    refs,\n  };\n\n  await withOrg(orgId, async (tx) => {\n    await tx`update interview_reports set status = 'completed', summary = ${report.summary}, report_json = ${json(stored)}, generated_at = now(), error = null\n      where interview_id = ${interviewId}`;\n    await tx`update interviews set status = 'report_ready', processing_error = null where id = ${interviewId}`;\n    await audit(tx, { orgId, actorType: \"system\", action: \"interview.report_generated\", entityType: \"interview\", entityId: interviewId, metadata: { source } });\n    const [info] = await tx<{ candidate: string; job: string }[]>`select c.name as candidate, j.title as job from interviews i\n      join candidates c on c.id = i.candidate_id join jobs j on j.id = i.job_id where i.id = ${interviewId}`;\n    await notify(tx, { orgId, type: \"report.ready\", payload: { interview_id: interviewId, candidate: info.candidate, job: info.job } });\n  });\n}\n\n/** Full pipeline. Section failures don't block the report; the report notes missing evaluations. */\nexport async function processInterview(orgId: string, interviewId: string) {\n  // An interview left in \"completing\" (candidate closed the tab after the closing\n  // line, or the final save never finished) is closed out here so it can be reviewed.\n  await withOrg(orgId, async (tx) => {\n    const [iv] = await tx<{ status: string }[]>`select status from interviews where id = ${interviewId} for update`;\n    if (iv?.status !== \"completing\") return;\n    const [{ last_ms }] = await tx<{ last_ms: number | null }[]>`select max(end_time_ms) as last_ms from transcript_segments where interview_id = ${interviewId}`;\n    await tx`update interviews set status = 'completed', completed_at = coalesce(completed_at, now()),\n      duration_seconds = coalesce(duration_seconds, ${last_ms != null ? Math.round(last_ms / 1000) : null}) where id = ${interviewId}`;\n    await tx`update interview_sections set status = 'completed', completed_at = coalesce(completed_at, now()),\n      end_ms = coalesce(end_ms, ${last_ms}) where interview_id = ${interviewId} and status = 'in_progress'`;\n    await tx`update interview_sections set status = 'skipped' where interview_id = ${interviewId} and status = 'pending'`;\n    await audit(tx, { orgId, actorType: \"system\", action: \"interview.completed\", entityType: \"interview\", entityId: interviewId, metadata: { reason: \"closed_by_processing\" } });\n  });\n  await withOrg(orgId, (tx) => tx`update interviews set status = 'processing', processing_error = null where id = ${interviewId} and status in ('completed','failed','report_ready')`);\n  await finalizeAllParts(orgId, interviewId);\n  const sections = await withOrg(orgId, (tx) => tx<{ id: string; evaluation_status: string | null }[]>`\n    select id, evaluation_status from interview_sections where interview_id = ${interviewId} and status = 'completed' order by sort_order`);\n  let failures = 0;\n  for (const s of sections) {\n    if (s.evaluation_status === \"completed\") continue;\n    try {\n      await evaluateInterviewSection(orgId, interviewId, s.id);\n    } catch {\n      failures++;\n    }\n  }\n  try {\n    await generateInterviewReport(orgId, interviewId);\n    if (failures) {\n      await withOrg(orgId, (tx) => tx`update interviews set processing_error = ${`${failures} section evaluation(s) failed — retry to complete the report.`} where id = ${interviewId}`);\n    }\n  } catch (err) {\n    log.error(\"report.failed\", { interviewId, err });\n    await withOrg(orgId, async (tx) => {\n      await tx`update interview_reports set status = 'failed', error = ${\"We couldn't generate the report yet. The interview data is safe.\"} where interview_id = ${interviewId}`;\n      await tx`update interviews set status = 'completed', processing_error = ${\"Report generation failed. The interview data is safe — retry.\"} where id = ${interviewId}`;\n    });\n  }\n  // The candidate's confirmation (with AI feedback when the report allows it). Sent once.\n  await sendCandidateFollowup(orgId, interviewId);\n}\n\n/**\n * A candidate who leaves after the closing line (or whose final save failed)\n * leaves the interview in \"completing\". After 10 minutes, close it out and\n * generate the report without waiting for a manual retry.\n */\nexport function recoverIfStale(orgId: string, interview: { id: string; status: string; updated_at: Date }) {\n  if (interview.status !== \"completing\" || Date.now() - interview.updated_at.getTime() < 10 * 60_000) return;\n  runInBackground(\"interview.recover\", () => processInterview(orgId, interview.id));\n}\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/lib/interview/processing.ts b/lib/interview/processing.ts
+--- a/lib/interview/processing.ts	(revision b78e40ee62758608964bc9015bdc90cae40956a0)
++++ b/lib/interview/processing.ts	(date 1793773106461)
+@@ -191,7 +191,8 @@
+       await tx`update interviews set status = 'completed', processing_error = ${"Report generation failed. The interview data is safe — retry."} where id = ${interviewId}`;
+     });
+   }
+-  // The candidate's confirmation (with AI feedback when the report allows it). Sent once.
++  // The candidate's confirmation (with AI feedback when the company allows it). Sent once, and
++  // only after the report is ready: a failed report waits for the retry.
+   await sendCandidateFollowup(orgId, interviewId);
+ }
+ 
+Index: components/auth/login-form.tsx
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>\"use client\";\n\nimport { useRouter, useSearchParams } from \"next/navigation\";\nimport { AuthForm } from \"./auth-form\";\n\nexport function LoginForm() {\n  const router = useRouter();\n  const next = useSearchParams().get(\"next\");\n  return (\n    <AuthForm\n      endpoint=\"/api/auth/login\"\n      submitLabel=\"Sign in\"\n      fields={[\n        { name: \"email\", label: \"Work email\", type: \"email\", autoComplete: \"email\", placeholder: \"you@company.com\" },\n        { name: \"password\", label: \"Password\", type: \"password\", autoComplete: \"current-password\" },\n      ]}\n      onSuccess={(res) => {\n        router.push(next && next.startsWith(\"/\") && !next.startsWith(\"//\") ? next : typeof res.home === \"string\" ? res.home : \"/dashboard\");\n        router.refresh();\n      }}\n    />\n  );\n}\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/components/auth/login-form.tsx b/components/auth/login-form.tsx
+--- a/components/auth/login-form.tsx	(revision b78e40ee62758608964bc9015bdc90cae40956a0)
++++ b/components/auth/login-form.tsx	(date 1793773021315)
+@@ -1,6 +1,7 @@
+ "use client";
+ 
+ import { useRouter, useSearchParams } from "next/navigation";
++import { safeNext } from "@/lib/security/safe-redirect";
+ import { AuthForm } from "./auth-form";
+ 
+ export function LoginForm() {
+@@ -15,7 +16,7 @@
+         { name: "password", label: "Password", type: "password", autoComplete: "current-password" },
+       ]}
+       onSuccess={(res) => {
+-        router.push(next && next.startsWith("/") && !next.startsWith("//") ? next : typeof res.home === "string" ? res.home : "/dashboard");
++        router.push(safeNext(next) ?? (typeof res.home === "string" ? res.home : "/dashboard"));
+         router.refresh();
+       }}
+     />
+Index: next.config.ts
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>import type { NextConfig } from \"next\";\n\nconst securityHeaders = [\n  { key: \"X-Content-Type-Options\", value: \"nosniff\" },\n  { key: \"X-Frame-Options\", value: \"DENY\" },\n  { key: \"Referrer-Policy\", value: \"strict-origin-when-cross-origin\" },\n  // Camera/mic are needed on the candidate interview pages only (same origin).\n  { key: \"Permissions-Policy\", value: \"camera=(self), microphone=(self), geolocation=(), payment=()\" },\n  { key: \"Cross-Origin-Opener-Policy\", value: \"same-origin\" },\n];\n\nconst nextConfig: NextConfig = {\n  poweredByHeader: false,\n  // Marketing images rarely change (new files get new names): let browsers and\n  // proxies keep resized copies for a week instead of re-requesting them.\n  images: { minimumCacheTTL: 7 * 24 * 60 * 60 },\n  serverExternalPackages: [\"postgres\", \"unpdf\", \"mammoth\"],\n  async headers() {\n    return [\n      { source: \"/:path*\", headers: securityHeaders },\n      // Face model files (several MB) are fixed per release of the face library.\n      { source: \"/models/face/:file*\", headers: [{ key: \"Cache-Control\", value: \"public, max-age=2592000\" }] },\n      // Candidate links carry a secret token: never leak it via Referer or cache it.\n      { source: \"/interview/:token*\", headers: [{ key: \"Referrer-Policy\", value: \"no-referrer\" }, { key: \"Cache-Control\", value: \"no-store\" }] },\n    ];\n  },\n};\n\nexport default nextConfig;\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/next.config.ts b/next.config.ts
+--- a/next.config.ts	(revision b78e40ee62758608964bc9015bdc90cae40956a0)
++++ b/next.config.ts	(date 1793773028325)
+@@ -7,6 +7,17 @@
+   // Camera/mic are needed on the candidate interview pages only (same origin).
+   { key: "Permissions-Policy", value: "camera=(self), microphone=(self), geolocation=(), payment=()" },
+   { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
++  // The parts of a CSP that can't break scripts, styles, media or AI/WebRTC connections:
++  // no plugins, no <base> hijacking, forms only post here, and no framing (clickjacking).
++  // A full nonce-based script-src needs every page rendered dynamically and browser
++  // testing of the interview room (face models, recording, realtime), so it's a separate step.
++  {
++    key: "Content-Security-Policy",
++    value: ["object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'none'",
++      ...(process.env.NODE_ENV === "production" ? ["upgrade-insecure-requests"] : [])].join("; "),
++  },
++  // HTTPS only for a year (browsers ignore it on plain-HTTP localhost). No "preload": that can't be undone quickly.
++  ...(process.env.NODE_ENV === "production" ? [{ key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" }] : []),
+ ];
+ 
+ const nextConfig: NextConfig = {
+Index: app/api/auth/forgot-password/route.ts
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>import { z } from \"zod\";\nimport { body, route } from \"@/lib/api\";\nimport { requestPasswordReset } from \"@/lib/services/accounts\";\n\nexport const POST = route(async (req) => {\n  const { email } = await body(req, z.object({ email: z.string().trim().toLowerCase().email(\"Enter a valid email\") }));\n  await requestPasswordReset(email);\n  return { ok: true };\n}, { rateLimit: { key: \"forgot\", limit: 5, windowMs: 15 * 60_000 } });\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/api/auth/forgot-password/route.ts b/app/api/auth/forgot-password/route.ts
+--- a/app/api/auth/forgot-password/route.ts	(revision b78e40ee62758608964bc9015bdc90cae40956a0)
++++ b/app/api/auth/forgot-password/route.ts	(date 1793772993263)
+@@ -1,9 +1,11 @@
+ import { z } from "zod";
+ import { body, route } from "@/lib/api";
++import { rateLimit } from "@/lib/security/rate-limit";
+ import { requestPasswordReset } from "@/lib/services/accounts";
+ 
+ export const POST = route(async (req) => {
+   const { email } = await body(req, z.object({ email: z.string().trim().toLowerCase().email("Enter a valid email") }));
+-  await requestPasswordReset(email);
++  // Per address too, so nobody can flood one inbox from many IPs. Same response either way (no account probing).
++  if (rateLimit(`forgot-account:${email}`, 3, 60 * 60_000).ok) await requestPasswordReset(email);
+   return { ok: true };
+ }, { rateLimit: { key: "forgot", limit: 5, windowMs: 15 * 60_000 } });
+Index: tests/unit/security.test.ts
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>import { describe, expect, it } from \"vitest\";\nimport { assignableRoles, can } from \"@/lib/auth/permissions\";\nimport { hashPassword, verifyPassword } from \"@/lib/security/password\";\nimport { rateLimit } from \"@/lib/security/rate-limit\";\nimport { generateToken, hashToken, isWellFormedToken } from \"@/lib/security/tokens\";\n\ndescribe(\"permissions\", () => {\n  it(\"grants owners everything\", () => {\n    expect(can(\"owner\", \"billing:manage\")).toBe(true);\n    expect(can(\"owner\", \"data:delete\")).toBe(true);\n  });\n  it(\"keeps viewers read-only\", () => {\n    expect(can(\"viewer\", \"report:view\")).toBe(true);\n    expect(can(\"viewer\", \"job:write\")).toBe(false);\n    expect(can(\"viewer\", \"recording:view\")).toBe(false);\n  });\n  it(\"lets interviewers view but not manage\", () => {\n    expect(can(\"interviewer\", \"recording:view\")).toBe(true);\n    expect(can(\"interviewer\", \"interview:write\")).toBe(false);\n  });\n  it(\"limits candidate data to hiring roles\", () => {\n    for (const r of [\"owner\", \"admin\", \"recruiter\"] as const) expect(can(r, \"candidate:view\")).toBe(true);\n    for (const r of [\"interviewer\", \"viewer\"] as const) expect(can(r, \"candidate:view\")).toBe(false);\n  });\n  it(\"limits usage to owners and admins\", () => {\n    expect(can(\"owner\", \"usage:view\")).toBe(true);\n    expect(can(\"admin\", \"usage:view\")).toBe(true);\n    for (const r of [\"recruiter\", \"interviewer\", \"viewer\"] as const) expect(can(r, \"usage:view\")).toBe(false);\n  });\n  it(\"lets recruiters manage templates\", () => {\n    expect(can(\"recruiter\", \"template:write\")).toBe(true);\n  });\n  it(\"restricts role assignment\", () => {\n    expect(assignableRoles(\"owner\")).not.toContain(\"owner\");\n    expect(assignableRoles(\"admin\")).not.toContain(\"admin\");\n    expect(assignableRoles(\"recruiter\")).toEqual([]);\n  });\n});\n\ndescribe(\"tokens\", () => {\n  it(\"generates high-entropy, well-formed tokens\", () => {\n    const a = generateToken();\n    const b = generateToken();\n    expect(a).not.toBe(b);\n    expect(a.length).toBeGreaterThanOrEqual(43);\n    expect(isWellFormedToken(a)).toBe(true);\n  });\n  it(\"hashes deterministically and never returns the token\", () => {\n    const t = generateToken();\n    expect(hashToken(t)).toBe(hashToken(t));\n    expect(hashToken(t)).not.toContain(t);\n  });\n  it(\"rejects malformed tokens\", () => {\n    expect(isWellFormedToken(\"short\")).toBe(false);\n    expect(isWellFormedToken(\"../../etc/passwd\" + \"a\".repeat(40))).toBe(false);\n  });\n});\n\ndescribe(\"passwords\", () => {\n  it(\"verifies correct and rejects wrong passwords\", async () => {\n    const h = await hashPassword(\"correct horse battery\");\n    expect(await verifyPassword(\"correct horse battery\", h)).toBe(true);\n    expect(await verifyPassword(\"wrong\", h)).toBe(false);\n  });\n});\n\ndescribe(\"rate limit\", () => {\n  it(\"blocks after the limit\", () => {\n    const key = `t-${Math.random()}`;\n    for (let i = 0; i < 3; i++) expect(rateLimit(key, 3, 1000).ok).toBe(true);\n    expect(rateLimit(key, 3, 1000).ok).toBe(false);\n  });\n});\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/tests/unit/security.test.ts b/tests/unit/security.test.ts
+--- a/tests/unit/security.test.ts	(revision b78e40ee62758608964bc9015bdc90cae40956a0)
++++ b/tests/unit/security.test.ts	(date 1793775129925)
+@@ -1,7 +1,8 @@
+ import { describe, expect, it } from "vitest";
+ import { assignableRoles, can } from "@/lib/auth/permissions";
+ import { hashPassword, verifyPassword } from "@/lib/security/password";
+-import { rateLimit } from "@/lib/security/rate-limit";
++import { clientIp, isRateLimited, rateLimit } from "@/lib/security/rate-limit";
++import { safeNext } from "@/lib/security/safe-redirect";
+ import { generateToken, hashToken, isWellFormedToken } from "@/lib/security/tokens";
+ 
+ describe("permissions", () => {
+@@ -71,3 +72,45 @@
+     expect(rateLimit(key, 3, 1000).ok).toBe(false);
+   });
+ });
++
++describe("rate limit hardening", () => {
++  it("peeks without counting, for limits that count only failures", () => {
++    const key = `peek-${Math.random()}`;
++    for (let i = 0; i < 5; i++) expect(isRateLimited(key, 2, 1000).limited).toBe(false);
++    rateLimit(key, 2, 1000);
++    rateLimit(key, 2, 1000);
++    expect(isRateLimited(key, 2, 1000).limited).toBe(true);
++  });
++
++  it("can't be reset by flooding new keys", () => {
++    const key = `victim-${Math.random()}`;
++    for (let i = 0; i < 3; i++) rateLimit(key, 3, 60_000);
++    for (let i = 0; i < 60_000; i++) rateLimit(`flood-${i}-${Math.random()}`, 3, 60_000);
++    expect(rateLimit(key, 3, 60_000).ok).toBe(false);
++  });
++});
++
++describe("client IP", () => {
++  const h = (xff: string, extra: Record<string, string> = {}) => new Headers({ "x-forwarded-for": xff, ...extra });
++  it("uses the entry the trusted proxy appended, not the one the client sent", () => {
++    expect(clientIp(h("6.6.6.6, 1.2.3.4"), { hops: 1 })).toBe("1.2.3.4");
++    expect(clientIp(h("6.6.6.6, 1.2.3.4, 10.0.0.1"), { hops: 2 })).toBe("1.2.3.4");
++    expect(clientIp(h("1.2.3.4"), { hops: 3 })).toBe("1.2.3.4");
++  });
++  it("prefers the edge's own client-IP header when configured", () => {
++    expect(clientIp(h("6.6.6.6", { "cf-connecting-ip": "1.2.3.4" }), { header: "cf-connecting-ip" })).toBe("1.2.3.4");
++  });
++  it("keeps the old behaviour when nothing is configured", () => {
++    expect(clientIp(h("1.2.3.4, 10.0.0.1"), {})).toBe("1.2.3.4");
++    expect(clientIp(new Headers(), {})).toBe("local");
++  });
++});
++
++describe("post-login redirect", () => {
++  it("allows same-site paths only", () => {
++    expect(safeNext("/jobs/1?tab=rounds#x")).toBe("/jobs/1?tab=rounds#x");
++    for (const bad of ["//evil.com", "/\\evil.com", "/\tevil.com", "/\t/evil.com", "https://evil.com", "javascript:alert(1)", "", null]) {
++      expect(safeNext(bad)).toBeNull();
++    }
++  });
++});
+Index: .env.example
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+># --- Database -------------------------------------------------------------\n# Any PostgreSQL 14+ database. For Supabase use the project's direct\n# connection string (Settings -> Database). Must NOT be a superuser role,\n# otherwise Row Level Security is bypassed.\nDATABASE_URL=\n\n# --- Supabase (optional; used when STORAGE_DRIVER=supabase) ---------------\nNEXT_PUBLIC_SUPABASE_URL=\nNEXT_PUBLIC_SUPABASE_ANON_KEY=\nSUPABASE_SERVICE_ROLE_KEY=\n\n# --- Storage --------------------------------------------------------------\n# local | supabase\nSTORAGE_DRIVER=local\nLOCAL_STORAGE_DIR=./.storage\nSUPABASE_STORAGE_BUCKET=interview-private\n\n# --- Security -------------------------------------------------------------\n# 32+ random bytes, used to sign storage URLs. `openssl rand -hex 32`\nAPP_SECRET=\n\n# --- OpenAI (server-side only) --------------------------------------------\nOPENAI_API_KEY=\n# Optional model overrides (see lib/ai/config.ts for defaults)\nOPENAI_MODEL_FAST=\nOPENAI_MODEL_REASONING=\nOPENAI_MODEL_REALTIME=\nOPENAI_MODEL_TRANSCRIBE=\nOPENAI_REALTIME_VOICE=\n# auto | openai | mock   (auto = openai when OPENAI_API_KEY is set, else mock)\nAI_PROVIDER=auto\n\n# --- App --------------------------------------------------------------------\nAPP_URL=http://localhost:3000\n\n# --- Email (optional) --------------------------------------------------------\n# log | resend\nEMAIL_PROVIDER=log\nEMAIL_PROVIDER_API_KEY=\nEMAIL_FROM=\n\n# Required to create new workspaces (give to approved customers). Unset = invite-only.\nSIGNUP_ACCESS_CODE=\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/.env.example b/.env.example
+--- a/.env.example	(revision b78e40ee62758608964bc9015bdc90cae40956a0)
++++ b/.env.example	(date 1793773219541)
+@@ -41,3 +41,9 @@
+ 
+ # Required to create new workspaces (give to approved customers). Unset = invite-only.
+ SIGNUP_ACCESS_CODE=
++
++# Rate limiting: how to find the caller's real IP behind your proxies (pick one).
++# A header your edge sets and clients can't override, e.g. cf-connecting-ip behind Cloudflare:
++# CLIENT_IP_HEADER=
++# Or the number of proxies in front of the app (uses the X-Forwarded-For entry the outermost one added):
++# TRUSTED_PROXY_HOPS=
+Index: lib/ai/candidate-feedback.ts
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>import \"server-only\";\nimport { z } from \"zod\";\nimport { aiIsLive } from \"@/lib/env\";\nimport { log } from \"@/lib/logger\";\nimport * as prompt from \"@/prompts/candidate-feedback/v1\";\nimport { AI_CONFIG } from \"./config\";\nimport { runStructured } from \"./openai-client\";\n\nconst FeedbackSchema = z.object({ enough_evidence: z.boolean(), feedback: z.string() });\n\n// A last check on what reaches the candidate: anything that looks like a score, an\n// outcome or an internal note means the email goes without feedback.\nconst NOT_FOR_CANDIDATES = /\\b(score[ds]?|rating|rated|\\d\\s*\\/\\s*(?:5|10)|out of (?:5|10)|hire[ds]?|hiring decision|reject\\w*|shortlist\\w*|pass(?:ed)?|fail(?:ed)?|next round|move forward|other candidates|insufficient evidence|areas? to explore|accent|nervous\\w*)\\b/i;\n\nexport const CANDIDATE_FEEDBACK_VERSION = prompt.version;\n\n/** Candidate-safe feedback text, or null when there isn't enough evidence or anything looks unsafe. Never throws. */\nexport async function writeCandidateFeedback(input: { orgId: string } & Parameters<typeof prompt.buildUser>[0]): Promise<string | null> {\n  try {\n    const { orgId, ...rest } = input;\n    const out = aiIsLive()\n      ? await runStructured({\n        orgId,\n        feature: \"candidate_feedback\",\n        model: AI_CONFIG.reportGenerator,\n        promptVersion: prompt.version,\n        system: prompt.system,\n        user: prompt.buildUser(rest),\n        schema: FeedbackSchema,\n        schemaName: \"candidate_feedback\",\n        timeoutMs: 60_000,\n        maxAttempts: 2,\n      })\n      : mockFeedback(rest);\n    return checkFeedback(out);\n  } catch (err) {\n    log.warn(\"ai.candidate_feedback_failed\", { err });\n    return null;\n  }\n}\n\nexport function checkFeedback(out: z.infer<typeof FeedbackSchema>): string | null {\n  const text = out.feedback.replace(/\\s+/g, \" \").trim();\n  if (!out.enough_evidence || text.length < 80 || text.length > 1200) return null;\n  if (NOT_FOR_CANDIDATES.test(text)) {\n    log.warn(\"ai.candidate_feedback_rejected\", { reason: \"unsafe wording\" });\n    return null;\n  }\n  return text;\n}\n\n/** Demo mode: a plain note built only from the report's own points. */\nfunction mockFeedback(input: Parameters<typeof prompt.buildUser>[0]): z.infer<typeof FeedbackSchema> {\n  if (input.answeredQuestions < 3 || !input.strengths.length) return { enough_evidence: false, feedback: \"\" };\n  const area = input.areasToBuild[0];\n  return {\n    enough_evidence: true,\n    feedback: `Thank you for taking the time to interview for the ${input.jobTitle} role. ${input.strengths[0].replace(/\\.$/, \"\")} came through clearly in your answers.`\n      + (area ? ` One area to build on: ${area.replace(/\\.$/, \"\").toLowerCase()}. Developing this will help you show the impact of your work more clearly.` : \"\")\n      + \" Keep building on these strengths as you grow in your career.\",\n  };\n}\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/lib/ai/candidate-feedback.ts b/lib/ai/candidate-feedback.ts
+--- a/lib/ai/candidate-feedback.ts	(revision b78e40ee62758608964bc9015bdc90cae40956a0)
++++ b/lib/ai/candidate-feedback.ts	(date 1793773099823)
+@@ -10,7 +10,10 @@
+ 
+ // A last check on what reaches the candidate: anything that looks like a score, an
+ // outcome or an internal note means the email goes without feedback.
+-const NOT_FOR_CANDIDATES = /\b(score[ds]?|rating|rated|\d\s*\/\s*(?:5|10)|out of (?:5|10)|hire[ds]?|hiring decision|reject\w*|shortlist\w*|pass(?:ed)?|fail(?:ed)?|next round|move forward|other candidates|insufficient evidence|areas? to explore|accent|nervous\w*)\b/i;
++const NOT_FOR_CANDIDATES = /\b(score[ds]?|rating|rated|\d\s*\/\s*(?:5|10)|out of (?:5|10)|hire[ds]?|hiring decision|reject\w*|shortlist\w*|pass(?:ed)?|fail(?:ed)?|next round|move forward|other candidates|insufficient evidence|areas? to explore|accent|nervous\w*|verify|verified|probe[ds]?|probing|recruiters?|interviewer should|hiring manager)\b/i;
++// Feedback is plain prose. A link, an email address or markup can only come from a
++// prompt injection in the candidate's answers, so it means no feedback at all.
++const NOT_PROSE = /(https?:\/\/|\bwww\.|[\w.+-]+@[\w-]+\.[\w.-]+|[<>{}]|\[[^\]]*\]\()/i;
+ 
+ export const CANDIDATE_FEEDBACK_VERSION = prompt.version;
+ 
+@@ -46,9 +49,16 @@
+     log.warn("ai.candidate_feedback_rejected", { reason: "unsafe wording" });
+     return null;
+   }
++  if (NOT_PROSE.test(text)) {
++    log.warn("ai.candidate_feedback_rejected", { reason: "link or markup" });
++    return null;
++  }
+   return text;
+ }
+ 
++/** "Linking work to outcomes" → "linking work to outcomes", but "AWS cost reviews" stays as written. */
++const lowerFirst = (t: string) => (/^[A-Z][a-z]/.test(t) ? t[0].toLowerCase() + t.slice(1) : t);
++
+ /** Demo mode: a plain note built only from the report's own points. */
+ function mockFeedback(input: Parameters<typeof prompt.buildUser>[0]): z.infer<typeof FeedbackSchema> {
+   if (input.answeredQuestions < 3 || !input.strengths.length) return { enough_evidence: false, feedback: "" };
+@@ -56,7 +66,7 @@
+   return {
+     enough_evidence: true,
+     feedback: `Thank you for taking the time to interview for the ${input.jobTitle} role. ${input.strengths[0].replace(/\.$/, "")} came through clearly in your answers.`
+-      + (area ? ` One area to build on: ${area.replace(/\.$/, "").toLowerCase()}. Developing this will help you show the impact of your work more clearly.` : "")
++      + (area ? ` One area to build on: ${lowerFirst(area.replace(/\.$/, ""))}. Developing this will help you show the impact of your work more clearly.` : "")
+       + " Keep building on these strengths as you grow in your career.",
+   };
+ }
+Index: lib/interview/candidate-followup.ts
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>import \"server-only\";\nimport { withOrg } from \"@/lib/database/db\";\nimport { audit } from \"@/lib/audit\";\nimport { writeCandidateFeedback } from \"@/lib/ai/candidate-feedback\";\nimport { companyBrand, emailTemplates, replyToUser, sendEmail } from \"@/lib/email\";\nimport { log } from \"@/lib/logger\";\nimport { readSettings } from \"@/lib/services/org-settings\";\nimport type { FinalReport } from \"@/lib/validation/ai-schemas\";\n\n/** Too few answers to say anything specific: the candidate gets the confirmation only. */\nconst MIN_ANSWERS_FOR_FEEDBACK = 3;\n/** Only interviews that ended recently: regenerating an old report never emails the candidate. */\nconst SEND_WITHIN_HOURS = 24;\n\n/**\n * After an interview is processed, email the candidate once: a confirmation, plus\n * short AI feedback from the report when the company allows it and there's enough to\n * go on. Called after every processing run; the first call claims the send, so the\n * candidate never gets it twice (regenerated reports, retries, parallel runs).\n * Never throws: the interview and report are already saved.\n */\nexport async function sendCandidateFollowup(orgId: string, interviewId: string) {\n  try {\n    const claimed = await withOrg(orgId, async (tx) => {\n      const [iv] = await tx<{\n        candidate_name: string; candidate_email: string; job_title: string; org_name: string; round_name: string | null; created_by: string | null;\n        settings: unknown; ended_reason: string | null; report_status: string | null; report_json: { final?: FinalReport } | null; answered: number;\n      }[]>`\n        update interviews i set candidate_email_sent_at = now()\n        from candidates c, jobs j, organizations o\n        where i.id = ${interviewId} and i.organization_id = ${orgId} and c.id = i.candidate_id and j.id = i.job_id and o.id = i.organization_id\n          and i.candidate_email_sent_at is null and i.completed_at > now() - make_interval(hours => ${SEND_WITHIN_HOURS})\n          and i.status in ('completed', 'processing', 'report_ready')\n        returning c.name as candidate_name, c.email as candidate_email, j.title as job_title, o.name as org_name, i.round_name, i.created_by,\n          o.settings, i.state->>'ended_reason' as ended_reason,\n          (select r.status::text from interview_reports r where r.interview_id = i.id) as report_status,\n          (select r.report_json from interview_reports r where r.interview_id = i.id) as report_json,\n          (select count(*)::int from interview_answers a where a.interview_id = i.id and coalesce(a.transcript_text, '') <> '') as answered`;\n      if (!iv) return null;\n      const sections = await tx<{ name: string; summary: string | null; strengths: unknown; concerns: unknown }[]>`\n        select s.name, e.summary, e.strengths, e.concerns from interview_sections s join section_evaluations e on e.section_id = s.id\n        where s.interview_id = ${interviewId} order by s.sort_order`;\n      return { iv, sections };\n    });\n    if (!claimed) return;\n    const { iv, sections } = claimed;\n\n    const final = iv.report_json?.final;\n    const wantsFeedback = readSettings(iv.settings).candidate_feedback_email && iv.report_status === \"completed\" && !!final\n      && iv.ended_reason !== \"left\" && iv.answered >= MIN_ANSWERS_FOR_FEEDBACK;\n    const texts = (v: unknown) => (Array.isArray(v) ? v.map((x) => (typeof x === \"string\" ? x : String((x as { point?: string })?.point ?? \"\"))).filter(Boolean) : []);\n    const feedback = wantsFeedback && final\n      ? await writeCandidateFeedback({\n        orgId, jobTitle: iv.job_title, answeredQuestions: iv.answered, reportSummary: final.summary,\n        strengths: final.strengths.map((s) => s.point), areasToBuild: final.areas_to_explore.map((a) => a.point),\n        sections: sections.map((s) => ({ name: s.name, summary: s.summary, strengths: texts(s.strengths), concerns: texts(s.concerns) })),\n      })\n      : null;\n\n    const tpl = emailTemplates.candidateThankYou({ candidateName: iv.candidate_name.split(\" \")[0], jobTitle: iv.job_title, companyName: iv.org_name, roundName: iv.round_name, feedback });\n    const sent = await sendEmail({ to: iv.candidate_email, ...tpl, orgId, replyTo: await replyToUser(iv.created_by), brand: await companyBrand(orgId) });\n    await withOrg(orgId, async (tx) => {\n      await tx`update interviews set candidate_feedback = ${feedback} where id = ${interviewId}`;\n      await audit(tx, { orgId, actorType: \"system\", action: \"interview.candidate_emailed\", entityType: \"interview\", entityId: interviewId, metadata: { feedback: !!feedback, sent: sent.ok } });\n    });\n  } catch (err) {\n    log.warn(\"interview.candidate_followup_failed\", { interviewId, err });\n  }\n}\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/lib/interview/candidate-followup.ts b/lib/interview/candidate-followup.ts
+--- a/lib/interview/candidate-followup.ts	(revision b78e40ee62758608964bc9015bdc90cae40956a0)
++++ b/lib/interview/candidate-followup.ts	(date 1793773083118)
+@@ -11,30 +11,45 @@
+ const MIN_ANSWERS_FOR_FEEDBACK = 3;
+ /** Only interviews that ended recently: regenerating an old report never emails the candidate. */
+ const SEND_WITHIN_HOURS = 24;
++/**
++ * A claim older than this is treated as abandoned (the process died between claiming and
++ * sending), so a later run can retry. Longer than the AI call (2 × 60s) plus the send.
++ */
++const STALE_CLAIM_MINUTES = 15;
++
++const firstName = (name: string) => name.trim().split(/\s+/)[0] || name.trim();
+ 
+ /**
+  * After an interview is processed, email the candidate once: a confirmation, plus
+  * short AI feedback from the report when the company allows it and there's enough to
+- * go on. Called after every processing run; the first call claims the send, so the
+- * candidate never gets it twice (regenerated reports, retries, parallel runs).
++ * go on. Called after every processing run.
++ *
++ * - Waits for the report: while it's failed or still generating, nothing is claimed, so a
++ *   successful retry still sends the email (with feedback) instead of a bare confirmation.
++ * - The first run claims the send, so the candidate never gets it twice (retries, parallel runs).
++ * - `candidate_email_sent_at` is set only after the provider accepts the email; a failed
++ *   send releases the claim for the next run.
++ *
+  * Never throws: the interview and report are already saved.
+  */
+ export async function sendCandidateFollowup(orgId: string, interviewId: string) {
++  let claimed = false;
+   try {
+-    const claimed = await withOrg(orgId, async (tx) => {
++    const data = await withOrg(orgId, async (tx) => {
+       const [iv] = await tx<{
+         candidate_name: string; candidate_email: string; job_title: string; org_name: string; round_name: string | null; created_by: string | null;
+-        settings: unknown; ended_reason: string | null; report_status: string | null; report_json: { final?: FinalReport } | null; answered: number;
++        settings: unknown; ended_reason: string | null; report_json: { final?: FinalReport } | null; answered: number;
+       }[]>`
+-        update interviews i set candidate_email_sent_at = now()
+-        from candidates c, jobs j, organizations o
++        update interviews i set candidate_email_claimed_at = now()
++        from candidates c, jobs j, organizations o, interview_reports r
+         where i.id = ${interviewId} and i.organization_id = ${orgId} and c.id = i.candidate_id and j.id = i.job_id and o.id = i.organization_id
+-          and i.candidate_email_sent_at is null and i.completed_at > now() - make_interval(hours => ${SEND_WITHIN_HOURS})
+-          and i.status in ('completed', 'processing', 'report_ready')
++          and r.interview_id = i.id and r.status = 'completed'
++          and i.candidate_email_sent_at is null
++          and (i.candidate_email_claimed_at is null or i.candidate_email_claimed_at < now() - make_interval(mins => ${STALE_CLAIM_MINUTES}))
++          and i.completed_at > now() - make_interval(hours => ${SEND_WITHIN_HOURS})
++          and i.status in ('completed', 'report_ready')
+         returning c.name as candidate_name, c.email as candidate_email, j.title as job_title, o.name as org_name, i.round_name, i.created_by,
+-          o.settings, i.state->>'ended_reason' as ended_reason,
+-          (select r.status::text from interview_reports r where r.interview_id = i.id) as report_status,
+-          (select r.report_json from interview_reports r where r.interview_id = i.id) as report_json,
++          o.settings, i.state->>'ended_reason' as ended_reason, r.report_json,
+           (select count(*)::int from interview_answers a where a.interview_id = i.id and coalesce(a.transcript_text, '') <> '') as answered`;
+       if (!iv) return null;
+       const sections = await tx<{ name: string; summary: string | null; strengths: unknown; concerns: unknown }[]>`
+@@ -42,11 +57,12 @@
+         where s.interview_id = ${interviewId} order by s.sort_order`;
+       return { iv, sections };
+     });
+-    if (!claimed) return;
+-    const { iv, sections } = claimed;
++    if (!data) return;
++    claimed = true;
++    const { iv, sections } = data;
+ 
+     const final = iv.report_json?.final;
+-    const wantsFeedback = readSettings(iv.settings).candidate_feedback_email && iv.report_status === "completed" && !!final
++    const wantsFeedback = readSettings(iv.settings).candidate_feedback_email && !!final
+       && iv.ended_reason !== "left" && iv.answered >= MIN_ANSWERS_FOR_FEEDBACK;
+     const texts = (v: unknown) => (Array.isArray(v) ? v.map((x) => (typeof x === "string" ? x : String((x as { point?: string })?.point ?? ""))).filter(Boolean) : []);
+     const feedback = wantsFeedback && final
+@@ -57,13 +73,26 @@
+       })
+       : null;
+ 
+-    const tpl = emailTemplates.candidateThankYou({ candidateName: iv.candidate_name.split(" ")[0], jobTitle: iv.job_title, companyName: iv.org_name, roundName: iv.round_name, feedback });
++    const tpl = emailTemplates.candidateThankYou({ candidateName: firstName(iv.candidate_name), jobTitle: iv.job_title, companyName: iv.org_name, roundName: iv.round_name, feedback });
+     const sent = await sendEmail({ to: iv.candidate_email, ...tpl, orgId, replyTo: await replyToUser(iv.created_by), brand: await companyBrand(orgId) });
++    // Once the email is out, never release the claim: a retry would send it twice.
++    if (sent.ok) claimed = false;
+     await withOrg(orgId, async (tx) => {
+-      await tx`update interviews set candidate_feedback = ${feedback} where id = ${interviewId}`;
++      if (sent.ok) {
++        // What was sent and when, in one write, so the interview page shows exactly what the candidate got.
++        await tx`update interviews set candidate_email_sent_at = now(), candidate_feedback = ${feedback} where id = ${interviewId}`;
++      } else {
++        await tx`update interviews set candidate_email_claimed_at = null where id = ${interviewId} and candidate_email_sent_at is null`;
++      }
+       await audit(tx, { orgId, actorType: "system", action: "interview.candidate_emailed", entityType: "interview", entityId: interviewId, metadata: { feedback: !!feedback, sent: sent.ok } });
+     });
++    claimed = false; // released above when the send failed
+   } catch (err) {
+     log.warn("interview.candidate_followup_failed", { interviewId, err });
++    if (claimed) {
++      // Release the claim so a later run can retry (the stale-claim timeout covers a crash).
++      await withOrg(orgId, (tx) => tx`update interviews set candidate_email_claimed_at = null where id = ${interviewId} and candidate_email_sent_at is null`)
++        .catch(() => undefined);
++    }
+   }
+ }
+Index: tests/unit/email.test.ts
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>import { describe, expect, it } from \"vitest\";\nimport { aboutRole, emailTemplates, resendPayload } from \"@/lib/email\";\nimport { renderEmailHtml } from \"@/lib/email/html\";\n\nconst brand = { name: \"Acme <Robotics>\", logoUrl: \"https://pickmyhire.ai/api/public/logo/abc?v=1\", color: \"#e11d48\", company: true };\n\ndescribe(\"resend payload\", () => {\n  it(\"sends text and branded HTML, and adds reply-to and base64 attachments only when given\", () => {\n    const plain = resendPayload({ to: \"a@x.test\", subject: \"Hi\", text: \"Body\", brand }, \"PickMyHire.ai <noreply@pickmyhire.ai>\");\n    expect(plain).toMatchObject({ from: \"PickMyHire.ai <noreply@pickmyhire.ai>\", to: \"a@x.test\", subject: \"Hi\", text: \"Body\" });\n    expect(plain.html).toContain(\"Body\");\n    expect(plain).not.toHaveProperty(\"reply_to\");\n    expect(plain).not.toHaveProperty(\"attachments\");\n\n    const ics = \"BEGIN:VCALENDAR\\r\\nEND:VCALENDAR\\r\\n\";\n    const p = resendPayload({\n      to: \"a@x.test\", subject: \"Hi\", text: \"Body\", brand, replyTo: \"Rita Recruiter <rita@acme.test>\",\n      attachments: [{ filename: \"invite.ics\", content: ics, contentType: \"text/calendar; charset=utf-8; method=REQUEST\" }],\n    }, \"PickMyHire.ai <noreply@pickmyhire.ai>\");\n    expect(p.reply_to).toBe(\"Rita Recruiter <rita@acme.test>\");\n    expect(p.attachments).toEqual([{ filename: \"invite.ics\", content: Buffer.from(ics).toString(\"base64\"), content_type: \"text/calendar; charset=utf-8; method=REQUEST\" }]);\n  });\n});\n\ndescribe(\"branded HTML email\", () => {\n  const link = \"https://pickmyhire.ai/interview/tok123\";\n  const text = `Hi Priya,\\n\\nAcme invited you.\\n\\n• Approximate duration: 30 minutes\\n• Bring <headphones> & a quiet room\\n\\nStart your interview: ${link}\\n\\nAcme hiring team`;\n\n  it(\"turns the main link into a button, keeps every line, and escapes text\", () => {\n    const html = renderEmailHtml({ subject: \"Your interview\", text, brand, cta: { label: \"Start your interview\", url: link } });\n    expect(html).toContain(`href=\"${link}\"`);\n    expect(html).toContain(\">Start your interview</a>\");\n    expect(html).not.toContain(\"Start your interview: \"); // the link line became the button\n    expect(html).toContain(\"<li\");\n    expect(html).toContain(\"Bring &lt;headphones&gt; &amp; a quiet room\");\n    expect(html).toContain('alt=\"Acme &lt;Robotics&gt;\"');\n    expect(html).toContain(\"background:#e11d48\");\n    expect(html).toContain(\"Sent by Acme &lt;Robotics&gt; via PickMyHire.ai\");\n    expect(Buffer.byteLength(html)).toBeLessThan(20_000); // far below Gmail's ~100 KB clipping\n  });\n\n  it(\"shows the company name when there's no logo, and keeps a Where: line next to the meeting button\", () => {\n    const meet = \"https://meet.google.com/abc-defg-hij\";\n    const html = renderEmailHtml({\n      subject: \"Interview\", text: `Hi Priya,\\n\\nWhen: Tue 11:00\\nWhere: Video call: ${meet}\\nWith: Daniel`,\n      brand: { name: \"Northwind Talent\", logoUrl: null, color: null, company: true }, cta: { label: \"Join the meeting\", url: meet },\n    });\n    expect(html).not.toContain(\"<img\");\n    expect(html).toContain(\">Northwind Talent</span>\");\n    expect(html).toContain(\"<strong style=\\\"color:#0f1f3a;\\\">Where:</strong>\");\n    expect(html).toContain(\">Join the meeting</a>\");\n  });\n});\n\ndescribe(\"about the role in interview emails\", () => {\n  const role = {\n    summary: \"Sr. SEO Executive owning technical and content SEO for our e-commerce sites.\",\n    skills: [{ name: \"Technical SEO\", importance: \"required\" as const }, { name: \"GA4\", importance: \"required\" as const }, { name: \"Python\", importance: \"preferred\" as const }],\n    experience: { minimum_years: 4, maximum_years: null },\n    responsibilities: [\"Run technical audits\", \"Plan keyword strategy\", \"Report on organic growth\", \"Work with content writers\", \"Fifth duty\"],\n    seniority: \"senior\" as const,\n  };\n\n  it(\"uses the extracted summary, up to 4 duties and the required skills only\", () => {\n    const text = aboutRole(role);\n    expect(text).toContain(\"About the role\\nSr. SEO Executive owning technical\");\n    expect(text).toContain(\"• Work with content writers\");\n    expect(text).not.toContain(\"Fifth duty\");\n    expect(text).toContain(\"Key skills: Technical SEO, GA4\");\n    expect(text).not.toContain(\"Python\");\n  });\n\n  it(\"leaves the section out when the job wasn't analysed\", () => {\n    expect(aboutRole(null)).toBe(\"\");\n    const t = emailTemplates.invitation({ candidateName: \"Riya\", jobTitle: \"Sr. SEO Executive\", companyName: \"Acme\", minutes: 25, link: \"https://pickmyhire.ai/interview/x\", expiresAt: null });\n    expect(t.text).not.toContain(\"About the role\");\n    expect(t.text).toContain(\"• Approximate duration: 25 minutes\");\n  });\n\n  it(\"puts it in the invitation and the reminder, with duties as a list in the HTML\", () => {\n    const inv = emailTemplates.invitation({ candidateName: \"Riya\", jobTitle: \"Sr. SEO Executive\", companyName: \"Acme\", minutes: 25, link: \"https://pickmyhire.ai/interview/x\", expiresAt: null, role });\n    expect(inv.text).toContain(\"About the role\");\n    const html = renderEmailHtml({ subject: inv.subject, text: inv.text, brand, cta: inv.cta });\n    expect(html).toContain(\"Run technical audits</li>\");\n    expect(emailTemplates.reminder({ candidateName: \"Riya\", jobTitle: \"Sr. SEO Executive\", companyName: \"Acme\", link: \"https://x\", role }).text).toContain(\"Key skills: Technical SEO, GA4\");\n  });\n});\n\ndescribe(\"candidate feedback safety check\", () => {\n  it(\"keeps specific, safe feedback and drops anything with scores, outcomes or internal notes\", async () => {\n    const { checkFeedback } = await import(\"@/lib/ai/candidate-feedback\");\n    const good = \"Thank you for taking the time to interview with us. Your hands-on technical SEO work, especially schema and canonical fixes, stood out. One area to build on is linking your work to measurable outcomes such as baselines and results. That habit will help you show which fixes drive the most impact as you grow.\";\n    expect(checkFeedback({ enough_evidence: true, feedback: good })).toBe(good);\n    expect(checkFeedback({ enough_evidence: false, feedback: good })).toBeNull();\n    expect(checkFeedback({ enough_evidence: true, feedback: \"Too short.\" })).toBeNull();\n    for (const bad of [\"You scored 4/5 on technical SEO.\", \"We will move forward with your application.\", \"Compared with other candidates you did well.\", \"Areas to explore: verify the GSC claims.\"]) {\n      expect(checkFeedback({ enough_evidence: true, feedback: `${good} ${bad}` })).toBeNull();\n    }\n  });\n});\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/tests/unit/email.test.ts b/tests/unit/email.test.ts
+--- a/tests/unit/email.test.ts	(revision b78e40ee62758608964bc9015bdc90cae40956a0)
++++ b/tests/unit/email.test.ts	(date 1793773131096)
+@@ -98,3 +98,26 @@
+     }
+   });
+ });
++
++describe("candidate-facing text from AI and job descriptions", () => {
++  it("drops feedback with links, email addresses or markup (prompt injection from answers)", async () => {
++    const { checkFeedback } = await import("@/lib/ai/candidate-feedback");
++    const good = "Thank you for taking the time to interview with us. Your hands-on technical SEO work, especially schema and canonical fixes, stood out. One area to build on is linking your work to measurable outcomes such as baselines and results. That habit will help you show which fixes drive the most impact as you grow.";
++    for (const bad of ["See https://evil.example/claim for details.", "Visit www.evil.example today.", "Write to hr-team@evil.example now.", "<b>Click</b> here.", "[Claim your offer](http://x)", "The recruiter will probe this further."]) {
++      expect(checkFeedback({ enough_evidence: true, feedback: `${good} ${bad}` })).toBeNull();
++    }
++  });
++
++  it("strips links and emails from the role summary and keeps lines intact", () => {
++    const text = aboutRole({
++      summary: "Own SEO.\nApply at https://evil.example/form or mail jobs@evil.example now.",
++      skills: [{ name: "Technical SEO www.evil.example", importance: "required" }],
++      experience: { minimum_years: null, maximum_years: null },
++      responsibilities: ["Run audits\n\nFake line"],
++      seniority: "senior",
++    });
++    expect(text).not.toMatch(/evil\.example|https?:/);
++    expect(text).toContain("About the role\nOwn SEO. Apply at or mail now.");
++    expect(text).toContain("• Run audits Fake line");
++  });
++});
+Index: lib/email/index.ts
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>import \"server-only\";\nimport { env } from \"@/lib/env\";\nimport { withSystem } from \"@/lib/database/db\";\nimport { log } from \"@/lib/logger\";\nimport { logoUrl } from \"@/lib/branding\";\nimport { renderEmailHtml, type EmailBrand, type EmailCta } from \"./html\";\nimport type { JobRequirements } from \"@/lib/validation/ai-schemas\";\n\nexport type EmailAttachment = { filename: string; content: string; contentType: string };\nexport type EmailMessage = {\n  to: string; subject: string; text: string; orgId?: string | null;\n  /** Where replies go (e.g. the recruiter), since the From address has no mailbox. */\n  replyTo?: string | null;\n  attachments?: EmailAttachment[];\n  /** The main action, shown as a button in the HTML version. */\n  cta?: EmailCta | null;\n  /** Whose logo and colour to use; PickMyHire.ai when not given. */\n  brand?: EmailBrand | null;\n};\n\n/** PickMyHire.ai's own look, for team, account and platform emails. */\nexport function platformBrand(): EmailBrand {\n  return { name: \"PickMyHire.ai\", logoUrl: `${env().APP_URL}/brand/email-logo.png`, color: \"#0b5bd3\" };\n}\n\n/** A hiring company's logo and colour, for the emails its candidates receive. */\nexport async function companyBrand(orgId: string): Promise<EmailBrand> {\n  try {\n    const [o] = await withSystem((tx) => tx<{ name: string; logo_path: string | null; logo_updated_at: Date | null; brand_color: string | null }[]>`\n      select name, logo_path, logo_updated_at, brand_color from organizations where id = ${orgId}`);\n    if (!o) return platformBrand();\n    const path = logoUrl(orgId, o.logo_updated_at, o.logo_path);\n    return { name: o.name, logoUrl: path ? `${env().APP_URL}${path}` : null, color: o.brand_color, company: true };\n  } catch {\n    return platformBrand();\n  }\n}\n\ninterface EmailProvider {\n  name: string;\n  send(msg: EmailMessage): Promise<void>;\n}\n\n/** Development provider: records the message in email_outbox (visible under Settings → Notifications). */\nconst logProvider: EmailProvider = {\n  name: \"log\",\n  async send(msg) {\n    log.info(\"email.logged\", { to_domain: msg.to.split(\"@\")[1], subject: msg.subject });\n  },\n};\n\n/** The Resend API request body (attachments are sent base64-encoded). */\nexport function resendPayload(msg: EmailMessage, from: string | undefined) {\n  return {\n    from, to: msg.to, subject: msg.subject, text: msg.text,\n    html: renderEmailHtml({ subject: msg.subject, text: msg.text, brand: msg.brand ?? platformBrand(), cta: msg.cta }),\n    ...(msg.replyTo ? { reply_to: msg.replyTo } : {}),\n    ...(msg.attachments?.length ? {\n      attachments: msg.attachments.map((a) => ({ filename: a.filename, content: Buffer.from(a.content).toString(\"base64\"), content_type: a.contentType })),\n    } : {}),\n  };\n}\n\nconst resendProvider: EmailProvider = {\n  name: \"resend\",\n  async send(msg) {\n    const e = env();\n    const res = await fetch(\"https://api.resend.com/emails\", {\n      method: \"POST\",\n      headers: { Authorization: `Bearer ${e.EMAIL_PROVIDER_API_KEY}`, \"Content-Type\": \"application/json\" },\n      body: JSON.stringify(resendPayload(msg, e.EMAIL_FROM)),\n    });\n    if (!res.ok) throw new Error(`Email provider returned ${res.status}`);\n  },\n};\n\n/** `Name <email>` for a reply-to header (characters that would break the header are dropped). */\nexport const mailbox = (name: string, email: string) => `${name.replace(/[<>\"\\\\,;]/g, \"\").trim() || email} <${email}>`;\n\n/** Email every platform admin (best effort: the thing it's about is already saved). */\nexport async function emailPlatformAdmins(tpl: { subject: string; text: string; cta?: EmailCta }, replyTo?: string | null) {\n  try {\n    const admins = await withSystem((tx) => tx<{ email: string }[]>`select email from users where is_platform_admin and disabled_at is null`);\n    for (const a of admins) await sendEmail({ to: a.email, ...tpl, replyTo });\n  } catch (err) {\n    log.warn(\"email.platform_admins_failed\", { err });\n  }\n}\n\n/** \"Name <email>\" for a team member, used as the reply-to on emails sent on their behalf. */\nexport async function replyToUser(userId: string | null | undefined): Promise<string | null> {\n  if (!userId) return null;\n  try {\n    const [u] = await withSystem((tx) => tx<{ name: string; email: string }[]>`select name, email from users where id = ${userId} and disabled_at is null`);\n    return u ? mailbox(u.name, u.email) : null;\n  } catch {\n    return null;\n  }\n}\n\nfunction provider(): EmailProvider {\n  return env().EMAIL_PROVIDER === \"resend\" ? resendProvider : logProvider;\n}\n\nexport async function sendEmail(msg: EmailMessage): Promise<{ ok: boolean }> {\n  const p = provider();\n  let status = \"sent\";\n  let error: string | null = null;\n  try {\n    await p.send(msg);\n  } catch (err) {\n    status = \"failed\";\n    error = err instanceof Error ? err.message : \"send failed\";\n    log.warn(\"email.send_failed\", { provider: p.name, error });\n  }\n  // The outbox notes the reply-to and attachments too, so they're visible under Settings → Notifications.\n  const extras = [msg.replyTo && `Reply-to: ${msg.replyTo}`, ...(msg.attachments ?? []).map((a) => `Attached: ${a.filename}`)].filter(Boolean);\n  const logged = extras.length ? `${msg.text}\\n\\n---\\n${extras.join(\"\\n\")}` : msg.text;\n  await withSystem((tx) => tx`\n    insert into email_outbox (organization_id, to_email, subject, body_text, provider, status, error)\n    values (${msg.orgId ?? null}, ${msg.to}, ${msg.subject}, ${logged}, ${p.name}, ${status}, ${error})`);\n  return { ok: status === \"sent\" };\n}\n\n/**\n * \"About the role\" for interview emails: the summary, main responsibilities and required\n * skills the AI extracted when the job was created (never the full description).\n * Empty when the job hasn't been analysed.\n */\nexport function aboutRole(req: JobRequirements | null | undefined): string {\n  const summary = req?.summary?.trim();\n  if (!req || !summary) return \"\";\n  const clip = (t: string, n: number) => (t.length > n ? `${t.slice(0, n - 1).trimEnd()}…` : t);\n  const duties = req.responsibilities.map((r) => clip(r.trim(), 200)).filter(Boolean).slice(0, 4);\n  const skills = req.skills.filter((s) => s.importance === \"required\").map((s) => s.name.trim()).filter(Boolean).slice(0, 8);\n  return [\n    `About the role\\n${summary}`,\n    duties.length ? `What you'll do:\\n\\n${duties.map((d) => `• ${d}`).join(\"\\n\")}` : \"\",\n    skills.length ? `Key skills: ${skills.join(\", \")}` : \"\",\n  ].filter(Boolean).join(\"\\n\\n\");\n}\n\nexport const emailTemplates = {\n  invitation(input: { candidateName: string; jobTitle: string; companyName: string; minutes: number; link: string; expiresAt: Date | null; roundName?: string | null; role?: JobRequirements | null }) {\n    const role = aboutRole(input.role);\n    return {\n      subject: input.roundName ? `Your ${input.roundName} interview for ${input.jobTitle}` : \"Your AI interview invitation\",\n      cta: { label: \"Start your interview\", url: input.link },\n      text: `Hi ${input.candidateName},\n\n${input.companyName} has invited you to ${input.roundName ? `the ${input.roundName} round, an AI-assisted interview,` : \"an AI-assisted interview\"} for the ${input.jobTitle} role.\n${role ? `\\n${role}\\n` : \"\"}\n• Approximate duration: ${input.minutes} minutes\n• You'll need a computer with a camera and microphone, and a quiet place.\n• The interview is recorded and transcribed. You'll be asked for consent before it starts.\n${input.expiresAt ? `• This link expires on ${input.expiresAt.toUTCString()}.\\n` : \"\"}\nStart your interview: ${input.link}\n\nThis link is personal to you — please don't share it. Questions? Just reply to this email.\n\n${input.companyName} hiring team`,\n    };\n  },\n  applicationReceived(input: { candidateName: string; jobTitle: string; companyName: string }) {\n    return {\n      subject: `We received your application — ${input.jobTitle}`,\n      text: `Hi ${input.candidateName},\n\nThank you for applying for the ${input.jobTitle} role at ${input.companyName}. We've received your application and resume.\n\nOur hiring team reviews every application. If your background is a match, we'll email you an invitation to the next step. Questions? Just reply to this email.\n\n${input.companyName} hiring team`,\n    };\n  },\n  reminder(input: { candidateName: string; jobTitle: string; companyName: string; link: string; roundName?: string | null; role?: JobRequirements | null }) {\n    const role = aboutRole(input.role);\n    return {\n      subject: `Reminder: your ${input.roundName ? `${input.roundName} ` : \"\"}interview for ${input.jobTitle}`,\n      cta: { label: \"Start your interview\", url: input.link },\n      text: `Hi ${input.candidateName},\n\nThis is a friendly reminder that your ${input.roundName ? `${input.roundName} ` : \"\"}AI interview for the ${input.jobTitle} role at ${input.companyName} is still waiting for you.\n${role ? `\\n${role}\\n` : \"\"}\nStart when you're ready: ${input.link}\n\nQuestions? Just reply to this email.\n\n${input.companyName} hiring team`,\n    };\n  },\n  /** To the candidate once their interview is processed: a confirmation, with AI feedback when there is any. */\n  candidateThankYou(input: { candidateName: string; jobTitle: string; companyName: string; roundName?: string | null; feedback: string | null }) {\n    const what = `${input.roundName ? `${input.roundName} ` : \"\"}interview for the ${input.jobTitle} role`;\n    return {\n      subject: `Thank you for your interview: ${input.jobTitle}`,\n      text: `Hi ${input.candidateName},\n\nThank you for taking your ${what} at ${input.companyName}. We've received your interview, and the hiring team will review it and be in touch about next steps.\n${input.feedback ? `\nFeedback on your interview\n\n${input.feedback}\n\nThis feedback was generated by AI from your interview answers. It is not a hiring decision: the ${input.companyName} hiring team reviews every interview.\n` : \"\"}\nQuestions? Just reply to this email.\n\n${input.companyName} hiring team`,\n    };\n  },\n  completed(input: { candidateName: string; jobTitle: string; link: string }) {\n    return {\n      subject: `${input.candidateName} completed their interview`,\n      cta: { label: \"View the interview\", url: input.link },\n      text: `${input.candidateName} has completed the AI interview for ${input.jobTitle}.\\n\\nThe report will be ready shortly: ${input.link}`,\n    };\n  },\n  teamInvite(input: { orgName: string; inviter: string; role: string; link: string }) {\n    return {\n      subject: `You've been invited to ${input.orgName}`,\n      cta: { label: \"Accept invitation\", url: input.link },\n      text: `${input.inviter} invited you to join ${input.orgName} as ${input.role}.\\n\\nAccept the invitation: ${input.link}\\n\\nThis link expires in 7 days.`,\n    };\n  },\n  humanInterview(input: {\n    kind: \"invite\" | \"rescheduled\" | \"cancelled\"; name: string; jobTitle: string; companyName: string; roundName: string;\n    when: string; where: string; with: string; message: string | null; reason: string | null; link?: string; team?: boolean;\n  }) {\n    const what = input.team ? `${input.roundName} interview with ${input.with} (${input.jobTitle})` : `${input.roundName} interview for ${input.jobTitle} at ${input.companyName}`;\n    const subject = input.kind === \"cancelled\" ? `Cancelled: ${what}` : input.kind === \"rescheduled\" ? `New time: ${what}` : input.team ? `You're interviewing: ${what}` : `Interview invitation: ${what}`;\n    const lead = input.kind === \"cancelled\" ? `The ${what} has been cancelled.${input.reason ? `\\nReason: ${input.reason}` : \"\"}`\n      : input.kind === \"rescheduled\" ? `The ${what} has moved to a new time.${input.reason ? `\\nReason: ${input.reason}` : \"\"}`\n      : input.team ? `You're on the panel for the ${what}.` : `${input.companyName} would like to invite you to the ${input.roundName} interview for the ${input.jobTitle} role.`;\n    const details = input.kind === \"cancelled\" ? \"\" : `\\n\\nWhen: ${input.when}\\nWhere: ${input.where}\\nWith: ${input.with}${input.message ? `\\n\\n${input.message}` : \"\"}`;\n    const calendar = input.kind === \"cancelled\" ? \"\\n\\nThe attached calendar update removes it from your calendar.\" : \"\\n\\nOpen the attached invite (invite.ics) to add it to your calendar.\";\n    const tail = input.team && input.link ? `\\n\\nInterview guide and scorecard: ${input.link}` : input.kind === \"cancelled\" ? \"\" : \"\\n\\nIf this time doesn't work for you, please reply to let us know.\";\n    const meeting = input.kind === \"cancelled\" ? null : /https?:\\/\\/\\S+/.exec(input.where)?.[0];\n    const cta = input.team && input.link ? { label: \"Open interview guide\", url: input.link } : meeting ? { label: \"Join the meeting\", url: meeting } : null;\n    return { subject, text: `Hi ${input.name},\\n\\n${lead}${details}${calendar}${tail}\\n\\n${input.companyName}`, cta };\n  },\n  supportToAdmin(input: { kind: \"new\" | \"reply\"; company: string; name: string; email: string; category?: string; subject: string; message: string; link: string }) {\n    return {\n      subject: input.kind === \"new\" ? `Support: ${input.subject} (${input.company})` : `Re: ${input.subject} (${input.company})`,\n      cta: { label: \"Open in admin\", url: input.link },\n      text: `${input.kind === \"new\" ? `New support request${input.category ? ` (${input.category})` : \"\"}` : \"New reply on a support request\"} from ${input.name} <${input.email}>, ${input.company}.\n\n${input.message}\n\nOpen in admin: ${input.link}`,\n    };\n  },\n  inquiryToAdmin(input: { topic: string; name: string; email: string; company: string | null; phone: string | null; teamSize: string | null; message: string | null; link: string }) {\n    const details = [\n      `From: ${input.name} <${input.email}>`,\n      input.company && `Company: ${input.company}`,\n      input.phone && `Phone: ${input.phone}`,\n      input.teamSize && `Team size: ${input.teamSize} employees`,\n    ].filter(Boolean).join(\"\\n\");\n    return {\n      subject: `New inquiry: ${input.topic}${input.company ? ` (${input.company})` : ` from ${input.name}`}`,\n      cta: { label: \"Open in admin\", url: input.link },\n      text: `${details}${input.message ? `\\n\\n${input.message}` : \"\"}\\n\\nReply to this email to answer ${input.name} directly, or open it in admin: ${input.link}`,\n    };\n  },\n  trialToAdmin(input: { company: string; name: string; email: string; interviews: number; days: number; link: string }) {\n    return {\n      subject: `New free trial: ${input.company}`,\n      cta: { label: \"Open company\", url: input.link },\n      text: `${input.name} <${input.email}> started a free trial for ${input.company} (${input.interviews} interviews for ${input.days} days).\\n\\nReply to this email to reach them directly, or open the company in admin: ${input.link}`,\n    };\n  },\n  supportReply(input: { name: string; subject: string; message: string; link: string }) {\n    return {\n      subject: `Re: ${input.subject}`,\n      cta: { label: \"View conversation\", url: input.link },\n      text: `Hi ${input.name},\n\nPickMyHire.ai support replied to your request \"${input.subject}\":\n\n${input.message}\n\nView the conversation or reply: ${input.link}\n\nPickMyHire.ai support`,\n    };\n  },\n  verifyEmail(input: { name: string; link: string }) {\n    return {\n      subject: \"Confirm your email to start your PickMyHire.ai trial\",\n      cta: { label: \"Confirm my email\", url: input.link },\n      text: `Hi ${input.name},\\n\\nConfirm your email to start inviting candidates to AI interviews (link valid for 3 days):\\n${input.link}\\n\\nIf you didn't sign up for PickMyHire.ai, you can ignore this email.`,\n    };\n  },\n  passwordReset(input: { link: string }) {\n    return {\n      subject: \"Reset your password\",\n      cta: { label: \"Reset password\", url: input.link },\n      text: `We received a request to reset your password.\\n\\nReset it here (valid for 1 hour): ${input.link}\\n\\nIf you didn't request this, you can ignore this email.`,\n    };\n  },\n};\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/lib/email/index.ts b/lib/email/index.ts
+--- a/lib/email/index.ts	(revision b78e40ee62758608964bc9015bdc90cae40956a0)
++++ b/lib/email/index.ts	(date 1793773099824)
+@@ -122,17 +122,31 @@
+   return { ok: status === "sent" };
+ }
+ 
++/**
++ * Text taken from a job description for a candidate email: links and email addresses
++ * dropped (the email's own button is the only link a candidate should follow), and
++ * whitespace collapsed so it can't push fake lines into the message.
++ */
++function clean(t: string): string {
++  return t.replace(/\bhttps?:\/\/\S+|\bwww\.\S+|[\w.+-]+@[\w-]+\.[\w.-]+/gi, "").replace(/\s+/g, " ").trim();
++}
++
++/** Cut to `n` characters on a code-point boundary (never half an emoji). */
++function clip(t: string, n: number): string {
++  const chars = Array.from(t);
++  return chars.length > n ? `${chars.slice(0, n - 1).join("").trimEnd()}…` : t;
++}
++
+ /**
+  * "About the role" for interview emails: the summary, main responsibilities and required
+  * skills the AI extracted when the job was created (never the full description).
+  * Empty when the job hasn't been analysed.
+  */
+ export function aboutRole(req: JobRequirements | null | undefined): string {
+-  const summary = req?.summary?.trim();
++  const summary = clean(req?.summary ?? "");
+   if (!req || !summary) return "";
+-  const clip = (t: string, n: number) => (t.length > n ? `${t.slice(0, n - 1).trimEnd()}…` : t);
+-  const duties = req.responsibilities.map((r) => clip(r.trim(), 200)).filter(Boolean).slice(0, 4);
+-  const skills = req.skills.filter((s) => s.importance === "required").map((s) => s.name.trim()).filter(Boolean).slice(0, 8);
++  const duties = req.responsibilities.map((r) => clip(clean(r), 200)).filter(Boolean).slice(0, 4);
++  const skills = req.skills.filter((s) => s.importance === "required").map((s) => clip(clean(s.name), 60)).filter(Boolean).slice(0, 8);
+   return [
+     `About the role\n${summary}`,
+     duties.length ? `What you'll do:\n\n${duties.map((d) => `• ${d}`).join("\n")}` : "",
+Index: tests/integration/candidate-followup.test.ts
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>import { afterAll, beforeAll, describe, expect, it } from \"vitest\";\nimport { json, withSystem } from \"@/lib/database/db\";\nimport { hashToken, generateToken } from \"@/lib/security/tokens\";\nimport { sendCandidateFollowup } from \"@/lib/interview/candidate-followup\";\n\n// The email a candidate gets once their interview is processed (AI in demo mode, email logged to the outbox).\nconst id = Date.now().toString(36);\nlet orgId = \"\";\nlet jobId = \"\";\nlet n = 0;\nconst report = {\n  version: 1, generated_by: \"mock\", prompt_version: \"t\",\n  final: {\n    summary: \"Clear, specific answers about technical SEO work.\",\n    strengths: [{ point: \"Hands-on technical SEO with schema and canonicals\", evidence_refs: [] }],\n    areas_to_explore: [{ point: \"Linking work to measurable outcomes\", reason: \"Few baselines given\" }],\n    key_evidence: [], missing_evidence: [], fact_vs_interpretation_note: \"\",\n  },\n  sections: [], refs: {},\n};\n\nasync function interview(opts: { completedAgoHours?: number; answers?: number; endedReason?: \"left\"; feedbackSetting?: boolean } = {}) {\n  n += 1;\n  const email = `cand${n}-${id}@followup.test`;\n  const ivId = await withSystem(async (tx) => {\n    if (opts.feedbackSetting === false) await tx`update organizations set settings = settings || '{\"candidate_feedback_email\": false}'::jsonb where id = ${orgId}`;\n    else await tx`update organizations set settings = settings || '{\"candidate_feedback_email\": true}'::jsonb where id = ${orgId}`;\n    const [c] = await tx<{ id: string }[]>`insert into candidates (organization_id, name, email) values (${orgId}, ${`Riya Sharma`}, ${email}) returning id`;\n    const completed = new Date(Date.now() - (opts.completedAgoHours ?? 0.1) * 3_600_000);\n    const [iv] = await tx<{ id: string }[]>`\n      insert into interviews (organization_id, job_id, candidate_id, secure_token_hash, status, started_at, completed_at, state, round_name)\n      values (${orgId}, ${jobId}, ${c.id}, ${hashToken(generateToken())}, 'report_ready', ${new Date(completed.getTime() - 1_800_000)}, ${completed},\n        ${json(opts.endedReason ? { ended_reason: opts.endedReason } : {})}, 'Screening')\n      returning id`;\n    const [s] = await tx<{ id: string }[]>`insert into interview_sections (organization_id, interview_id, name, objective, sort_order, status)\n      values (${orgId}, ${iv.id}, 'Experience', 'Experience', 0, 'completed') returning id`;\n    for (let i = 0; i < (opts.answers ?? 4); i++) {\n      const [q] = await tx<{ id: string }[]>`insert into interview_questions (organization_id, interview_id, section_id, question_text, spoken_text, sequence_number)\n        values (${orgId}, ${iv.id}, ${s.id}, ${`Q${i}`}, ${`Q${i}`}, ${i + 1}) returning id`;\n      await tx`insert into interview_answers (organization_id, interview_id, question_id, transcript_text) values (${orgId}, ${iv.id}, ${q.id}, 'An answer about schema markup.')`;\n    }\n    await tx`insert into interview_reports (organization_id, interview_id, status, report_json) values (${orgId}, ${iv.id}, 'completed', ${json(report)})`;\n    return iv.id;\n  });\n  return { ivId, email };\n}\n\nconst outbox = (email: string) => withSystem((tx) => tx<{ subject: string; body_text: string }[]>`select subject, body_text from email_outbox where to_email = ${email}`);\nconst saved = (ivId: string) => withSystem(async (tx) => (await tx<{ sent: Date | null; feedback: string | null }[]>`\n  select candidate_email_sent_at as sent, candidate_feedback as feedback from interviews where id = ${ivId}`)[0]);\n\nbeforeAll(async () => {\n  const [o] = await withSystem((tx) => tx<{ id: string }[]>`insert into organizations (name, slug) values (${`Acme Hiring ${id}`}, ${`acme-followup-${id}`}) returning id`);\n  orgId = o.id;\n  const [j] = await withSystem((tx) => tx<{ id: string }[]>`insert into jobs (organization_id, title, status) values (${orgId}, 'Sr. SEO Executive', 'active') returning id`);\n  jobId = j.id;\n});\n\nafterAll(async () => {\n  await withSystem(async (tx) => {\n    await tx`delete from email_outbox where to_email like ${`%-${id}@followup.test`}`;\n    await tx`delete from organizations where id = ${orgId}`;\n  });\n});\n\ndescribe(\"email to the candidate after the interview\", () => {\n  it(\"sends a confirmation with labelled AI feedback, once\", async () => {\n    const { ivId, email } = await interview();\n    await sendCandidateFollowup(orgId, ivId);\n    await sendCandidateFollowup(orgId, ivId); // regenerated report / second processing run\n    const mails = await outbox(email);\n    expect(mails).toHaveLength(1);\n    expect(mails[0].subject).toBe(\"Thank you for your interview: Sr. SEO Executive\");\n    expect(mails[0].body_text).toContain(\"Hi Riya,\");\n    expect(mails[0].body_text).toContain(\"Thank you for taking your Screening interview for the Sr. SEO Executive role\");\n    expect(mails[0].body_text).toContain(\"Feedback on your interview\");\n    expect(mails[0].body_text).toContain(\"Hands-on technical SEO with schema and canonicals came through clearly\");\n    expect(mails[0].body_text).toContain(\"This feedback was generated by AI from your interview answers. It is not a hiring decision\");\n    const row = await saved(ivId);\n    expect(row.sent).not.toBeNull();\n    expect(row.feedback).toContain(\"Hands-on technical SEO\");\n  });\n\n  it(\"sends only the confirmation when the company turned feedback off, or there's too little to go on\", async () => {\n    for (const opts of [{ feedbackSetting: false }, { answers: 2 }, { endedReason: \"left\" as const }]) {\n      const { ivId, email } = await interview(opts);\n      await sendCandidateFollowup(orgId, ivId);\n      const mails = await outbox(email);\n      expect(mails).toHaveLength(1);\n      expect(mails[0].body_text).not.toContain(\"Feedback on your interview\");\n      expect((await saved(ivId)).feedback).toBeNull();\n    }\n  });\n\n  it(\"never emails candidates about old interviews (e.g. when a report is regenerated later)\", async () => {\n    const { ivId, email } = await interview({ completedAgoHours: 48 });\n    await sendCandidateFollowup(orgId, ivId);\n    expect(await outbox(email)).toHaveLength(0);\n    expect((await saved(ivId)).sent).toBeNull();\n  });\n});\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/tests/integration/candidate-followup.test.ts b/tests/integration/candidate-followup.test.ts
+--- a/tests/integration/candidate-followup.test.ts	(revision b78e40ee62758608964bc9015bdc90cae40956a0)
++++ b/tests/integration/candidate-followup.test.ts	(date 1793773160452)
+@@ -19,7 +19,7 @@
+   sections: [], refs: {},
+ };
+ 
+-async function interview(opts: { completedAgoHours?: number; answers?: number; endedReason?: "left"; feedbackSetting?: boolean } = {}) {
++async function interview(opts: { completedAgoHours?: number; answers?: number; endedReason?: "left"; feedbackSetting?: boolean; reportStatus?: "completed" | "failed" } = {}) {
+   n += 1;
+   const email = `cand${n}-${id}@followup.test`;
+   const ivId = await withSystem(async (tx) => {
+@@ -39,7 +39,9 @@
+         values (${orgId}, ${iv.id}, ${s.id}, ${`Q${i}`}, ${`Q${i}`}, ${i + 1}) returning id`;
+       await tx`insert into interview_answers (organization_id, interview_id, question_id, transcript_text) values (${orgId}, ${iv.id}, ${q.id}, 'An answer about schema markup.')`;
+     }
+-    await tx`insert into interview_reports (organization_id, interview_id, status, report_json) values (${orgId}, ${iv.id}, 'completed', ${json(report)})`;
++    const status = opts.reportStatus ?? "completed";
++    if (status === "failed") await tx`update interviews set status = 'completed' where id = ${iv.id}`;
++    await tx`insert into interview_reports (organization_id, interview_id, status, report_json) values (${orgId}, ${iv.id}, ${status}, ${status === "completed" ? json(report) : null})`;
+     return iv.id;
+   });
+   return { ivId, email };
+@@ -98,4 +100,32 @@
+     expect(await outbox(email)).toHaveLength(0);
+     expect((await saved(ivId)).sent).toBeNull();
+   });
++
++  it("waits for a failed report, then sends with feedback once the retry succeeds", async () => {
++    const { ivId, email } = await interview({ reportStatus: "failed" });
++    await sendCandidateFollowup(orgId, ivId);
++    expect(await outbox(email)).toHaveLength(0);
++    expect((await saved(ivId)).sent).toBeNull();
++
++    await withSystem(async (tx) => {
++      await tx`update interview_reports set status = 'completed', report_json = ${json(report)} where interview_id = ${ivId}`;
++      await tx`update interviews set status = 'report_ready' where id = ${ivId}`;
++    });
++    await sendCandidateFollowup(orgId, ivId);
++    const mails = await outbox(email);
++    expect(mails).toHaveLength(1);
++    expect(mails[0].body_text).toContain("Feedback on your interview");
++    expect((await saved(ivId)).sent).not.toBeNull();
++  });
++
++  it("leaves a claim another run holds alone, and retries one that was abandoned", async () => {
++    const { ivId, email } = await interview();
++    await withSystem((tx) => tx`update interviews set candidate_email_claimed_at = now() where id = ${ivId}`);
++    await sendCandidateFollowup(orgId, ivId);
++    expect(await outbox(email)).toHaveLength(0);
++
++    await withSystem((tx) => tx`update interviews set candidate_email_claimed_at = now() - interval '1 hour' where id = ${ivId}`);
++    await sendCandidateFollowup(orgId, ivId);
++    expect(await outbox(email)).toHaveLength(1);
++  });
+ });
+Index: app/api/auth/login/route.ts
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>import { z } from \"zod\";\nimport { body, route } from \"@/lib/api\";\nimport { createSession } from \"@/lib/auth/session\";\nimport { authenticate } from \"@/lib/services/accounts\";\n\nconst Schema = z.object({\n  email: z.string().trim().toLowerCase().email(\"Enter a valid email\"),\n  password: z.string().min(1, \"Password is required\").max(200),\n});\n\nexport const POST = route(async (req) => {\n  const { email, password } = await body(req, Schema);\n  const { userId, orgId, isPlatformAdmin } = await authenticate(email, password);\n  await createSession(userId, orgId);\n  // Platform admins without a company of their own land in the admin area.\n  return { ok: true, home: !orgId && isPlatformAdmin ? \"/admin\" : \"/dashboard\" };\n}, { rateLimit: { key: \"login\", limit: 10, windowMs: 10 * 60_000 } });\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/api/auth/login/route.ts b/app/api/auth/login/route.ts
+--- a/app/api/auth/login/route.ts	(revision b78e40ee62758608964bc9015bdc90cae40956a0)
++++ b/app/api/auth/login/route.ts	(date 1793772998757)
+@@ -1,6 +1,7 @@
+ import { z } from "zod";
+-import { body, route } from "@/lib/api";
++import { ApiError, body, route } from "@/lib/api";
+ import { createSession } from "@/lib/auth/session";
++import { isRateLimited, rateLimit } from "@/lib/security/rate-limit";
+ import { authenticate } from "@/lib/services/accounts";
+ 
+ const Schema = z.object({
+@@ -8,9 +9,23 @@
+   password: z.string().min(1, "Password is required").max(200),
+ });
+ 
++/** Wrong passwords per account, across all IPs: stops slow brute force from many addresses. */
++const ACCOUNT_FAILURES = { limit: 10, windowMs: 15 * 60_000 };
++
+ export const POST = route(async (req) => {
+   const { email, password } = await body(req, Schema);
+-  const { userId, orgId, isPlatformAdmin } = await authenticate(email, password);
++  const key = `login-account:${email}`;
++  const blocked = isRateLimited(key, ACCOUNT_FAILURES.limit, ACCOUNT_FAILURES.windowMs);
++  if (blocked.limited) throw new ApiError(429, "Too many sign-in attempts for this account. Please wait a few minutes or reset your password.", "rate_limited");
++  let result: Awaited<ReturnType<typeof authenticate>>;
++  try {
++    result = await authenticate(email, password);
++  } catch (err) {
++    // Only wrong passwords count: a user signing in normally never uses up the limit.
++    if (err instanceof ApiError && err.status === 401) rateLimit(key, ACCOUNT_FAILURES.limit, ACCOUNT_FAILURES.windowMs);
++    throw err;
++  }
++  const { userId, orgId, isPlatformAdmin } = result;
+   await createSession(userId, orgId);
+   // Platform admins without a company of their own land in the admin area.
+   return { ok: true, home: !orgId && isPlatformAdmin ? "/admin" : "/dashboard" };

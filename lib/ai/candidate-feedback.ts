@@ -10,7 +10,10 @@ const FeedbackSchema = z.object({ enough_evidence: z.boolean(), feedback: z.stri
 
 // A last check on what reaches the candidate: anything that looks like a score, an
 // outcome or an internal note means the email goes without feedback.
-const NOT_FOR_CANDIDATES = /\b(score[ds]?|rating|rated|\d\s*\/\s*(?:5|10)|out of (?:5|10)|hire[ds]?|hiring decision|reject\w*|shortlist\w*|pass(?:ed)?|fail(?:ed)?|next round|move forward|other candidates|insufficient evidence|areas? to explore|accent|nervous\w*)\b/i;
+const NOT_FOR_CANDIDATES = /\b(score[ds]?|rating|rated|\d\s*\/\s*(?:5|10)|out of (?:5|10)|hire[ds]?|hiring decision|reject\w*|shortlist\w*|pass(?:ed)?|fail(?:ed)?|next round|move forward|other candidates|insufficient evidence|areas? to explore|accent|nervous\w*|verify|verified|probe[ds]?|probing|recruiters?|interviewer should|hiring manager)\b/i;
+// Feedback is plain prose. A link, an email address or markup can only come from a
+// prompt injection in the candidate's answers, so it means no feedback at all.
+const NOT_PROSE = /(https?:\/\/|\bwww\.|[\w.+-]+@[\w-]+\.[\w.-]+|[<>{}]|\[[^\]]*\]\()/i;
 
 export const CANDIDATE_FEEDBACK_VERSION = prompt.version;
 
@@ -46,8 +49,15 @@ export function checkFeedback(out: z.infer<typeof FeedbackSchema>): string | nul
     log.warn("ai.candidate_feedback_rejected", { reason: "unsafe wording" });
     return null;
   }
+  if (NOT_PROSE.test(text)) {
+    log.warn("ai.candidate_feedback_rejected", { reason: "link or markup" });
+    return null;
+  }
   return text;
 }
+
+/** "Linking work to outcomes" → "linking work to outcomes", but "AWS cost reviews" stays as written. */
+const lowerFirst = (t: string) => (/^[A-Z][a-z]/.test(t) ? t[0].toLowerCase() + t.slice(1) : t);
 
 /** Demo mode: a plain note built only from the report's own points. */
 function mockFeedback(input: Parameters<typeof prompt.buildUser>[0]): z.infer<typeof FeedbackSchema> {
@@ -56,7 +66,7 @@ function mockFeedback(input: Parameters<typeof prompt.buildUser>[0]): z.infer<ty
   return {
     enough_evidence: true,
     feedback: `Thank you for taking the time to interview for the ${input.jobTitle} role. ${input.strengths[0].replace(/\.$/, "")} came through clearly in your answers.`
-      + (area ? ` One area to build on: ${area.replace(/\.$/, "").toLowerCase()}. Developing this will help you show the impact of your work more clearly.` : "")
+      + (area ? ` One area to build on: ${lowerFirst(area.replace(/\.$/, ""))}. Developing this will help you show the impact of your work more clearly.` : "")
       + " Keep building on these strengths as you grow in your career.",
   };
 }

@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="e094c943-93c4-4d1a-a498-10b16f4003b3" name="Changes" comment="vedio done mp4">
+      <change beforePath="$PROJECT_DIR$/.env.example" beforeDir="false" afterPath="$PROJECT_DIR$/.env.example" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/api/auth/forgot-password/route.ts" beforeDir="false" afterPath="$PROJECT_DIR$/app/api/auth/forgot-password/route.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/api/auth/login/route.ts" beforeDir="false" afterPath="$PROJECT_DIR$/app/api/auth/login/route.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/components/auth/login-form.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/components/auth/login-form.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lib/ai/candidate-feedback.ts" beforeDir="false" afterPath="$PROJECT_DIR$/lib/ai/candidate-feedback.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lib/email/index.ts" beforeDir="false" afterPath="$PROJECT_DIR$/lib/email/index.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lib/interview/candidate-followup.ts" beforeDir="false" afterPath="$PROJECT_DIR$/lib/interview/candidate-followup.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lib/interview/processing.ts" beforeDir="false" afterPath="$PROJECT_DIR$/lib/interview/processing.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lib/security/rate-limit.ts" beforeDir="false" afterPath="$PROJECT_DIR$/lib/security/rate-limit.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/next.config.ts" beforeDir="false" afterPath="$PROJECT_DIR$/next.config.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/integration/candidate-followup.test.ts" beforeDir="false" afterPath="$PROJECT_DIR$/tests/integration/candidate-followup.test.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/unit/email.test.ts" beforeDir="false" afterPath="$PROJECT_DIR$/tests/unit/email.test.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/unit/security.test.ts" beforeDir="false" afterPath="$PROJECT_DIR$/tests/unit/security.test.ts" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_BRANCH_BY_REPOSITORY">
+      <map>
+        <entry key="$PROJECT_DIR$" value="main-rohit" />
+      </map>
+    </option>
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;rohityadavdeligence&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/DeligenceTechnologies/pickMyHire-AI.git&quot;,
+    &quot;accountId&quot;: &quot;55d5020a-80ee-4581-830b-505e6b4c27a6&quot;
+  }
+}</component>
+  <component name="NextEditCompletionFeaturesState">
+    <decayedCancelled>
+      <entry key="MS100" value="1.0" />
+      <entry key="MS500" value="1.0" />
+      <entry key="S2" value="1.0000000003630785" />
+      <entry key="S5" value="1.0001674943440606" />
+      <entry key="S10" value="1.0129419605956975" />
+      <entry key="S30" value="1.234783023481828" />
+      <entry key="S60" value="1.484544139869453" />
+      <entry key="M2" value="1.6960920484170559" />
+      <entry key="M5" value="1.865100711698993" />
+      <entry key="M10" value="1.9303065582086312" />
+      <entry key="M15" value="1.9687413281486128" />
+      <entry key="M30" value="3.2508649563012506" />
+      <entry key="H1" value="13.913865623952818" />
+      <entry key="H2" value="47.05098826895871" />
+      <entry key="H4" value="124.13988208645904" />
+      <entry key="D1" value="446.3564040842621" />
+      <entry key="W1" value="586.7334700498899" />
+    </decayedCancelled>
+    <decayedSelected>
+      <entry key="MS100" value="0.0" />
+      <entry key="MS500" value="0.0" />
+      <entry key="S2" value="0.0" />
+      <entry key="S5" value="0.0" />
+      <entry key="S10" value="0.0" />
+      <entry key="S30" value="8.983047865868746E-115" />
+      <entry key="S60" value="1.280077496922026E-57" />
+      <entry key="M2" value="4.996870346772111E-29" />
+      <entry key="M5" value="7.2237471694182314E-12" />
+      <entry key="M10" value="3.7990289009152367E-6" />
+      <entry key="M15" value="3.0672043962040623E-4" />
+      <entry key="M30" value="0.02480288975392608" />
+      <entry key="H1" value="0.23316550237353284" />
+      <entry key="H2" value="0.8615651341450961" />
+      <entry key="H4" value="2.02006298630453" />
+      <entry key="D1" value="4.914350355340806" />
+      <entry key="W1" value="5.828756470383612" />
+    </decayedSelected>
+    <decayedShown>
+      <entry key="MS100" value="0.7900413118633771" />
+      <entry key="MS500" value="0.9539595505475581" />
+      <entry key="S2" value="0.9882856518439876" />
+      <entry key="S5" value="0.9954614644998064" />
+      <entry key="S10" value="1.0104435228283277" />
+      <entry key="S30" value="1.2331206161300363" />
+      <entry key="S60" value="1.4832454585339507" />
+      <entry key="M2" value="1.695244613437423" />
+      <entry key="M5" value="1.8646984119597867" />
+      <entry key="M10" value="1.9300970216216402" />
+      <entry key="M15" value="1.9689027262206928" />
+      <entry key="M30" value="3.2755833253818993" />
+      <entry key="H1" value="14.146941756106793" />
+      <entry key="H2" value="47.91241610734516" />
+      <entry key="H4" value="126.15975250081354" />
+      <entry key="D1" value="451.27064213921636" />
+      <entry key="W1" value="592.562205805467" />
+    </decayedShown>
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 3,
+  &quot;fromUser&quot;: false
+}</component>
+  <component name="ProjectId" id="3LXPharOOM5RGIr33FhAL1Lducn" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
+    &quot;codeWithMe.voiceChat.enabledByDefault&quot;: &quot;false&quot;,
+    &quot;com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1&quot;: &quot;true&quot;,
+    &quot;disable.download.node.interpreter.editor.notification&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main-safe&quot;,
+    &quot;javascript.preferred.runtime.type.id&quot;: &quot;node&quot;,
+    &quot;js.debugger.nextJs.config.created.client&quot;: &quot;true&quot;,
+    &quot;js.debugger.nextJs.config.created.server&quot;: &quot;true&quot;,
+    &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/home/deligence/WebstormProjects/pickMyHire-AI&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;
+  }
+}</component>
+  <component name="RunManager" selected="npm.Next.js: server-side">
+    <configuration name="Next.js: debug client-side" type="JavascriptDebugType" uri="http://localhost:3000/">
+      <method v="2" />
+    </configuration>
+    <configuration name="Next.js: server-side" type="js.build_tools.npm">
+      <package-json value="$PROJECT_DIR$/package.json" />
+      <command value="run" />
+      <scripts>
+        <script value="dev" />
+      </scripts>
+      <node-interpreter value="project" />
+      <envs />
+      <method v="2" />
+    </configuration>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-js-predefined-d6986cc7102b-4abd2a77f808-JavaScript-WS-262.11879.105" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="e094c943-93c4-4d1a-a498-10b16f4003b3" name="Changes" comment="" />
+      <created>1793597559235</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1793597559235</updated>
+      <workItem from="1793597560274" duration="23570000" />
+      <workItem from="1793682374147" duration="16561000" />
+      <workItem from="1793702770085" duration="591000" />
+      <workItem from="1793768672528" duration="10792000" />
+      <workItem from="1794375105315" duration="330000" />
+    </task>
+    <task id="LOCAL-00001" summary="vedio done mp4">
+      <option name="closed" value="true" />
+      <created>1793702437972</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1793702437972</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="vedio done mp4" />
+    <option name="LAST_COMMIT_MESSAGE" value="vedio done mp4" />
+  </component>
+</project>

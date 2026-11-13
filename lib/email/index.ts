@@ -123,16 +123,30 @@ export async function sendEmail(msg: EmailMessage): Promise<{ ok: boolean }> {
 }
 
 /**
+ * Text taken from a job description for a candidate email: links and email addresses
+ * dropped (the email's own button is the only link a candidate should follow), and
+ * whitespace collapsed so it can't push fake lines into the message.
+ */
+function clean(t: string): string {
+  return t.replace(/\bhttps?:\/\/\S+|\bwww\.\S+|[\w.+-]+@[\w-]+\.[\w.-]+/gi, "").replace(/\s+/g, " ").trim();
+}
+
+/** Cut to `n` characters on a code-point boundary (never half an emoji). */
+function clip(t: string, n: number): string {
+  const chars = Array.from(t);
+  return chars.length > n ? `${chars.slice(0, n - 1).join("").trimEnd()}…` : t;
+}
+
+/**
  * "About the role" for interview emails: the summary, main responsibilities and required
  * skills the AI extracted when the job was created (never the full description).
  * Empty when the job hasn't been analysed.
  */
 export function aboutRole(req: JobRequirements | null | undefined): string {
-  const summary = req?.summary?.trim();
+  const summary = clean(req?.summary ?? "");
   if (!req || !summary) return "";
-  const clip = (t: string, n: number) => (t.length > n ? `${t.slice(0, n - 1).trimEnd()}…` : t);
-  const duties = req.responsibilities.map((r) => clip(r.trim(), 200)).filter(Boolean).slice(0, 4);
-  const skills = req.skills.filter((s) => s.importance === "required").map((s) => s.name.trim()).filter(Boolean).slice(0, 8);
+  const duties = req.responsibilities.map((r) => clip(clean(r), 200)).filter(Boolean).slice(0, 4);
+  const skills = req.skills.filter((s) => s.importance === "required").map((s) => clip(clean(s.name), 60)).filter(Boolean).slice(0, 8);
   return [
     `About the role\n${summary}`,
     duties.length ? `What you'll do:\n\n${duties.map((d) => `• ${d}`).join("\n")}` : "",

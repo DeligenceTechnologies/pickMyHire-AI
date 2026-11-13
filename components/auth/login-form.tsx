@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
+import { safeNext } from "@/lib/security/safe-redirect";
 import { AuthForm } from "./auth-form";
 
 export function LoginForm() {
@@ -15,7 +16,7 @@ export function LoginForm() {
         { name: "password", label: "Password", type: "password", autoComplete: "current-password" },
       ]}
       onSuccess={(res) => {
-        router.push(next && next.startsWith("/") && !next.startsWith("//") ? next : typeof res.home === "string" ? res.home : "/dashboard");
+        router.push(safeNext(next) ?? (typeof res.home === "string" ? res.home : "/dashboard"));
         router.refresh();
       }}
     />
