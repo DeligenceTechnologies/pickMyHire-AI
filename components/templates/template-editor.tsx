@@ -12,6 +12,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { TagInput } from "@/components/common/tag-input";
 import { api, ClientApiError } from "@/lib/client/api";
+import { cn } from "@/lib/utils";
+import { SECTION_TEXT_LIMITS } from "@/types/interview";
 
 export type SectionDraft = {
   key: string;
@@ -73,7 +75,13 @@ function SectionEditor({ s, index, count, onChange, onMove, onRemove }: {
             <NumberField id={`f-${s.key}`} label="Follow-ups / question" value={s.max_followups} min={0} max={5} onChange={(n) => onChange({ max_followups: n })} />
           </div>
           <div className="space-y-1.5 md:col-span-2"><Label htmlFor={`c-${s.key}`}>Evaluation criteria</Label><TagInput id={`c-${s.key}`} value={s.evaluation_criteria} onChange={(v) => onChange({ evaluation_criteria: v })} placeholder="e.g. Ownership, Technical depth" /></div>
-          <div className="space-y-1.5 md:col-span-2"><Label htmlFor={`i-${s.key}`}>Interviewer instructions <span className="font-normal text-muted-foreground">(optional)</span></Label><Textarea id={`i-${s.key}`} rows={2} value={s.instructions} onChange={(e) => onChange({ instructions: e.target.value })} placeholder="Probe personal contribution versus team contribution." /></div>
+          <div className="space-y-1.5 md:col-span-2">
+            <Label htmlFor={`i-${s.key}`}>Interviewer instructions <span className="font-normal text-muted-foreground">(optional)</span></Label>
+            <Textarea id={`i-${s.key}`} rows={s.instructions.length > 300 ? 6 : 2} value={s.instructions} onChange={(e) => onChange({ instructions: e.target.value })} placeholder="Probe personal contribution versus team contribution." aria-invalid={s.instructions.length > SECTION_TEXT_LIMITS.instructions} />
+            <p className={cn("text-right text-xs tabular", s.instructions.length > SECTION_TEXT_LIMITS.instructions ? "font-medium text-destructive" : "text-muted-foreground")}>
+              {s.instructions.length > SECTION_TEXT_LIMITS.instructions && "Too long, please shorten. "}{s.instructions.length.toLocaleString("en-US")}/{SECTION_TEXT_LIMITS.instructions.toLocaleString("en-US")}
+            </p>
+          </div>
           <label className="flex items-center gap-2 text-sm md:col-span-2">
             <Switch checked={s.scoring_enabled} onCheckedChange={(c) => onChange({ scoring_enabled: !!c })} /> Show a 1–5 assessment score for this section (always backed by evidence)
           </label>
@@ -81,6 +89,32 @@ function SectionEditor({ s, index, count, onChange, onMove, onRemove }: {
       )}
     </div>
   );
+}
+
+const FIELD_LABEL: Record<string, string> = { name: "Section name", description: "Description", objective: "Objective", instructions: "Interviewer instructions", evaluation_criteria: "Evaluation criteria" };
+
+/** "Section 2 (Technical SEO)": how a section is named in messages. */
+function sectionLabel(sections: SectionDraft[], i: number) {
+  const name = sections[i]?.name?.trim();
+  return `Section ${i + 1}${name ? ` (${name})` : ""}`;
+}
+
+/** A clear message for the first section text over its limit, or null. */
+function textTooLong(sections: SectionDraft[]): string | null {
+  for (const [i, s] of sections.entries()) {
+    for (const f of ["instructions", "objective", "description"] as const) {
+      const max = SECTION_TEXT_LIMITS[f];
+      if ((s[f] ?? "").length > max) return `${sectionLabel(sections, i)}: ${FIELD_LABEL[f]} is ${(s[f] ?? "").length.toLocaleString("en-US")} characters. The limit is ${max.toLocaleString("en-US")}, please shorten it.`;
+    }
+  }
+  return null;
+}
+
+/** Turn a server error like "sections.1.instructions: Too big" into "Section 2 (Technical SEO), Interviewer instructions: …". */
+function friendlyIssue(issue: { path: string; message: string }, sections: SectionDraft[]) {
+  const m = issue.path.match(/^sections\.(\d+)\.(\w+)/);
+  if (!m) return issue.path ? `${issue.path}: ${issue.message}` : issue.message;
+  return `${sectionLabel(sections, Number(m[1]))}, ${FIELD_LABEL[m[2]] ?? m[2]}: ${issue.message}`;
 }
 
 export function TemplateEditor({ templateId, initial, canWrite }: { templateId?: string; initial?: { name: string; description: string; sections: SectionDraft[] }; canWrite: boolean }) {
@@ -95,6 +129,8 @@ export function TemplateEditor({ templateId, initial, canWrite }: { templateId?:
   const move = (i: number, dir: -1 | 1) => setSections((p) => { const n = [...p]; [n[i], n[i + dir]] = [n[i + dir], n[i]]; return n; });
 
   const save = async () => {
+    const over = textTooLong(sections);
+    if (over) { toast.error(over); return; }
     setBusy(true);
     try {
       const body = { name, description, sections: sections.map(({ key: _k, ...s }) => s) };
@@ -104,7 +140,7 @@ export function TemplateEditor({ templateId, initial, canWrite }: { templateId?:
       router.refresh();
     } catch (err) {
       const ce = err as ClientApiError;
-      toast.error(ce.issues?.[0] ? `${ce.issues[0].path}: ${ce.issues[0].message}` : ce.message);
+      toast.error(ce.issues?.[0] ? friendlyIssue(ce.issues[0], sections) : ce.message);
     } finally {
       setBusy(false);
     }

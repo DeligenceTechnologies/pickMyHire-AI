@@ -1,11 +1,14 @@
 import { z } from "zod";
 
+/** Text limits for a template section (shown as counters in the template editor). */
+export const SECTION_TEXT_LIMITS = { description: 500, objective: 500, instructions: 3000 } as const;
+
 export const TemplateSectionInputSchema = z.object({
   id: z.string().uuid().optional(),
   name: z.string().trim().min(1).max(80),
-  description: z.string().max(500).default(""),
-  objective: z.string().max(500).default(""),
-  instructions: z.string().max(1000).default(""),
+  description: z.string().max(SECTION_TEXT_LIMITS.description, `Description can be up to ${SECTION_TEXT_LIMITS.description} characters`).default(""),
+  objective: z.string().max(SECTION_TEXT_LIMITS.objective, `Objective can be up to ${SECTION_TEXT_LIMITS.objective} characters`).default(""),
+  instructions: z.string().max(SECTION_TEXT_LIMITS.instructions, `Interviewer instructions can be up to ${SECTION_TEXT_LIMITS.instructions.toLocaleString("en-US")} characters`).default(""),
   duration_minutes: z.coerce.number().int().min(1).max(60),
   min_questions: z.coerce.number().int().min(0).max(10),
   max_questions: z.coerce.number().int().min(1).max(12),
