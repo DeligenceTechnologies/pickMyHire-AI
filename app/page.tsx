@@ -9,6 +9,7 @@ import { Copyright, Logo } from "@/components/layout/logo";
 import { IdentityMock, InterviewMock, PipelineMock, ReportMock, ScreeningMock } from "@/components/marketing/mocks";
 import { SiteHeader } from "@/components/marketing/site-header";
 import { DemoVideo } from "@/components/marketing/demo-video";
+import { DemoBubble } from "@/components/marketing/demo-bubble";
 import { CookieSettingsLink } from "@/components/analytics/analytics";
 import { ContactForms } from "@/components/marketing/access-request-form";
 import Image from "next/image";
@@ -567,6 +568,7 @@ export default async function Home() {
         </div>
         <div className="border-t border-[#E3EAF5] py-6 text-center"><Copyright /><div className="mt-2 flex items-center justify-center gap-4 text-xs text-[#5A6A86]"><Link href="/cookies" className="hover:text-[#0B5BD3]">Cookie policy</Link><CookieSettingsLink className="hover:text-[#0B5BD3]" /></div></div>
       </footer>
+      {!app && <DemoBubble cta={trial.enabled ? { href: "/signup", label: "Start free trial" } : { href: "/#request-access", label: "Request access" }} />}
     </div>
   );
 }

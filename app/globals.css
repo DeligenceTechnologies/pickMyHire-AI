@@ -163,3 +163,8 @@
 @keyframes video-loading-in { to { opacity: 1; } }
 .video-loading { opacity: 0; animation: video-loading-in 200ms ease 300ms forwards; }
 .video-loading-slow { opacity: 0; animation: video-loading-in 300ms ease 4s forwards; }
+
+/* Demo video bubble (components/marketing/demo-bubble.tsx) */
+@keyframes demo-bubble-in { 0% { opacity: 0; transform: translateY(28px) scale(0.6); } 60% { opacity: 1; transform: translateY(-6px) scale(1.05); } 100% { opacity: 1; transform: none; } }
+@keyframes demo-label-in { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: none; } }
+@keyframes demo-ring { 0% { opacity: 0.6; transform: scale(1); } 80%, 100% { opacity: 0; transform: scale(1.4); } }
