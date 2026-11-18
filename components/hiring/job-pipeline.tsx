@@ -37,6 +37,7 @@ export function JobPipeline({ rounds, rows }: { rounds: PipelineRound[]; rows: J
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{r.name}</p>
                   <p className="truncate text-xs text-muted-foreground">{r.email}</p>
+                  {(r.stage === "rejected" || r.stage === "withdrawn") && r.stage_note && <p className="truncate text-xs text-muted-foreground" title={r.stage_note}>{r.stage_note}</p>}
                 </div>
                 <div className="flex items-center gap-1" aria-label="Round results">
                   {r.results.map((x) => <RoundChip key={x.round.id} name={x.round.name} decision={x.decision} state={x.state} />)}

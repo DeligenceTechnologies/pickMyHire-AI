@@ -14,6 +14,7 @@ import { parseCandidateResume, storeResume } from "./candidates";
 import { detectResumeKind } from "./document-text";
 import { createInterview, type CreateInterviewInput } from "./interviews";
 import { checkAnswers, saveAnswersTx } from "./application-answers";
+import { DECLINED_NOTE, rejectInJob, undoDeclinedReject } from "./pipeline";
 import { readForm, type ApplicationForm } from "@/lib/application-form";
 
 export type ApplicationStatus = "new" | "interview_invited" | "declined";
@@ -215,6 +216,10 @@ export async function setApplicationStatus(orgId: string, userId: string, applic
       where id = ${applicationId} and organization_id = ${orgId} and status <> 'interview_invited' returning id`;
     if (!a) throw new ApiError(409, "This application already has an interview.");
     await audit(tx, { orgId, userId, action: "application.status_changed", entityType: "application", entityId: applicationId, metadata: { status } });
+    // Declining shows the applicant under the job's Rejected tab; reopening takes them out again.
+    const [{ job_id, candidate_id }] = await tx<{ job_id: string; candidate_id: string }[]>`select job_id, candidate_id from job_applications where id = ${applicationId}`;
+    if (status === "declined") await rejectInJob(tx, orgId, userId, job_id, candidate_id, DECLINED_NOTE, "application_declined");
+    else await undoDeclinedReject(tx, orgId, userId, job_id, candidate_id);
   });
 }
 
@@ -226,6 +231,7 @@ export async function inviteApplicant(orgId: string, userId: string, application
   const { id, link, emailFailed } = await createInterview(orgId, userId, { ...round, jobId: app.job_id, candidateId: app.candidate_id, sendInvite });
   await withOrg(orgId, async (tx) => {
     await tx`update job_applications set status = 'interview_invited', interview_id = ${id}, reviewed_by = ${userId}, reviewed_at = now() where id = ${applicationId}`;
+    await undoDeclinedReject(tx, orgId, userId, app.job_id, app.candidate_id); // invited after being declined: back to In progress
     await audit(tx, { orgId, userId, action: "application.interview_invited", entityType: "application", entityId: applicationId, metadata: { interview_id: id } });
   });
   return { interviewId: id, link, emailFailed };

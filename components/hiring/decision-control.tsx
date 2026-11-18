@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Check, Loader2, Pause, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -30,8 +31,14 @@ export function DecisionControl({ endpoint, decision, note, decidedBy, decidedOn
   const [text, setText] = useState("");
   const [clearing, setClearing] = useState(false);
   const [reason, setReason] = useState("");
+  // Not qualified usually ends the candidate's application: offer to move them to Rejected in the same step.
+  const [reject, setReject] = useState(true);
   const save = async (d: Decision | null, n: string | null) => {
-    const ok = await run("decide", endpoint, { body: { decision: d, note: n }, success: d ? `Marked ${DECISION_LABEL[d]}` : "Round reopened" });
+    const alsoReject = d === "not_qualified" && reject;
+    const ok = await run("decide", endpoint, {
+      body: { decision: d, note: n, ...(alsoReject ? { reject: true } : {}) },
+      success: d ? `Marked ${DECISION_LABEL[d]}${alsoReject ? " and moved to Rejected" : ""}` : "Round reopened",
+    });
     if (ok) { setChoice(null); setClearing(false); }
   };
   return (
@@ -50,7 +57,7 @@ export function DecisionControl({ endpoint, decision, note, decidedBy, decidedOn
             const Icon = ICON[d];
             return (
               <Button key={d} size="sm" variant="outline" disabled={!!pending} className={cn(decision === d && ACTIVE[d])}
-                onClick={() => { setText(decision === d ? note ?? "" : ""); setChoice(d); }} aria-pressed={decision === d}>
+                onClick={() => { setText(decision === d ? note ?? "" : ""); setReject(true); setChoice(d); }} aria-pressed={decision === d}>
                 <Icon /> {DECISION_LABEL[d]}
               </Button>
             );
@@ -84,6 +91,15 @@ export function DecisionControl({ endpoint, decision, note, decidedBy, decidedOn
             <Label htmlFor="decision-note">Note <span className="font-normal text-muted-foreground">(optional)</span></Label>
             <Textarea id="decision-note" rows={3} maxLength={1000} value={text} onChange={(e) => setText(e.target.value)} placeholder="e.g. Strong on APIs, needs to go deeper on system design" />
           </div>
+          {choice === "not_qualified" && (
+            <label className="flex items-start gap-3 rounded-lg border bg-muted/40 px-3 py-2.5 text-sm">
+              <Checkbox checked={reject} onCheckedChange={(c) => setReject(!!c)} className="mt-0.5" />
+              <span>
+                <span className="font-medium">Also move the candidate to Rejected for this job</span>
+                <span className="block text-xs text-muted-foreground">Untick to keep them in progress, for example to give them another round. A hired candidate isn&apos;t changed.</span>
+              </span>
+            </label>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setChoice(null)}>Cancel</Button>
             <Button disabled={!!pending} onClick={() => choice && save(choice, text.trim() || null)}>{pending && <Loader2 className="animate-spin" />} Save decision</Button>

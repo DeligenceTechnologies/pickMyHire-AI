@@ -15,6 +15,45 @@ export async function ensurePipeline(tx: Tx, orgId: string, jobId: string, candi
     on conflict (job_id, candidate_id) do nothing`;
 }
 
+/** The stage note used when a declined application puts the candidate in Rejected (so reopening can undo it). */
+export const DECLINED_NOTE = "Application declined";
+
+/**
+ * Move a candidate to Rejected for a job, inside the caller's transaction. Used when a round is marked
+ * Not qualified (if the team ticks the option) and when an application is declined. Hired and withdrawn
+ * candidates are left as they are. Returns whether the stage changed.
+ */
+export async function rejectInJob(tx: Tx, orgId: string, userId: string, jobId: string, candidateId: string, note: string, via: string): Promise<boolean> {
+  await ensurePipeline(tx, orgId, jobId, candidateId);
+  const [row] = await tx<{ stage: string }[]>`
+    update job_candidates set stage = 'rejected', stage_note = ${note.slice(0, 1000)}, stage_changed_by = ${userId}, stage_changed_at = now()
+    where job_id = ${jobId} and candidate_id = ${candidateId} and organization_id = ${orgId} and stage in ('in_progress', 'shortlisted') returning stage`;
+  if (!row) return false;
+  await audit(tx, { orgId, userId, action: "candidate.stage_changed", entityType: "candidate", entityId: candidateId, metadata: { job_id: jobId, stage: "rejected", note: note.slice(0, 300), via } });
+  return true;
+}
+
+/**
+ * Undo the Rejected stage that declining an application set (the application was reopened, or the applicant
+ * invited after all). A candidate with no interviews for the job leaves the pipeline again; otherwise they go
+ * back to In progress. A stage the team changed since then is left alone.
+ */
+export async function undoDeclinedReject(tx: Tx, orgId: string, userId: string, jobId: string, candidateId: string) {
+  const [row] = await tx<{ stage: string; stage_note: string | null; rounds: number }[]>`
+    select jc.stage, jc.stage_note,
+      (select count(*) from interviews i where i.job_id = jc.job_id and i.candidate_id = jc.candidate_id)::int
+        + (select count(*) from human_interviews h where h.job_id = jc.job_id and h.candidate_id = jc.candidate_id)::int as rounds
+    from job_candidates jc where jc.job_id = ${jobId} and jc.candidate_id = ${candidateId} and jc.organization_id = ${orgId}`;
+  if (!row || row.stage !== "rejected" || row.stage_note !== DECLINED_NOTE) return;
+  if (row.rounds === 0) {
+    await tx`delete from job_candidates where job_id = ${jobId} and candidate_id = ${candidateId} and organization_id = ${orgId}`;
+  } else {
+    await tx`update job_candidates set stage = 'in_progress', stage_note = null, stage_changed_by = ${userId}, stage_changed_at = now()
+      where job_id = ${jobId} and candidate_id = ${candidateId} and organization_id = ${orgId}`;
+  }
+  await audit(tx, { orgId, userId, action: "candidate.stage_changed", entityType: "candidate", entityId: candidateId, metadata: { job_id: jobId, stage: "in_progress", via: "application_reopened" } });
+}
+
 export type RoundEntry = {
   kind: "ai" | "human"; id: string; job_id: string; candidate_id: string; round_id: string | null; round_name: string; attempt: number;
   status: string; created_at: Date; at: Date | null; timezone: string | null;
@@ -87,13 +126,13 @@ export async function getCandidatePipelines(orgId: string, candidateId: string):
   });
 }
 
-export type JobPipelineRow = { candidate_id: string; name: string; email: string; stage: Stage; stage_changed_at: Date | null; results: RoundResult[]; allQualified: boolean };
+export type JobPipelineRow = { candidate_id: string; name: string; email: string; stage: Stage; stage_note: string | null; stage_changed_at: Date | null; results: RoundResult[]; allQualified: boolean };
 
 /** All candidates in a job with their round results, for the job's pipeline view. */
 export async function getJobPipeline(orgId: string, jobId: string) {
   return withOrg(orgId, async (tx) => {
-    const people = await tx<{ candidate_id: string; name: string; email: string; stage: Stage; stage_changed_at: Date | null }[]>`
-      select jc.candidate_id, c.name, c.email, jc.stage, jc.stage_changed_at
+    const people = await tx<{ candidate_id: string; name: string; email: string; stage: Stage; stage_note: string | null; stage_changed_at: Date | null }[]>`
+      select jc.candidate_id, c.name, c.email, jc.stage, jc.stage_note, jc.stage_changed_at
       from job_candidates jc join candidates c on c.id = jc.candidate_id
       where jc.job_id = ${jobId} and jc.organization_id = ${orgId}
       order by coalesce(jc.stage_changed_at, jc.created_at) desc`;
@@ -113,7 +152,11 @@ export async function getJobPipeline(orgId: string, jobId: string) {
  * it. Clearing a decision reopens the round (and unlocks human scorecards), so
  * it needs a reason, recorded in the history and audit log.
  */
-export async function setRoundDecision(orgId: string, userId: string, input: { kind: "ai" | "human"; id: string; decision: Decision | null; note?: string | null }) {
+export async function setRoundDecision(orgId: string, userId: string, input: {
+  kind: "ai" | "human"; id: string; decision: Decision | null; note?: string | null;
+  /** With Not qualified: also move the candidate to Rejected for the job. */
+  reject?: boolean;
+}) {
   const note = input.decision ? input.note?.trim() || null : null;
   const reason = input.decision ? null : input.note?.trim() || null;
   return withOrg(orgId, async (tx) => {
@@ -123,12 +166,12 @@ export async function setRoundDecision(orgId: string, userId: string, input: { k
     if (!before) throw new ApiError(404, "Interview not found");
     if (!input.decision && before.decision && !reason) throw new ApiError(400, "Add a reason for reopening this round.", "needs_reason");
     const [row] = input.kind === "ai"
-      ? await tx<{ id: string; job_id: string; candidate_id: string }[]>`
+      ? await tx<{ id: string; job_id: string; candidate_id: string; round_name: string | null }[]>`
           update interviews set decision = ${input.decision}, decision_note = ${note}, decided_by = ${input.decision ? userId : null}, decided_at = ${input.decision ? new Date() : null}
-          where id = ${input.id} and organization_id = ${orgId} returning id, job_id, candidate_id`
-      : await tx<{ id: string; job_id: string; candidate_id: string }[]>`
+          where id = ${input.id} and organization_id = ${orgId} returning id, job_id, candidate_id, round_name`
+      : await tx<{ id: string; job_id: string; candidate_id: string; round_name: string | null }[]>`
           update human_interviews set decision = ${input.decision}, decision_note = ${note}, decided_by = ${input.decision ? userId : null}, decided_at = ${input.decision ? new Date() : null}
-          where id = ${input.id} and organization_id = ${orgId} returning id, job_id, candidate_id`;
+          where id = ${input.id} and organization_id = ${orgId} returning id, job_id, candidate_id, round_name`;
     if (!row) throw new ApiError(404, "Interview not found");
     await ensurePipeline(tx, orgId, row.job_id, row.candidate_id);
     if (input.kind === "human" && before.decision !== input.decision) {
@@ -141,7 +184,9 @@ export async function setRoundDecision(orgId: string, userId: string, input: { k
       orgId, userId, action: "interview.decision", entityType: input.kind === "ai" ? "interview" : "human_interview", entityId: input.id,
       metadata: { decision: input.decision, previous: before.decision, ...(note ? { note: note.slice(0, 300) } : {}), ...(reason ? { reason: reason.slice(0, 300) } : {}) },
     });
-    return { jobId: row.job_id, candidateId: row.candidate_id };
+    const rejected = input.decision === "not_qualified" && !!input.reject
+      && await rejectInJob(tx, orgId, userId, row.job_id, row.candidate_id, `Not qualified in ${row.round_name ?? "a round"}${note ? `: ${note}` : ""}`, "round_not_qualified");
+    return { jobId: row.job_id, candidateId: row.candidate_id, rejected };
   });
 }
 
