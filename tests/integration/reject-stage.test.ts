@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { withSystem } from "@/lib/database/db";
 import { DEFAULT_TEMPLATES } from "@/lib/interview/default-templates";
 import { inviteApplicant, setApplicationStatus } from "@/lib/services/applications";
-import { createInterview } from "@/lib/services/interviews";
+import { cancelInterview, createInterview } from "@/lib/services/interviews";
 import { DECLINED_NOTE, getJobPipeline, setRoundDecision, setStage } from "@/lib/services/pipeline";
 import { saveRounds } from "@/lib/services/rounds";
 import { insertTemplate } from "@/lib/services/templates";
@@ -43,10 +43,12 @@ beforeAll(async () => {
   });
 });
 afterAll(async () => {
-  await withSystem(async (tx) => {
+  // Other test files clean up at the same time; retry once if the deletes collide (deadlock).
+  const clean = () => withSystem(async (tx) => {
     await tx`delete from organizations where id = ${orgId}`;
     await tx`delete from users where id = ${owner}`;
   });
+  await clean().catch(async () => { await new Promise((r) => setTimeout(r, 300)); await clean(); });
 });
 
 describe("the job's Rejected tab", () => {
@@ -99,5 +101,42 @@ describe("the job's Rejected tab", () => {
     await setStage(orgId, owner, { jobId, candidateId: c, stage: "rejected", note: "Not a fit for the team" });
     await setApplicationStatus(orgId, owner, app, "new");
     expect(await row(c)).toMatchObject({ stage: "rejected", stage_note: "Not a fit for the team" });
+  });
+
+  it("an application can be closed once its interview is cancelled (the candidate lost interest)", async () => {
+    const c = await candidate("Lea Lobo");
+    const app = await application(c);
+    const { interviewId } = await inviteApplicant(orgId, owner, app, false);
+    await expect(setApplicationStatus(orgId, owner, app, "declined")).rejects.toMatchObject({ status: 409, message: expect.stringMatching(/Cancel it on the interview page first/) });
+    await cancelInterview(orgId, owner, interviewId);
+    await setApplicationStatus(orgId, owner, app, "declined");
+    expect(await row(c)).toMatchObject({ stage: "rejected", stage_note: DECLINED_NOTE });
+  });
+
+  it("an application whose interview was deleted can be closed too", async () => {
+    const c = await candidate("Om Oza");
+    const app = await application(c);
+    const { interviewId } = await inviteApplicant(orgId, owner, app, false);
+    await withSystem((tx) => tx`delete from interviews where id = ${interviewId}`);
+    await setApplicationStatus(orgId, owner, app, "declined");
+    expect(await row(c)).toMatchObject({ stage: "rejected" });
+  });
+
+  it("a finished interview still blocks it: the round decision is the place for that", async () => {
+    const c = await candidate("Pia Pal");
+    const app = await application(c);
+    const { interviewId } = await inviteApplicant(orgId, owner, app, false);
+    await withSystem((tx) => tx`update interviews set status = 'report_ready', completed_at = now() where id = ${interviewId}`);
+    await expect(setApplicationStatus(orgId, owner, app, "declined")).rejects.toMatchObject({ status: 409, message: expect.stringMatching(/Not qualified/) });
+  });
+
+  it("inviting a declined candidate from another page reopens the application too", async () => {
+    const c = await candidate("Uma Udupi");
+    const app = await application(c);
+    await setApplicationStatus(orgId, owner, app, "declined");
+    await createInterview(orgId, owner, { jobId, candidateId: c, sendInvite: false });
+    expect(await row(c)).toMatchObject({ stage: "in_progress" });
+    const [a] = await withSystem((tx) => tx<{ status: string }[]>`select status::text from job_applications where id = ${app}`);
+    expect(a.status).toBe("interview_invited");
   });
 });

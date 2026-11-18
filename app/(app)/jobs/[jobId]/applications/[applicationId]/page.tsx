@@ -69,7 +69,7 @@ export default async function ApplicationPage(props: PageProps<"/jobs/[jobId]/ap
           <span>{APPLICATION_STATUS[a.status]}{a.reviewer_name ? ` · by ${a.reviewer_name}` : ""}</span>
           {a.interview_status && <StatusBadge status={a.interview_status} />}
         </>}
-        actions={<ApplicationActions id={a.id} status={a.status} interviewId={a.interview_id} canWrite={can(auth.role, "candidate:write")} canInvite={can(auth.role, "interview:write")}
+        actions={<ApplicationActions id={a.id} status={a.status} interviewId={a.interview_id} interviewStatus={a.interview_status} canWrite={can(auth.role, "candidate:write")} canInvite={can(auth.role, "interview:write")}
           jobId={a.job_id} candidateId={a.candidate_id} candidateName={a.candidate_name} />}
       />
       {total + (inList ? 0 : 1) > 1 && (

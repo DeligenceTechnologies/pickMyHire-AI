@@ -210,14 +210,27 @@ export async function getApplication(orgId: string, applicationId: string) {
   return a ?? null;
 }
 
+/** True while an application's interview still counts: not cancelled, expired or deleted. */
+export const activeInterview = (status: string | null) => !!status && status !== "cancelled" && status !== "expired";
+
 export async function setApplicationStatus(orgId: string, userId: string, applicationId: string, status: "new" | "declined") {
   await withOrg(orgId, async (tx) => {
-    const [a] = await tx`update job_applications set status = ${status}, reviewed_by = ${userId}, reviewed_at = now()
-      where id = ${applicationId} and organization_id = ${orgId} and status <> 'interview_invited' returning id`;
-    if (!a) throw new ApiError(409, "This application already has an interview.");
+    const [cur] = await tx<{ job_id: string; candidate_id: string; interview_status: string | null }[]>`
+      select a.job_id, a.candidate_id, i.status::text as interview_status
+      from job_applications a left join interviews i on i.id = a.interview_id
+      where a.id = ${applicationId} and a.organization_id = ${orgId} for update of a`;
+    if (!cur) throw new ApiError(404, "Application not found");
+    // A cancelled, expired or deleted interview no longer stands in the way (e.g. the candidate lost interest).
+    if (activeInterview(cur.interview_status)) {
+      const notStarted = ["created", "invited", "consent_pending", "device_check", "ready"].includes(cur.interview_status!);
+      throw new ApiError(409, notStarted
+        ? "This candidate has an interview that hasn't started. Cancel it on the interview page first, then mark the application."
+        : "This candidate already took the interview. Mark the round Not qualified on the interview page instead.", "interview_active");
+    }
+    await tx`update job_applications set status = ${status}, reviewed_by = ${userId}, reviewed_at = now() where id = ${applicationId}`;
     await audit(tx, { orgId, userId, action: "application.status_changed", entityType: "application", entityId: applicationId, metadata: { status } });
     // Declining shows the applicant under the job's Rejected tab; reopening takes them out again.
-    const [{ job_id, candidate_id }] = await tx<{ job_id: string; candidate_id: string }[]>`select job_id, candidate_id from job_applications where id = ${applicationId}`;
+    const { job_id, candidate_id } = cur;
     if (status === "declined") await rejectInJob(tx, orgId, userId, job_id, candidate_id, DECLINED_NOTE, "application_declined");
     else await undoDeclinedReject(tx, orgId, userId, job_id, candidate_id);
   });
@@ -231,7 +244,6 @@ export async function inviteApplicant(orgId: string, userId: string, application
   const { id, link, emailFailed } = await createInterview(orgId, userId, { ...round, jobId: app.job_id, candidateId: app.candidate_id, sendInvite });
   await withOrg(orgId, async (tx) => {
     await tx`update job_applications set status = 'interview_invited', interview_id = ${id}, reviewed_by = ${userId}, reviewed_at = now() where id = ${applicationId}`;
-    await undoDeclinedReject(tx, orgId, userId, app.job_id, app.candidate_id); // invited after being declined: back to In progress
     await audit(tx, { orgId, userId, action: "application.interview_invited", entityType: "application", entityId: applicationId, metadata: { interview_id: id } });
   });
   return { interviewId: id, link, emailFailed };

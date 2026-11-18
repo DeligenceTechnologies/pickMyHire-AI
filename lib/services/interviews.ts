@@ -12,7 +12,7 @@ import { JobRequirementsSchema, type JobRequirements, type SectionEvaluation, ty
 import { readSettings } from "./org-settings";
 import { assertCanInvite, COUNTED_STATUSES } from "./quota";
 import { isOpen, MAX_ROUNDS } from "./rounds";
-import { ensurePipeline } from "./pipeline";
+import { ensurePipeline, undoDeclinedReject } from "./pipeline";
 
 export type InterviewListRow = {
   id: string;
@@ -188,9 +188,11 @@ export async function createInterview(orgId: string, userId: string, input: Crea
       orgId, userId, action: "interview.created", entityType: "interview", entityId: iv.id,
       metadata: { job_id: job.id, candidate_id: cand.id, round: round.name, attempt, ...(attempt > 1 && input.reason ? { reason: input.reason.slice(0, 300) } : {}) },
     });
-    // Whichever page the invite came from, an open application for this job is now handled.
+    // Whichever page the invite came from, an open (or earlier declined) application for this job is now handled,
+    // and a candidate the declined application had put under Rejected is back in progress.
+    await undoDeclinedReject(tx, orgId, userId, job.id, cand.id);
     await tx`update job_applications set interview_id = ${iv.id},
-        status = case when status = 'new' then 'interview_invited'::application_status else status end,
+        status = case when status in ('new', 'declined') then 'interview_invited'::application_status else status end,
         reviewed_by = coalesce(reviewed_by, ${userId}), reviewed_at = coalesce(reviewed_at, now())
       where job_id = ${job.id} and candidate_id = ${cand.id} and organization_id = ${orgId}`;
     return { id: iv.id, candidate: cand, jobTitle: job.title, minutes: sections.reduce((a, s) => a + s.duration_minutes, 0) };

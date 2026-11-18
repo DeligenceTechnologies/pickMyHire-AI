@@ -13,8 +13,10 @@ import { useAction } from "@/lib/client/use-action";
 import { emptyChoice, type RoundChoice, RoundPicker } from "@/components/interview/round-picker";
 import { BalanceNote, useBalance } from "@/components/billing/balance-note";
 
-export function ApplicationActions({ id, status, interviewId, canWrite, canInvite, jobId, candidateId, candidateName }: {
+export function ApplicationActions({ id, status, interviewId, interviewStatus = null, canWrite, canInvite, jobId, candidateId, candidateName }: {
   id: string; status: string; interviewId: string | null; canWrite: boolean; canInvite: boolean; jobId: string; candidateId: string; candidateName: string;
+  /** The linked interview's status: a cancelled or expired one no longer blocks "Not moving forward". */
+  interviewStatus?: string | null;
 }) {
   const { run, pending } = useAction();
   const router = useRouter();
@@ -26,6 +28,8 @@ export function ApplicationActions({ id, status, interviewId, canWrite, canInvit
   const balance = useBalance(open);
 
   const invited = !!interviewId;
+  // The application can be closed (or reopened) unless an interview is still open or done.
+  const closable = !interviewStatus || interviewStatus === "cancelled" || interviewStatus === "expired";
   return (
     <>
       {invited && <Link href={`/interviews/${interviewId}`} className={buttonVariants()}>View interview</Link>}
@@ -35,12 +39,12 @@ export function ApplicationActions({ id, status, interviewId, canWrite, canInvit
           <RefreshCw className={pending === "screen" ? "animate-spin" : ""} />
         </Button>
       )}
-      {!invited && canWrite && status !== "declined" && (
+      {closable && canWrite && status !== "declined" && (
         <Button variant="outline" disabled={!!pending} onClick={() => run("decline", `/api/applications/${id}`, { method: "PATCH", body: { status: "declined" }, success: "Marked as not moving forward" })}>
           <XCircle /> Not moving forward
         </Button>
       )}
-      {!invited && canWrite && status === "declined" && (
+      {closable && canWrite && status === "declined" && (
         <Button variant="outline" disabled={!!pending} onClick={() => run("reopen", `/api/applications/${id}`, { method: "PATCH", body: { status: "new" }, success: "Application reopened" })}>Reopen</Button>
       )}
       {canInvite && (
