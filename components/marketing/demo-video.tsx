@@ -1,5 +1,5 @@
 /** The short demo, and the full-length product walkthrough (served from /public/demo). */
-export const DEMO_VIDEO = { src: "/demo/pickmyhire-ai-demo.mp4", poster: "/demo/poster.webp", minutes: 3 };
+export const DEMO_VIDEO = { src: "/demo/pickmyhire-ai-demo-2min.mp4", poster: "/demo/poster-2min.webp", minutes: 2 };
 export const WALKTHROUGH_VIDEO = { src: "/demo/pickmyhire-ai-walkthrough-13min.mp4", poster: "/demo/poster-13min.webp", minutes: 13 };
 
 export function DemoVideo({ className = "", video = DEMO_VIDEO }: { className?: string; video?: { src: string; poster: string } }) {

@@ -11,22 +11,22 @@ import { getTrialSettings } from "@/lib/services/platform";
 
 export const metadata: Metadata = {
   title: { absolute: "Product demo · PickMyHire.ai" },
-  description: "Watch a 3-minute walkthrough of PickMyHire.ai: a real AI video interview, then every round from job to shortlist, with the identity check, human interviews and the overall result.",
+  description: "Watch a 2-minute overview of PickMyHire.ai: a real AI video interview, then how AI interviews, structured reports and candidate comparison take the repetitive work out of first-round hiring.",
   openGraph: {
     title: "PickMyHire.ai · Product demo",
-    description: "A 3-minute walkthrough: a real AI interview, then every round from job to shortlist.",
+    description: "A 2-minute overview: a real AI interview, and how PickMyHire.ai takes the repetitive work out of first-round hiring.",
     images: ["/demo/og.jpg"],
   },
 };
 
 const CHAPTERS = [
-  "A real AI interview, with adaptive questions",
-  "Creating a job with AI and human interview rounds",
-  "Apply link and AI application screening",
-  "Inviting a candidate, consent and the identity check",
-  "The evidence-backed report, with the identity check result",
-  "Human interviews, scorecards and the overall result",
-  "Shortlisting, with your team in control",
+  "A real AI interview, with personalized follow-up questions",
+  "Why first-round hiring takes so much time",
+  "Screening applicants and AI first-round interviews",
+  "Candidates interviewing at a time that suits them",
+  "Structured reports with strengths, areas to explore and evidence",
+  "Comparing candidates side by side",
+  "Your team stays in control of every hiring decision",
 ];
 
 export default async function DemoPage() {
@@ -38,7 +38,7 @@ export default async function DemoPage() {
         <p className="text-center text-sm font-semibold tracking-[0.18em] text-[#0B5BD3] uppercase">Product demo</p>
         <h1 className="mt-3 text-center text-3xl font-bold tracking-tight text-balance sm:text-5xl">See PickMyHire.ai in action</h1>
         <p className="mx-auto mt-4 max-w-2xl text-center text-lg leading-relaxed text-[#4A5874]">
-          A 3-minute walkthrough: a real AI interview, then every round from job to shortlist, with the identity check, human interviews and the overall result.
+          A 2-minute overview: a real AI interview, why first-round hiring takes so much time, and how PickMyHire.ai takes the repetitive screening and scheduling off your plate.
         </p>
         <DemoVideo className="mt-10" />
         <p className="mt-3 text-center text-xs text-[#7A8AA6]">Recorded with sample data, apart from the real candidate interview.</p>
