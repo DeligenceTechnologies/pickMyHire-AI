@@ -31,7 +31,7 @@ beforeAll(async () => {
       { name: "Screening", kind: "ai", template_id: tpl.id },
       { name: "Panel", kind: "human", criteria: ["System design", "Communication"], guide: null },
     ]);
-    const [c] = await tx<{ id: string }[]>`insert into candidates (organization_id, name, email) values (${orgId}, 'Hana Kim', ${`hana-${id}@summary.test`}) returning id`;
+    const [c] = await tx<{ id: string }[]>`insert into candidates (organization_id, name, email, resume_file_path) values (${orgId}, 'Hana Kim', ${`hana-${id}@summary.test`}, 'test/resume.pdf') returning id`;
     candidateId = c.id;
   });
   aiId = (await createInterview(orgId, owner, { jobId, candidateId, sendInvite: false })).id;

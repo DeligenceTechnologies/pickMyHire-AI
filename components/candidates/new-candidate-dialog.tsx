@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { Loader2, Plus } from "lucide-react";
+import { FileText, Loader2, Plus, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -15,6 +15,7 @@ export function NewCandidateDialog() {
   const sp = useSearchParams();
   const [open, setOpen] = useState(sp.get("new") === "1");
   const [v, setV] = useState({ name: "", email: "", phone: "" });
+  const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   return (
@@ -24,20 +25,26 @@ export function NewCandidateDialog() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add candidate</DialogTitle>
-            <DialogDescription>You can upload their resume on the next screen.</DialogDescription>
+            <DialogDescription>A resume is required: the AI interview is planned from it.</DialogDescription>
           </DialogHeader>
           <form id="new-cand" className="space-y-3" onSubmit={async (e) => {
             e.preventDefault();
+            if (!file) { setErrors({ file: "A resume is required." }); return; }
             setBusy(true);
             setErrors({});
             try {
-              const { id } = await api<{ id: string }>("/api/candidates", { body: { ...v, phone: v.phone || null } });
+              const fd = new FormData();
+              fd.append("name", v.name);
+              fd.append("email", v.email);
+              fd.append("phone", v.phone);
+              fd.append("file", file);
+              const { id } = await api<{ id: string }>("/api/candidates", { body: fd });
               toast.success("Candidate added");
               router.push(`/candidates/${id}`);
             } catch (err) {
               const ce = err as ClientApiError;
               setErrors(Object.fromEntries((ce.issues ?? []).map((i) => [i.path, i.message])));
-              if (!ce.issues) toast.error(ce.message);
+              if (!ce.issues) { if (ce.status === 413 || ce.status === 422) setErrors({ file: ce.message }); else toast.error(ce.message); }
               setBusy(false);
             }
           }}>
@@ -48,6 +55,15 @@ export function NewCandidateDialog() {
                 {errors[k] && <p className="text-xs text-destructive">{errors[k]}</p>}
               </div>
             ))}
+            <div className="space-y-1.5">
+              <Label htmlFor="c-file" required>Resume <span className="font-normal text-muted-foreground">(PDF, DOCX or TXT, up to 10 MB)</span></Label>
+              <label htmlFor="c-file" className={`flex h-10 cursor-pointer items-center gap-2 rounded-lg border border-dashed px-3 text-sm hover:bg-muted ${errors.file ? "border-destructive" : ""} ${file ? "text-foreground" : "text-muted-foreground"}`}>
+                {file ? <FileText className="size-4 shrink-0 text-primary" aria-hidden /> : <Upload className="size-4 shrink-0" aria-hidden />}
+                <span className="truncate">{file ? file.name : "Choose the resume file"}</span>
+              </label>
+              <input id="c-file" type="file" accept=".pdf,.docx,.txt" className="sr-only" aria-invalid={!!errors.file} onChange={(e) => { setFile(e.target.files?.[0] ?? null); setErrors(({ file: _f, ...rest }) => rest); }} />
+              {errors.file && <p className="text-xs text-destructive">{errors.file}</p>}
+            </div>
           </form>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)} disabled={busy}>Cancel</Button>

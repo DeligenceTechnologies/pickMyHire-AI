@@ -85,8 +85,8 @@ test("platform admin manages access, quotas and accounts", async ({ page, browse
     const [job] = await tx<{ id: string }[]>`insert into jobs (organization_id, title, status) values (${org.id}, 'Quota Role', 'active') returning id`;
     const [tpl] = await tx<{ id: string }[]>`select id from interview_templates where organization_id = ${org.id} limit 1`;
     await tx`insert into job_rounds (organization_id, job_id, name, template_id) values (${org.id}, ${job.id}, 'Screening', ${tpl.id})`;
-    const [c1] = await tx<{ id: string }[]>`insert into candidates (organization_id, name, email) values (${org.id}, 'Done Candidate', ${`done-${id}@e2e.test`}) returning id`;
-    const [c2] = await tx<{ id: string }[]>`insert into candidates (organization_id, name, email) values (${org.id}, 'Next Candidate', ${`next-${id}@e2e.test`}) returning id`;
+    const [c1] = await tx<{ id: string }[]>`insert into candidates (organization_id, name, email, resume_file_path) values (${org.id}, 'Done Candidate', ${`done-${id}@e2e.test`}, 'test/resume.pdf') returning id`;
+    const [c2] = await tx<{ id: string }[]>`insert into candidates (organization_id, name, email, resume_file_path) values (${org.id}, 'Next Candidate', ${`next-${id}@e2e.test`}, 'test/resume.pdf') returning id`;
     await tx`insert into interviews (organization_id, job_id, candidate_id, secure_token_hash, status, completed_at, duration_seconds, credits_used, charged_at)
       values (${org.id}, ${job.id}, ${c1.id}, ${`e2e-${id}`}, 'completed', now(), 900, 1, now())`;
     return { orgId: org.id, jobId: job.id, candidateId: c2.id };

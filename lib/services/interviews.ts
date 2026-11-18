@@ -104,9 +104,11 @@ export async function createInterview(orgId: string, userId: string, input: Crea
       select id, title, status from jobs where id = ${input.jobId} and organization_id = ${orgId}`;
     if (!job) throw new ApiError(404, "Job not found");
     if (job.status === "closed") throw new ApiError(409, "This job is closed.");
-    const [cand] = await tx<{ id: string; name: string; email: string }[]>`
-      select id, name, email from candidates where id = ${input.candidateId} and organization_id = ${orgId}`;
+    const [cand] = await tx<{ id: string; name: string; email: string; has_resume: boolean }[]>`
+      select id, name, email, resume_file_path is not null as has_resume from candidates where id = ${input.candidateId} and organization_id = ${orgId}`;
     if (!cand) throw new ApiError(404, "Candidate not found");
+    // The interview is planned from the resume: no resume, no invite.
+    if (!cand.has_resume) throw new ApiError(400, `Upload ${cand.name}'s resume before inviting them to an interview.`, "resume_required");
 
     // Which round (and so which template) is this interview for?
     let round: { id: string | null; name: string; template_id: string | null };

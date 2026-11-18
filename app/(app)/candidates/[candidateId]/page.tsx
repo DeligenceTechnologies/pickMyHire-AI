@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Download, Loader2, Mail, Phone, Sparkles } from "lucide-react";
+import { Download, Loader2, Mail, Phone, Sparkles, Upload } from "lucide-react";
+import { buttonVariants } from "@/components/ui/button";
 import { AutoRefresh } from "@/components/common/auto-refresh";
 import { PageHeader } from "@/components/common/page-header";
 import { StatusBadge } from "@/components/common/status-badge";
@@ -58,7 +59,9 @@ export default async function CandidatePage(props: PageProps<"/candidates/[candi
         </>}
         actions={<>
           <CandidateActions candidate={{ id: c.id, name: c.name, email: c.email, phone: c.phone }} canEdit={canWrite} canDelete={can(auth.role, "data:delete")} />
-          {jobs.length > 0 && <InviteDialog candidateId={c.id} candidateName={c.name} jobs={jobs.map((j) => ({ id: j.id, label: j.title }))} triggerLabel="Invite to interview" />}
+          {jobs.length > 0 && (c.resume_file_path
+            ? <InviteDialog candidateId={c.id} candidateName={c.name} jobs={jobs.map((j) => ({ id: j.id, label: j.title }))} triggerLabel="Invite to interview" />
+            : <a href="#resume" title="The interview is planned from the resume" className={buttonVariants({ variant: "outline" })}><Upload /> Upload resume to invite</a>)}
         </>}
       />
       {pipelines.length > 0 && (
@@ -83,8 +86,9 @@ export default async function CandidatePage(props: PageProps<"/candidates/[candi
           )}
         </section>
         <div className="space-y-6">
-          <section className="rounded-xl border bg-card p-5">
+          <section id="resume" className="scroll-mt-24 rounded-xl border bg-card p-5">
             <h2 className="mb-3 font-semibold">Resume</h2>
+            {!c.resume_file_path && <p className="mb-3 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200">Required to invite {c.name.split(" ")[0]} to an interview: the interview is planned from it.</p>}
             {c.documents[0] && (
               <a href={`/api/candidates/${c.id}/resume`} target="_blank" rel="noreferrer" className="mb-3 flex items-center gap-2 rounded-lg border px-3 py-2 text-sm hover:bg-muted">
                 <Download className="size-4 text-muted-foreground" />

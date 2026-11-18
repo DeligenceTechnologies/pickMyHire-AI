@@ -39,7 +39,7 @@ beforeAll(async () => {
     const [j] = await tx<{ id: string }[]>`insert into jobs (organization_id, title, status) values (${orgId}, 'Mail job', 'active') returning id`;
     jobId = j.id;
     await saveRounds(tx, orgId, jobId, [{ name: "Screening", kind: "ai", template_id: tpl.id }, { name: "Panel", kind: "human", criteria: ["Communication"] }]);
-    const [c] = await tx<{ id: string }[]>`insert into candidates (organization_id, name, email) values (${orgId}, 'Mai Lee', ${candidateEmail}) returning id`;
+    const [c] = await tx<{ id: string }[]>`insert into candidates (organization_id, name, email, resume_file_path) values (${orgId}, 'Mai Lee', ${candidateEmail}, 'test/resume.pdf') returning id`;
     candidateId = c.id;
   });
   humanRound = (await listRounds(orgId, jobId)).find((r) => r.kind === "human")!.id;

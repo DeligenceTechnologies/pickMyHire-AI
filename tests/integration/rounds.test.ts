@@ -40,7 +40,7 @@ beforeAll(async () => {
     const [j] = await tx<{ id: string }[]>`insert into jobs (organization_id, title, status) values (${orgId}, 'Rounds job', 'active') returning id`;
     jobId = j.id;
     await saveRounds(tx, orgId, jobId, [{ name: "Screening", template_id: screeningTpl }, { name: "Technical", template_id: technicalTpl }]);
-    const [c] = await tx<{ id: string }[]>`insert into candidates (organization_id, name, email) values (${orgId}, 'Riya Rounds', ${`riya-${id}@rounds.test`}) returning id`;
+    const [c] = await tx<{ id: string }[]>`insert into candidates (organization_id, name, email, resume_file_path) values (${orgId}, 'Riya Rounds', ${`riya-${id}@rounds.test`}, 'test/resume.pdf') returning id`;
     candidateId = c.id;
   });
 });

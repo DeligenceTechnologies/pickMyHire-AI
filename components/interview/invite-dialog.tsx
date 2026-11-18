@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { CheckCircle2, Loader2, Send, Upload } from "lucide-react";
-import { toast } from "sonner";
 import { toastEmailResult } from "@/lib/client/email-result";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -106,15 +105,15 @@ export function InviteDialog({ jobId, candidateId, candidateName, jobs, triggerL
     try {
       let cid = selectedCandidate;
       if (!candidateId && mode === "new") {
-        const res = await api<{ id: string }>("/api/candidates", { body: { name: form.name, email: form.email, phone: form.phone || null } });
+        if (!file) throw new ClientApiError("Add the candidate's resume: the interview is planned from it.", 400);
+        const fd = new FormData();
+        fd.append("name", form.name);
+        fd.append("email", form.email);
+        fd.append("phone", form.phone);
+        fd.append("file", file);
+        const res = await api<{ id: string }>("/api/candidates", { body: fd });
         cid = res.id;
-        if (file) {
-          const fd = new FormData();
-          fd.append("file", file);
-          const up = await fetch(`/api/candidates/${cid}/resume`, { method: "POST", body: fd });
-          if (!up.ok) toast.warning(((await up.json().catch(() => ({}))) as { error?: string }).error ?? "Resume upload failed — you can upload it from the candidate page.");
-          else await new Promise((r) => setTimeout(r, 400)); // let resume parsing begin before planning
-        }
+        await new Promise((r) => setTimeout(r, 400)); // let resume parsing begin before planning
       }
       if (!cid) throw new ClientApiError("Select a candidate.", 400);
       if (!selectedJob) throw new ClientApiError("Select a job.", 400);
@@ -189,7 +188,7 @@ export function InviteDialog({ jobId, candidateId, candidateName, jobs, triggerL
                         <div className="space-y-1.5"><Label htmlFor="inv-email" required>Email</Label><Input id="inv-email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
                         <div className="space-y-1.5"><Label htmlFor="inv-phone">Phone <span className="font-normal text-muted-foreground">(optional)</span></Label><Input id="inv-phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
                         <div className="space-y-1.5">
-                          <Label htmlFor="inv-file">Resume <span className="font-normal text-muted-foreground">(optional · PDF/DOCX)</span></Label>
+                          <Label htmlFor="inv-file" required>Resume <span className="font-normal text-muted-foreground">(PDF, DOCX or TXT)</span></Label>
                           <label htmlFor="inv-file" className="flex h-9 cursor-pointer items-center gap-2 truncate rounded-lg border border-dashed px-2.5 text-sm text-muted-foreground hover:bg-muted">
                             <Upload className="size-4 shrink-0" /> <span className="truncate">{file ? file.name : "Choose file"}</span>
                           </label>

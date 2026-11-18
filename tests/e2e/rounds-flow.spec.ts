@@ -45,7 +45,7 @@ test("job rounds and the invite round picker", async ({ page }) => {
   await system(async (tx) => {
     const [job] = await tx<{ organization_id: string }[]>`select organization_id from jobs where id = ${jobId}`;
     const [r] = await tx<{ id: string; name: string; template_id: string }[]>`select id, name, template_id from job_rounds where job_id = ${jobId} order by sort_order limit 1`;
-    const [c] = await tx<{ id: string }[]>`insert into candidates (organization_id, name, email) values (${job.organization_id}, 'Dana Done', ${`dana-${id}@e2e.test`}) returning id`;
+    const [c] = await tx<{ id: string }[]>`insert into candidates (organization_id, name, email, resume_file_path) values (${job.organization_id}, 'Dana Done', ${`dana-${id}@e2e.test`}, 'test/resume.pdf') returning id`;
     await tx`insert into interviews (organization_id, job_id, candidate_id, template_id, round_id, round_name, attempt, secure_token_hash, status, started_at, completed_at)
       values (${job.organization_id}, ${jobId}, ${c.id}, ${r.template_id}, ${r.id}, ${r.name}, 1, ${`rounds-${id}`}, 'completed', now() - interval '20 minutes', now())`;
   });

@@ -55,7 +55,7 @@ test("company logo and colour replace platform branding on candidate pages", asy
     const s = `brand-test-${id}`;
     const [job] = await tx<{ id: string }[]>`insert into jobs (organization_id, title, status, apply_enabled, apply_slug, description)
       values (${org.id}, 'Brand Role', 'active', true, ${s}, 'A role to test branding.') returning id`;
-    const [c] = await tx<{ id: string }[]>`insert into candidates (organization_id, name, email) values (${org.id}, 'Casey Candidate', ${`cand-${id}@e2e.test`}) returning id`;
+    const [c] = await tx<{ id: string }[]>`insert into candidates (organization_id, name, email, resume_file_path) values (${org.id}, 'Casey Candidate', ${`cand-${id}@e2e.test`}, 'test/resume.pdf') returning id`;
     const t = `brandtoken${id}${"x".repeat(32)}`.slice(0, 40);
     const { createHash } = await import("node:crypto");
     await tx`insert into interviews (organization_id, job_id, candidate_id, secure_token_hash, status, token_expires_at)

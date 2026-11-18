@@ -84,6 +84,23 @@ export async function createCandidate(orgId: string, userId: string, input: Cand
   });
 }
 
+/**
+ * Add a candidate with their resume (required). The file is checked first, so an unreadable resume adds
+ * nobody; if storing it still fails, the new candidate is removed again.
+ */
+export async function createCandidateWithResume(orgId: string, userId: string, input: CandidateInput, file: { name: string; bytes: Uint8Array }) {
+  await readResume(file);
+  const id = await createCandidate(orgId, userId, input);
+  try {
+    await uploadResume(orgId, userId, id, file);
+  } catch (err) {
+    await withOrg(orgId, (tx) => tx`delete from candidates where id = ${id} and organization_id = ${orgId}`).catch(() => {});
+    await storage().deletePrefix(paths.candidatePrefix(orgId, id)).catch(() => {});
+    throw err;
+  }
+  return id;
+}
+
 export async function updateCandidate(orgId: string, userId: string, candidateId: string, input: CandidateInput) {
   await withOrg(orgId, async (tx) => {
     const dup = await tx`select 1 from candidates where organization_id = ${orgId} and email = ${input.email} and id <> ${candidateId}`;
@@ -103,18 +120,9 @@ export async function uploadResume(orgId: string, userId: string, candidateId: s
 
 /** Validate, extract text and privately store a resume. Parsing is left to the caller. */
 export async function storeResume(orgId: string, userId: string | null, candidateId: string, file: { name: string; bytes: Uint8Array }) {
-  const { kind, mime } = detectResumeKind(file.name, file.bytes);
   const exists = await withOrg(orgId, (tx) => tx`select 1 from candidates where id = ${candidateId} and organization_id = ${orgId}`);
   if (!exists.length) throw new ApiError(404, "Candidate not found");
-
-  let text: string;
-  try {
-    text = await extractText(kind, file.bytes);
-  } catch (err) {
-    log.warn("resume.extract_failed", { candidateId, kind, err });
-    throw new ApiError(422, "We couldn't read text from this file. Try exporting it as a PDF or DOCX again.");
-  }
-  if (text.length < 40) throw new ApiError(422, "This file doesn't contain readable text (scanned images aren't supported yet).");
+  const { kind, mime, text } = await readResume(file, candidateId);
 
   const docId = crypto.randomUUID();
   const path = paths.resume(orgId, candidateId, docId, kind);
@@ -127,6 +135,20 @@ export async function storeResume(orgId: string, userId: string | null, candidat
       where id = ${candidateId}`;
     await audit(tx, { orgId, userId, actorType: userId ? "user" : "candidate", action: "candidate.resume_uploaded", entityType: "candidate", entityId: candidateId, metadata: { kind, size: file.bytes.byteLength } });
   });
+}
+
+/** Check a resume file and extract its text (throws a clear 4xx error for wrong or unreadable files). */
+async function readResume(file: { name: string; bytes: Uint8Array }, candidateId?: string) {
+  const { kind, mime } = detectResumeKind(file.name, file.bytes);
+  let text: string;
+  try {
+    text = await extractText(kind, file.bytes);
+  } catch (err) {
+    log.warn("resume.extract_failed", { candidateId, kind, err });
+    throw new ApiError(422, "We couldn't read text from this file. Try exporting it as a PDF or DOCX again.");
+  }
+  if (text.length < 40) throw new ApiError(422, "This file doesn't contain readable text (scanned images aren't supported yet).");
+  return { kind, mime, text };
 }
 
 export async function parseCandidateResume(orgId: string, candidateId: string) {

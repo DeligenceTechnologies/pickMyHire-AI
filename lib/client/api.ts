@@ -6,14 +6,15 @@ export class ClientApiError extends Error {
   }
 }
 
-/** JSON fetch with friendly errors. Never surfaces stack traces. */
+/** JSON fetch with friendly errors. Never surfaces stack traces. A FormData body is sent as a form upload. */
 export async function api<T = unknown>(url: string, opts: { method?: string; body?: unknown; signal?: AbortSignal; keepalive?: boolean } = {}): Promise<T> {
+  const form = typeof FormData !== "undefined" && opts.body instanceof FormData;
   let res: Response;
   try {
     res = await fetch(url, {
       method: opts.method ?? (opts.body !== undefined ? "POST" : "GET"),
-      headers: opts.body !== undefined ? { "Content-Type": "application/json" } : undefined,
-      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+      headers: opts.body !== undefined && !form ? { "Content-Type": "application/json" } : undefined,
+      body: opts.body === undefined ? undefined : form ? (opts.body as FormData) : JSON.stringify(opts.body),
       signal: opts.signal,
       keepalive: opts.keepalive,
       credentials: "same-origin",
