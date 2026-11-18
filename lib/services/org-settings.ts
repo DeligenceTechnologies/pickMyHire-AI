@@ -9,6 +9,9 @@ export const OrgSettingsSchema = z.object({
   notify_on_completion: z.boolean().default(true),
   /** Email candidates short AI feedback after their interview (they always get a confirmation). */
   candidate_feedback_email: z.boolean().default(true),
+  /** Shown to candidates who can't start because the company has no interviews left (email falls back to the inviter). */
+  candidate_contact_email: z.string().email().max(200).nullable().default(null),
+  candidate_contact_phone: z.string().max(40).nullable().default(null),
 });
 export type OrgSettings = z.infer<typeof OrgSettingsSchema>;
 

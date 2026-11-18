@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { checkLocation } from "@/lib/hiring";
 import { body, route } from "@/lib/api";
 import { requireApiAuth } from "@/lib/auth/session";
 import { getSettings, updateSettings } from "@/lib/services/workspace";
@@ -17,6 +18,9 @@ const Schema = z.object({
     show_scores: z.boolean().optional(),
     notify_on_completion: z.boolean().optional(),
     candidate_feedback_email: z.boolean().optional(),
+    candidate_contact_email: z.string().trim().toLowerCase().email("Enter a valid email address").max(200).nullable().optional(),
+    candidate_contact_phone: z.string().trim().max(40)
+      .refine((v) => !checkLocation("phone", v).error, "Enter a valid phone number, with the country code").nullable().optional(),
   }).optional(),
 });
 

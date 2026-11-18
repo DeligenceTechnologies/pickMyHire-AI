@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ArrowDown, ArrowUp, Clock, GripVertical, Loader2, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, Clock, GripVertical, Loader2, Plus, Scissors, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,10 +10,15 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ConfirmDialog } from "@/components/common/confirm-dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { TagInput } from "@/components/common/tag-input";
 import { api, ClientApiError } from "@/lib/client/api";
 import { cn } from "@/lib/utils";
 import { SECTION_TEXT_LIMITS } from "@/types/interview";
+import { fitDurations, interviewsFor, type Pricing } from "@/lib/pricing";
+
+/** How template length turns into interviews used (from pricing). */
+export type LengthRule = Pick<Pricing, "minutesPerInterview" | "maxMinutes">;
 
 export type SectionDraft = {
   key: string;
@@ -117,20 +122,40 @@ function friendlyIssue(issue: { path: string; message: string }, sections: Secti
   return `${sectionLabel(sections, Number(m[1]))}, ${FIELD_LABEL[m[2]] ?? m[2]}: ${issue.message}`;
 }
 
-export function TemplateEditor({ templateId, initial, canWrite }: { templateId?: string; initial?: { name: string; description: string; sections: SectionDraft[] }; canWrite: boolean }) {
+export function TemplateEditor({ templateId, initial, canWrite, rule }: { templateId?: string; initial?: { name: string; description: string; sections: SectionDraft[] }; canWrite: boolean; rule: LengthRule }) {
   const router = useRouter();
   const [name, setName] = useState(initial?.name ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [sections, setSections] = useState<SectionDraft[]>(initial?.sections ?? [blank()]);
   const [busy, setBusy] = useState(false);
+  /** The length being confirmed, kept fixed while the dialog fades out. */
+  const [ask, setAsk] = useState<{ total: number; counts: number } | null>(null);
+  const [askLength, setAskLength] = useState(false);
   const total = sections.filter((s) => s.enabled).reduce((a, s) => a + s.duration_minutes, 0);
+  const counts = interviewsFor(total, rule);
+  const tooLong = total > rule.maxMinutes;
 
   const update = (i: number, patch: Partial<SectionDraft>) => setSections((p) => p.map((s, j) => (j === i ? { ...s, ...patch } : s)));
   const move = (i: number, dir: -1 | 1) => setSections((p) => { const n = [...p]; [n[i], n[i + dir]] = [n[i + dir], n[i]]; return n; });
 
-  const save = async () => {
+  /** Longer than one interview's worth: ask first (shorten, or confirm it counts as more than one). */
+  const requestSave = () => {
     const over = textTooLong(sections);
     if (over) { toast.error(over); return; }
+    if (tooLong) { toast.error(`Interviews can be up to ${rule.maxMinutes} minutes. Shorten some sections, then save.`); return; }
+    if (counts > 1) { setAsk({ total, counts }); setAskLength(true); return; }
+    void save();
+  };
+
+  const shorten = () => {
+    const fitted = fitDurations(sections, rule.minutesPerInterview);
+    setSections((p) => p.map((s, i) => ({ ...s, duration_minutes: fitted[i] })));
+    setAskLength(false);
+    toast.success(`Sections shortened to fit ${rule.minutesPerInterview} minutes`, { description: "Check the new section times, then save." });
+  };
+
+  const save = async () => {
+    setAskLength(false);
     setBusy(true);
     try {
       const body = { name, description, sections: sections.map(({ key: _k, ...s }) => s) };
@@ -153,7 +178,13 @@ export function TemplateEditor({ templateId, initial, canWrite }: { templateId?:
         <div className="space-y-1.5 md:col-span-2"><Label htmlFor="t-desc">Description</Label><Input id="t-desc" value={description} onChange={(e) => setDescription(e.target.value)} disabled={!canWrite} /></div>
       </div>
       <div className="flex items-center justify-between">
-        <h2 className="font-semibold">Sections <span className="ml-1 text-sm font-normal text-muted-foreground">{sections.filter((s) => s.enabled).length} enabled · {total} min total</span></h2>
+        <h2 className="flex flex-wrap items-center gap-x-2 gap-y-1 font-semibold">Sections <span className="text-sm font-normal text-muted-foreground">{sections.filter((s) => s.enabled).length} enabled · {total} min total</span>
+          {tooLong ? (
+            <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 ring-1 ring-red-200 ring-inset dark:bg-red-950 dark:text-red-300 dark:ring-red-900">Too long: up to {rule.maxMinutes} min</span>
+          ) : counts > 1 ? (
+            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 ring-1 ring-amber-200 ring-inset dark:bg-amber-950 dark:text-amber-300 dark:ring-amber-900">Counts as {counts} interviews per candidate</span>
+          ) : null}
+        </h2>
         {canWrite && <Button variant="outline" onClick={() => setSections((p) => [...p, blank()])}><Plus /> Add section</Button>}
       </div>
       <p className="-mt-3 text-sm text-muted-foreground">Click a section to edit it. Questions are generated per candidate from these settings; the interview engine enforces timing and follow-up limits.</p>
@@ -169,9 +200,27 @@ export function TemplateEditor({ templateId, initial, canWrite }: { templateId?:
               onConfirm={async () => { try { await api(`/api/templates/${templateId}`, { method: "DELETE" }); toast.success("Template deleted"); router.push("/templates"); } catch (e) { toast.error((e as Error).message); } }}
               trigger={(o) => <Button variant="ghost" className="text-destructive" onClick={o}><Trash2 /> Delete template</Button>} />
           ) : <span />}
-          <Button onClick={save} disabled={busy}>{busy && <Loader2 className="animate-spin" />}Save template</Button>
+          <Button onClick={requestSave} disabled={busy}>{busy && <Loader2 className="animate-spin" />}Save template</Button>
         </div>
       )}
+      <Dialog open={askLength} onOpenChange={setAskLength}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><AlertTriangle className="size-5 text-amber-600" aria-hidden /> This interview is {ask?.total} minutes long</DialogTitle>
+            <DialogDescription>
+              Interviews up to {rule.minutesPerInterview} minutes count as 1 interview. This template will count as <b className="text-foreground">{ask?.counts} interviews for each candidate</b> you invite with it.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-lg border bg-muted/40 p-3 text-sm">
+            <p>For example, inviting 10 candidates will use <b className="tabular">{10 * (ask?.counts ?? 1)}</b> interviews instead of 10.</p>
+            <p className="mt-1 text-muted-foreground">Shortening keeps every section and reduces their times in proportion, so the total is {rule.minutesPerInterview} minutes.</p>
+          </div>
+          <DialogFooter className="flex-wrap">
+            <Button variant="outline" onClick={shorten}><Scissors /> Shorten to {rule.minutesPerInterview} minutes</Button>
+            <Button onClick={() => void save()}>Keep {ask?.total} minutes · counts as {ask?.counts}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

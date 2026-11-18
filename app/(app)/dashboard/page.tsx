@@ -33,18 +33,6 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
         actions={<>{can(auth.role, "usage:view") && quota.quota !== null && <RedeemCouponButton />}{can(auth.role, "candidate:write") && <Link href="/candidates?new=1" className={buttonVariants({ variant: "outline" })}>Add candidate</Link>}{can(auth.role, "job:write") && <Link href="/jobs/new" className={buttonVariants()}>New job</Link>}</>}
       />
       {sp.denied && <p className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300">You don&apos;t have permission to view that page.</p>}
-      {quota.plan !== "trial" && quota.remaining !== null && quota.remaining <= 1 && can(auth.role, "interview:write") && (
-        <p className={`mb-6 flex items-start gap-2 rounded-lg border px-4 py-3 text-sm ${quota.remaining === 0 ? "border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-300" : "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300"}`}>
-          <AlertCircle className="mt-0.5 size-4 shrink-0" />
-          <span>
-            {quota.remaining === 0
-              ? `You've used all ${quota.quota} free interviews${quota.inProgress ? ` (${quota.inProgress} still in progress)` : ""}. Contact us to add more.`
-              : `1 free interview left of ${quota.quota}. Contact us to add more.`}
-            {" "}<Link href="/#contact" className="font-medium underline">Contact us</Link>
-            {can(auth.role, "usage:view") && <> or <RedeemCouponButton variant="link" /></>}
-          </span>
-        </p>
-      )}
       <UpcomingHumanInterviews rows={human} />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard label="Active jobs" value={stats.active_jobs} icon={Briefcase} />

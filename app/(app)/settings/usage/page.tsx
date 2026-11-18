@@ -21,18 +21,17 @@ export default async function UsagePage() {
   const admin = auth.isPlatformAdmin;
   return (
     <>
-      <FormCard title="Free interviews" description={quota.quota === null ? "Your plan has unlimited interviews." : `An interview counts once the candidate completes it (since ${formatDate(quota.countedFrom)}). Interviews sent but not finished hold a slot.`}>
+      <FormCard title="Interviews" description={quota.quota === null ? "Your plan has unlimited interviews." : `An interview is used when the candidate starts it (counted since ${formatDate(quota.countedFrom)}). Invites waiting to be started don't use any.`}>
         {quota.quota === null ? <p className="text-sm">{quota.used} completed · {quota.inProgress} in progress</p> : (
           <>
             <div className="flex items-baseline justify-between gap-3">
               <p className="text-2xl font-semibold tabular">{quota.used} <span className="text-base font-normal text-muted-foreground">of {quota.quota} used</span></p>
-              <p className="text-sm text-muted-foreground tabular">{quota.inProgress} in progress · {quota.remaining} left</p>
+              <p className="text-sm text-muted-foreground tabular">{quota.inProgress} waiting or in progress · {quota.remaining} left</p>
             </div>
             <div className="flex h-2 overflow-hidden rounded-full bg-muted" aria-hidden>
               <span className="bg-primary" style={{ width: `${Math.min(100, (quota.used / Math.max(1, quota.quota)) * 100)}%` }} />
-              <span className="bg-primary/40" style={{ width: `${Math.min(100, (quota.inProgress / Math.max(1, quota.quota)) * 100)}%` }} />
             </div>
-            {quota.remaining === 0 && <p className="text-sm text-muted-foreground">You&apos;ve reached your limit. <Link href="/#contact" className="font-medium text-primary hover:underline">Contact us</Link> to add more interviews, or apply a promo code below.</p>}
+            {quota.remaining === 0 && <p className="text-sm text-muted-foreground">You&apos;ve used all your interviews. Candidates you invite can&apos;t start until you add more. <Link href="/settings/billing" className="font-medium text-primary hover:underline">Buy interviews</Link>, or apply a promo code below.</p>}
           </>
         )}
       </FormCard>

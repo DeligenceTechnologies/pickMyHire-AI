@@ -69,12 +69,12 @@ export function TrialCard({ id, endsAt, daysLeft, domain }: { id: string; endsAt
 export function QuotaCard({ id, quota }: { id: string; quota: CompanyData["quota"] }) {
   const { run, pending } = useAction();
   const [value, setValue] = useState<number | null>(quota.quota);
-  const save = (v: number | null) => run("quota", `/api/admin/companies/${id}`, { method: "PATCH", body: { quota: v }, success: "Free interviews updated" });
+  const save = (v: number | null) => run("quota", `/api/admin/companies/${id}`, { method: "PATCH", body: { quota: v }, success: "Interviews updated" });
   return (
-    <FormCard title="Free interviews" description={`Counted when an interview is completed, since ${formatDate(quota.countedFrom)}.`}
+    <FormCard title="Interviews" description={`Used when a candidate starts an interview, counted since ${formatDate(quota.countedFrom)}. Adding interviews emails any waiting candidates a new link.`}
       footer={<Button disabled={!!pending || value === quota.quota} onClick={() => save(value)}>{pending === "quota" && <Loader2 className="animate-spin" />} Save</Button>}>
       <div className="grid grid-cols-3 gap-3 text-center">
-        {[["Completed", quota.used], ["In progress", quota.inProgress], ["Left", quota.remaining ?? "∞"]].map(([k, v]) => (
+        {[["Used", quota.used], ["Waiting", quota.inProgress], ["Left", quota.remaining ?? "∞"]].map(([k, v]) => (
           <div key={String(k)} className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">{k}</p><p className="mt-0.5 text-xl font-semibold tabular">{v}</p></div>
         ))}
       </div>

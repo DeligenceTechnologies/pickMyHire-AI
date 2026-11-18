@@ -225,6 +225,38 @@ Questions? Just reply to this email.
 ${input.companyName} hiring team`,
     };
   },
+  /** To the company: a candidate opened their interview link but there are no interviews left. */
+  interviewOnHold(input: { candidateName: string; jobTitle: string; link: string; more: number }) {
+    return {
+      subject: `${input.candidateName} is waiting to start their interview`,
+      cta: { label: "Buy interviews", url: input.link },
+      text: `${input.candidateName} opened their AI interview for ${input.jobTitle}, but your company has no interviews left, so it can't start.
+${input.more > 0 ? `\n${input.more} other ${input.more === 1 ? "candidate is" : "candidates are"} waiting too.\n` : ""}
+They may contact you about it. Once you add interviews, their same link works again, so let them know they can start.
+
+Buy interviews: ${input.link}
+
+PickMyHire.ai`,
+    };
+  },
+  /** To the company's owners and admins when the balance drops to the warning level, or to zero. */
+  balanceLow(input: { companyName: string; left: number; link: string }) {
+    return {
+      subject: input.left === 0 ? "You have no interviews left" : `${input.left} ${input.left === 1 ? "interview" : "interviews"} left`,
+      cta: { label: "Buy interviews", url: input.link },
+      text: input.left === 0
+        ? `${input.companyName} has used all its interviews. You can still invite candidates, but they can't start their interview until you add more.
+
+Buy interviews: ${input.link}
+
+PickMyHire.ai`
+        : `${input.companyName} has ${input.left} ${input.left === 1 ? "interview" : "interviews"} left. When they run out, invited candidates can't start until you add more.
+
+Buy interviews: ${input.link}
+
+PickMyHire.ai`,
+    };
+  },
   /** To the candidate once their interview is processed: a confirmation, with AI feedback when there is any. */
   candidateThankYou(input: { candidateName: string; jobTitle: string; companyName: string; roundName?: string | null; feedback: string | null }) {
     const what = `${input.roundName ? `${input.roundName} ` : ""}interview for the ${input.jobTitle} role`;

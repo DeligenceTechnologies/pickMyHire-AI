@@ -7,7 +7,7 @@ import { env } from "@/lib/env";
 import type { InquiryTopic } from "@/lib/marketing";
 import { generateToken, hashToken } from "@/lib/security/tokens";
 import { platformAudit, writeSetting, getDefaultQuota, getSignupCode, getTrialSettings, type TrialSettings } from "./platform";
-import { COUNTED_STATUSES, RUNNING_STATUSES, WAITING_STATUSES, getQuotaStatus } from "./quota";
+import { RUNNING_STATUSES, WAITING_STATUSES, getQuotaStatus } from "./quota";
 import { storage } from "@/lib/storage";
 import { log } from "@/lib/logger";
 
@@ -19,12 +19,12 @@ import { log } from "@/lib/logger";
 const COMPANY_INVITE_DAYS = 14;
 const RESET_LINK_HOURS = 24;
 
-/** Per-company quota counts, shared by the overview and the companies list. */
+/** Per-company counts, shared by the overview and the companies list: interviews used (at start), and invites waiting or running. */
 function quotaCounts(tx: Tx) {
   return tx`
     left join lateral (
       select
-        count(*) filter (where i.status::text = any(${COUNTED_STATUSES}) and i.completed_at >= o.quota_counted_from)::int as used,
+        coalesce(sum(i.credits_used) filter (where i.credits_used > 0 and i.charged_at >= o.quota_counted_from), 0)::int as used,
         count(*) filter (where i.status::text = any(${RUNNING_STATUSES})
           or (i.status::text = any(${WAITING_STATUSES}) and (i.token_expires_at is null or i.token_expires_at > now())))::int as in_progress
       from interviews i where i.organization_id = o.id
@@ -54,7 +54,7 @@ export async function getOverview() {
     const outOfQuota = await tx<{ id: string; name: string; interview_quota: number; used: number; in_progress: number }[]>`
       select o.id, o.name, o.interview_quota, q.used, q.in_progress
       from organizations o ${quotaCounts(tx)}
-      where o.status = 'active' and o.interview_quota is not null and q.used + q.in_progress >= o.interview_quota
+      where o.status = 'active' and o.interview_quota is not null and q.used >= o.interview_quota
       order by o.name limit 20`;
     const recentCompanies = await tx<{ id: string; name: string; created_at: Date; owner_email: string | null }[]>`
       select o.id, o.name, o.created_at,
@@ -167,7 +167,7 @@ export async function listCompanies(opts: { q?: string; filter?: CompanyFilter }
       ${filter === "active" ? tx`and o.status = 'active'` : tx``}
       ${filter === "suspended" ? tx`and o.status = 'suspended'` : tx``}
       ${filter === "trial" ? tx`and o.plan = 'trial'` : tx``}
-      ${filter === "out_of_quota" ? tx`and o.interview_quota is not null and q.used + q.in_progress >= o.interview_quota` : tx``}
+      ${filter === "out_of_quota" ? tx`and o.interview_quota is not null and q.used >= o.interview_quota` : tx``}
       ${q ? tx`and (o.name ilike ${q} or exists (select 1 from organization_members m join users u on u.id = m.user_id where m.organization_id = o.id and u.email::text ilike ${q}))` : tx``}
     order by o.created_at desc limit 300`);
 }

@@ -17,6 +17,12 @@ const EnvSchema = z.object({
   EMAIL_FROM: z.string().optional(),
   /** New workspaces need this code (shared with approved customers). Unset = sign-up closed except by team invite. */
   SIGNUP_ACCESS_CODE: z.string().min(8).optional(),
+  /** Online payments (Stripe Checkout). Unset = "Buy" explains how to get interviews instead. */
+  STRIPE_SECRET_KEY: z.string().startsWith("sk_", "STRIPE_SECRET_KEY must start with sk_").optional(),
+  /** Signing secret of the Stripe webhook (whsec_…), from the Stripe dashboard or `stripe listen`. */
+  STRIPE_WEBHOOK_SECRET: z.string().startsWith("whsec_", "STRIPE_WEBHOOK_SECRET must start with whsec_").optional(),
+  /** While set, buying online and the pricing page are only for people who entered this code (testing before launch). */
+  PURCHASE_ACCESS_CODE: z.string().min(8, "PURCHASE_ACCESS_CODE must be at least 8 characters").optional(),
 });
 
 type Env = z.infer<typeof EnvSchema>;

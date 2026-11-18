@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { CopyButton } from "@/components/common/copy-button";
 import { useAction } from "@/lib/client/use-action";
 import { emptyChoice, type RoundChoice, RoundPicker } from "@/components/interview/round-picker";
+import { BalanceNote, useBalance } from "@/components/billing/balance-note";
 
 export function ApplicationActions({ id, status, interviewId, canWrite, canInvite, jobId, candidateId, candidateName }: {
   id: string; status: string; interviewId: string | null; canWrite: boolean; canInvite: boolean; jobId: string; candidateId: string; candidateName: string;
@@ -22,6 +23,7 @@ export function ApplicationActions({ id, status, interviewId, canWrite, canInvit
   const [link, setLink] = useState<string | null>(null);
   const [choice, setChoice] = useState<RoundChoice>(emptyChoice);
   const [blocked, setBlocked] = useState(false);
+  const balance = useBalance(open);
 
   const invited = !!interviewId;
   return (
@@ -65,6 +67,7 @@ export function ApplicationActions({ id, status, interviewId, canWrite, canInvit
               </DialogHeader>
               {open && <RoundPicker jobId={jobId} candidateId={candidateId} candidateName={candidateName} onChange={(c, b) => { setChoice(c); setBlocked(b); }} />}
               <label className="flex items-center gap-2 text-sm"><Checkbox checked={sendInvite} onCheckedChange={(c) => setSendInvite(!!c)} /> Email the invitation to the applicant now</label>
+              <BalanceNote balance={balance} minutes={choice.minutes} name={candidateName} />
               <DialogFooter>
                 <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
                 <Button disabled={!!pending || blocked} onClick={async () => {

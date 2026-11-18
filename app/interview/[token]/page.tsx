@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Camera, Clock, Mic, ShieldCheck } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
-import { CandidateError, CandidateShell } from "@/components/interview/candidate-shell";
+import { CandidateError, CandidateOnHold, CandidateShell } from "@/components/interview/candidate-shell";
 import { candidateStep, loadPublicInterview } from "@/lib/interview/public-page";
 
 export default async function WelcomePage(props: PageProps<"/interview/[token]">) {
@@ -10,6 +10,7 @@ export default async function WelcomePage(props: PageProps<"/interview/[token]">
   const { data, error } = await loadPublicInterview(token);
   if (!data) return <CandidateError message={error} />;
   const step = candidateStep(data);
+  if (data.on_hold) return <CandidateOnHold brand={data.brand} job={data.job_title} company={data.company_name} first={data.candidate_first_name} contact={data.on_hold.contact} />;
   if (step === "completed") redirect(`/interview/${token}/completed`);
   if (step === "session") redirect(`/interview/${token}/session`);
   return (

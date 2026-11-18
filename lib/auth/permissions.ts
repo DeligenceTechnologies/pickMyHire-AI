@@ -31,7 +31,7 @@ const MATRIX: Record<Role, Permission[]> = {
     "data:delete", "privacy:manage", "audit:view", "usage:view", "branding:manage", "decision:write", "scorecard:write",
   ],
   admin: [
-    "team:manage", "job:write", "candidate:view", "candidate:write", "template:write", "interview:write", "interview:view",
+    "billing:manage", "team:manage", "job:write", "candidate:view", "candidate:write", "template:write", "interview:write", "interview:view",
     "report:view", "report:regenerate", "recording:view", "data:delete", "privacy:manage", "audit:view", "usage:view", "branding:manage",
     "decision:write", "scorecard:write",
   ],

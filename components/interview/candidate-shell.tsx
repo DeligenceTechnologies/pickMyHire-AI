@@ -1,4 +1,4 @@
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Clock, Mail, Phone } from "lucide-react";
 import { BrandMark } from "@/components/branding/brand-mark";
 import { type Brand, brandStyle } from "@/lib/branding";
 
@@ -39,6 +39,47 @@ export function CandidateError({ message }: { message: string }) {
         <AlertCircle className="mx-auto size-8 text-muted-foreground" />
         <h1 className="mt-4 text-lg font-semibold">We can&apos;t open this interview</h1>
         <p className="mt-2 text-sm text-muted-foreground">{message}</p>
+      </div>
+    </CandidateShell>
+  );
+}
+
+/**
+ * The company has no interviews left: the candidate can't start yet, through no fault of their own.
+ * They contact the company themselves; once it adds interviews, this same link works.
+ */
+export function CandidateOnHold({ brand, job, company, first, contact }: {
+  brand?: Brand; job: string; company: string; first: string; contact: { name: string | null; email: string | null; phone: string | null } | null;
+}) {
+  const who = contact?.name ? `${contact.name.split(" ")[0]} at ${company}` : `the ${company} hiring team`;
+  return (
+    <CandidateShell brand={brand} job={job}>
+      <div className="mx-auto max-w-lg rounded-xl border bg-card p-8 text-center">
+        <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-300"><Clock className="size-6" aria-hidden /></span>
+        <h1 className="mt-4 text-xl font-semibold">Your interview can&apos;t start just yet</h1>
+        <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+          Hi {first}, {company} needs to add more interviews to their account before you can begin. This isn&apos;t anything you did.
+        </p>
+        <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+          Please contact {who} and let them know you&apos;re ready. Once they&apos;ve sorted it, come back to <b className="text-foreground">this same link</b> to start your interview.
+        </p>
+        {(contact?.email || contact?.phone) && (
+          <div className="mt-6 space-y-2 rounded-lg border bg-muted/40 px-4 py-3 text-sm">
+            <p className="text-muted-foreground">Contact {who}:</p>
+            <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
+              {contact.email && (
+                <a href={`mailto:${contact.email}?subject=${encodeURIComponent(`My interview for ${job}`)}`} className="inline-flex items-center gap-1.5 font-medium text-primary hover:underline">
+                  <Mail className="size-4" aria-hidden />{contact.email}
+                </a>
+              )}
+              {contact.phone && (
+                <a href={`tel:${contact.phone.replace(/[^\d+]/g, "")}`} className="inline-flex items-center gap-1.5 font-medium text-primary hover:underline">
+                  <Phone className="size-4" aria-hidden />{contact.phone}
+                </a>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </CandidateShell>
   );

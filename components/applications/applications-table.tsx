@@ -20,6 +20,7 @@ import {
 } from "@/lib/applications/filters";
 import { APPLICATION_STATUS, MatchBadge } from "./match-badge";
 import { FitBadge } from "./answers-card";
+import { BalanceNote, useBalance } from "@/components/billing/balance-note";
 
 type Row = {
   id: string; job_id: string; status: string; created_at: string; screening_status: string; match_level: string | null;
@@ -49,6 +50,7 @@ export function ApplicationsTable({ rows, canInvite = false }: { rows: Row[]; ca
   const setSort = (v: ApplicationFilters["sort"]) => setFilters({ sort: v });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirm, setConfirm] = useState(false);
+  const balance = useBalance(confirm);
   const [sendEmail, setSendEmail] = useState(true);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
@@ -181,6 +183,7 @@ export function ApplicationsTable({ rows, canInvite = false }: { rows: Row[]; ca
           </DialogHeader>
           <ul className="max-h-40 space-y-1 overflow-y-auto text-sm">{chosen.map((r) => <li key={r.id} className="flex items-center justify-between gap-2"><span>{r.candidate_name}</span><FitBadge fit={r.fit} /></li>)}</ul>
           <label className="flex items-center gap-2 text-sm"><Checkbox checked={sendEmail} onCheckedChange={(c) => setSendEmail(!!c)} /> Email the invitations now</label>
+          <BalanceNote balance={balance} count={chosen.length} />
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirm(false)} disabled={!!progress}>Cancel</Button>
             <Button onClick={inviteAll} disabled={!!progress}>{progress && <Loader2 className="animate-spin" />}{progress ? `Inviting ${progress.done}/${progress.total}…` : "Invite"}</Button>

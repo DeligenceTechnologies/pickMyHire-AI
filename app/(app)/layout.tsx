@@ -9,6 +9,7 @@ import { NotificationBell } from "@/components/layout/notification-bell";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { UserMenu } from "@/components/layout/user-menu";
 import { TrialBanner } from "@/components/layout/trial-banner";
+import { BalanceBanner } from "@/components/layout/balance-banner";
 import { getQuotaStatus } from "@/lib/services/quota";
 
 export default async function AppLayout({ children }: LayoutProps<"/">) {
@@ -44,7 +45,8 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           <NotificationBell />
           <UserMenu name={auth.name} email={auth.email} role={roleLabel[auth.role]} />
         </header>
-        <TrialBanner quota={quota} email={auth.email} />
+        <TrialBanner quota={quota} email={auth.email} canBuy={can(auth.role, "billing:manage")} />
+        {can(auth.role, "interview:write") && <BalanceBanner quota={quota} canBuy={can(auth.role, "billing:manage")} />}
         <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 lg:px-8 lg:py-8">{children}</main>
       </div>
     </div>

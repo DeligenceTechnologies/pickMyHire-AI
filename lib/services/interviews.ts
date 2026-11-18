@@ -10,7 +10,7 @@ import { generateToken, hashToken } from "@/lib/security/tokens";
 import type { StoredPlan, InterviewStatus } from "@/types/interview";
 import { JobRequirementsSchema, type JobRequirements, type SectionEvaluation, type SimpleReport } from "@/lib/validation/ai-schemas";
 import { readSettings } from "./org-settings";
-import { assertQuotaAvailable, COUNTED_STATUSES } from "./quota";
+import { assertCanInvite, COUNTED_STATUSES } from "./quota";
 import { isOpen, MAX_ROUNDS } from "./rounds";
 import { ensurePipeline } from "./pipeline";
 
@@ -157,7 +157,7 @@ export async function createInterview(orgId: string, userId: string, input: Crea
       throw new ApiError(409, `${cand.name} already completed ${round.name}${last ? ` on ${last.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}. Invite again for another attempt?`, "already_completed");
     }
     const attempt = 1 + history.filter((h) => h.started_at).length;
-    await assertQuotaAvailable(tx, orgId);
+    await assertCanInvite(tx, orgId);
     const sections = await tx<{ id: string; name: string; objective: string; instructions: string; duration_minutes: number; min_questions: number; max_questions: number; max_followups: number; evaluation_criteria: string[]; scoring_enabled: boolean }[]>`
       select * from interview_template_sections where template_id = ${templateId} and organization_id = ${orgId} and enabled order by sort_order`;
     if (!sections.length) throw new ApiError(400, "The selected template has no enabled sections.");
@@ -243,7 +243,7 @@ export async function rotateLink(orgId: string, userId: string, interviewId: str
   await withOrg(orgId, async (tx) => {
     const [{ settings }] = await tx<{ settings: unknown }[]>`select settings from organizations where id = ${orgId}`;
     const days = readSettings(settings).invite_expiry_days;
-    await assertQuotaAvailable(tx, orgId, interviewId);
+    await assertCanInvite(tx, orgId);
     const [row] = await tx<{ status: string }[]>`
       update interviews set secure_token_hash = ${hashToken(token)}, token_expires_at = now() + make_interval(days => ${days}),
         status = case when status = 'expired' then 'invited'::interview_status else status end

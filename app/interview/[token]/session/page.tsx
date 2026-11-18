@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { CandidateError } from "@/components/interview/candidate-shell";
+import { CandidateError, CandidateOnHold } from "@/components/interview/candidate-shell";
 import { InterviewSession } from "@/components/interview/session/interview-session";
 import { candidateStep, loadPublicInterview } from "@/lib/interview/public-page";
 
@@ -8,6 +8,7 @@ export default async function SessionPage(props: PageProps<"/interview/[token]/s
   const { data, error } = await loadPublicInterview(token);
   if (!data) return <CandidateError message={error} />;
   const step = candidateStep(data);
+  if (data.on_hold) return <CandidateOnHold brand={data.brand} job={data.job_title} company={data.company_name} first={data.candidate_first_name} contact={data.on_hold.contact} />;
   if (step === "completed") redirect(`/interview/${token}/completed`);
   if (step === "welcome") redirect(`/interview/${token}/consent`);
   if (!data.plan_ready) {

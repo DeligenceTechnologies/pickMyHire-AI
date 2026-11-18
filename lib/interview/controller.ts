@@ -19,6 +19,8 @@ import { log } from "@/lib/logger";
 import { hashToken, isWellFormedToken } from "@/lib/security/tokens";
 import type { AnswerAnalysis, FollowupDecision } from "@/lib/validation/ai-schemas";
 import { readSettings } from "@/lib/services/org-settings";
+import { candidateContact, cannotStart, chargeAtStart, creditsForPlan, holdForBalance, refundIfNoAnswers, warnIfLow } from "@/lib/services/interview-balance";
+import { NO_INTERVIEWS_MESSAGE } from "@/lib/services/quota";
 import {
   InterviewStateSchema,
   initialInterviewState,
@@ -151,6 +153,7 @@ export async function closeIfAbandoned(orgId: string, interviewId: string): Prom
     await tx`update interview_sections set status = 'completed', completed_at = ${last}, end_ms = ${lastMs} where interview_id = ${interviewId} and status = 'in_progress'`;
     await tx`update interview_sections set status = 'skipped' where interview_id = ${interviewId} and status = 'pending'`;
     await tx`update interviews set state = ${json({ ...state, phase: "finished", pending_utterance: null, ended_reason: "left" })} where id = ${interviewId}`;
+    await refundIfNoAnswers(tx, orgId, interviewId);
     await audit(tx, { orgId, actorType: "system", action: "interview.completed", entityType: "interview", entityId: interviewId, metadata: { reason: "left_unfinished", duration, left_at: last.toISOString() } });
     const [info] = await tx<{ candidate: string; job: string }[]>`select c.name as candidate, j.title as job from interviews i
       join candidates c on c.id = i.candidate_id join jobs j on j.id = i.job_id where i.id = ${interviewId}`;
@@ -174,7 +177,11 @@ async function assertLinkUsable(ctx: InterviewCtx) {
 export async function getPublicInterview(token: string) {
   const ctx = await resolveToken(token);
   await assertLinkUsable(ctx);
+  // Not started yet and the company has too few interviews left: the candidate is asked to wait.
+  const waiting = !ACTIVE.includes(ctx.status) && !FINISHED.includes(ctx.status) && await cannotStart(ctx.orgId, ctx.plan);
+  if (waiting) await holdForBalance(ctx.orgId, ctx.id);
   return {
+    on_hold: waiting ? { contact: await candidateContact(ctx.orgId, ctx.id) } : null,
     status: ctx.status,
     candidate_first_name: ctx.candidateName.split(" ")[0],
     job_title: ctx.jobTitle,
@@ -289,8 +296,10 @@ export async function startInterview(token: string): Promise<SessionPayload & { 
   if (!ctx.consentGiven) throw new ApiError(409, "Please give consent first.");
   if (!ctx.plan) throw new ApiError(425, ctx.planStatus === "failed" ? "Your interview couldn't be prepared. Please contact the recruiter." : "Your interview is still being prepared. Please wait a moment.");
   const plan = ctx.plan;
+  const credits = await creditsForPlan(plan);
+  let balance: { before: number | null; after: number | null } | null = null;
 
-  return withOrg(ctx.orgId, async (tx) => {
+  const started = await withOrg(ctx.orgId, async (tx) => {
     // Row lock serializes concurrent starts (double clicks, two tabs).
     const [locked] = await tx<{ status: InterviewStatus; state: unknown; started_at: Date | null }[]>`
       select status, state, started_at from interviews where id = ${ctx.id} for update`;
@@ -305,6 +314,11 @@ export async function startInterview(token: string): Promise<SessionPayload & { 
       return { ...payload(ctx, state, status, locked.started_at), resumed: true };
     }
     if (!["ready", "device_check"].includes(status)) throw new ApiError(409, "Please complete the device check first.");
+
+    // The interview is used now (not at invite). Not enough left: the candidate waits, nothing changes.
+    const charge = await chargeAtStart(tx, ctx.orgId, ctx.id, credits);
+    if (!charge.ok) throw new ApiError(402, NO_INTERVIEWS_MESSAGE, "no_interviews_left");
+    balance = { before: charge.before, after: charge.after };
 
     const startedAt = new Date();
     await tx`update interviews set status = 'in_progress', started_at = ${startedAt} where id = ${ctx.id}`;
@@ -326,9 +340,15 @@ export async function startInterview(token: string): Promise<SessionPayload & { 
     };
     await saveState(tx, ctx.id, state);
     await audit(tx, { orgId: ctx.orgId, actorType: "candidate", action: "interview.started", entityType: "interview", entityId: ctx.id });
-    log.info("interview.started", { interviewId: ctx.id });
+    log.info("interview.started", { interviewId: ctx.id, credits });
     return { ...payload(ctx, state, "in_progress", startedAt), resumed: false };
+  }).catch(async (err) => {
+    if (err instanceof ApiError && err.code === "no_interviews_left") await holdForBalance(ctx.orgId, ctx.id);
+    throw err;
   });
+  const b = balance as { before: number | null; after: number | null } | null;
+  if (b) runInBackground("balance.warn", () => warnIfLow(ctx.orgId, b.before, b.after));
+  return started;
 }
 
 function stripIntro(text: string) {
@@ -609,6 +629,7 @@ export async function completeInterview(token: string, input: { reason: "finishe
     await tx`update interview_sections set status = 'completed', completed_at = now(), end_ms = ${endMs} where interview_id = ${ctx.id} and status = 'in_progress'`;
     await tx`update interview_sections set status = 'skipped' where interview_id = ${ctx.id} and status = 'pending'`;
     await tx`update interviews set state = jsonb_set(state, '{phase}', '"finished"') where id = ${ctx.id}`;
+    await refundIfNoAnswers(tx, ctx.orgId, ctx.id);
     await audit(tx, { orgId: ctx.orgId, actorType: "candidate", action: "interview.completed", entityType: "interview", entityId: ctx.id, metadata: { reason: input.reason, duration } });
     await notify(tx, { orgId: ctx.orgId, type: "interview.completed", payload: { interview_id: ctx.id, candidate: ctx.candidateName, job: ctx.jobTitle, reason: input.reason } });
     const [org] = await tx<{ settings: unknown }[]>`select settings from organizations where id = ${ctx.orgId}`;

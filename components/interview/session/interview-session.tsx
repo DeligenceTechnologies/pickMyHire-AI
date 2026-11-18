@@ -49,7 +49,7 @@ async function post<T>(url: string, body: unknown, opts: { retries?: number; onR
       const data = await res.json().catch(() => ({}));
       if (res.ok) return data as T;
       // 4xx (other than rate limiting / not-ready) are not retryable.
-      if (res.status < 500 && res.status !== 429 && res.status !== 425) throw Object.assign(new Error(data.error ?? "Request failed"), { fatal: true });
+      if (res.status < 500 && res.status !== 429 && res.status !== 425) throw Object.assign(new Error(data.error ?? "Request failed"), { fatal: true, status: res.status });
       throw new Error(data.error ?? `HTTP ${res.status}`);
     } catch (err) {
       if ((err as { fatal?: boolean }).fatal || attempt >= retries) throw err;
@@ -463,7 +463,9 @@ export function InterviewSession({ token, company, job, interviewerName, demoMod
       engine.current?.close();
       engine.current = null;
       stopMedia();
-      const e = err as Error & { name?: string };
+      const e = err as Error & { name?: string; status?: number };
+      // 402: the company ran out of interviews just now. Reloading shows the "can't start yet" page.
+      if (e.status === 402) { window.location.reload(); return; }
       setError(e.name === "NotAllowedError" ? "Camera and microphone access is required. Allow access in your browser and try again." : e.message || "We couldn't start the interview.");
       setStage("error");
       setAiState("idle");

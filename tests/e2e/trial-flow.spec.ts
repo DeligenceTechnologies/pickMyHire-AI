@@ -23,7 +23,7 @@ test("start a free trial from the home page", async ({ page }) => {
   await page.getByRole("button", { name: "Start free trial" }).click();
   await expect(page).toHaveURL(/\/dashboard/);
   await expect(page.getByText("3 of 3 interviews left · 14 days left")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Book a call" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Buy interviews" })).toBeVisible();
 });
 
 test("people with an access code can still use it", async ({ page }) => {

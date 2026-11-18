@@ -21,6 +21,8 @@ export default async function SignupPage(props: PageProps<"/signup">) {
   // Open sign-up: a free trial by default; "?code=1" for people with an access code.
   const open = !token && !companyToken;
   const mode = open && trial.enabled && sp.code !== "1" ? "trial" : "code";
+  // Chosen on the pricing page: after sign-up, Billing opens with this pack ready to buy.
+  const pack = typeof sp.pack === "string" && /^\d{1,5}$/.test(sp.pack) && Number(sp.pack) > 0 ? Number(sp.pack) : null;
   return (
     <>
       <h1 className="text-2xl font-semibold tracking-tight">
@@ -32,6 +34,11 @@ export default async function SignupPage(props: PageProps<"/signup">) {
           : mode === "trial" ? `${trial.interviews} AI interviews free for ${trial.days} days. No credit card needed.`
           : "Enter the access code you received from our team."}
       </p>
+      {open && pack && !linkBroken && (
+        <p className="-mt-4 mb-6 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-sm">
+          You chose <b>{pack} interviews</b>. Create your account first, and your pack is ready to buy straight after.
+        </p>
+      )}
       {linkBroken ? (
         <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {token ? "This invitation is invalid or has expired. Ask your admin for a new one." : "This sign-up link is invalid, already used or expired. Please contact us for a new one."}
@@ -41,6 +48,7 @@ export default async function SignupPage(props: PageProps<"/signup">) {
           invite={invite && token ? { token, email: invite.email, orgName: invite.org_name } : null}
           company={company && companyToken ? { token: companyToken, email: company.email, name: company.company_name } : null}
           mode={mode}
+          pack={open ? pack : null}
         />
       )}
       {open && mode === "trial" && (

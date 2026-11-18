@@ -3,6 +3,7 @@ import { json, withOrg, type Tx } from "@/lib/database/db";
 import { audit } from "@/lib/audit";
 import { ApiError } from "@/lib/api";
 import type { TemplateInput } from "@/types/interview";
+import { getPricing } from "./pricing";
 
 export type TemplateSectionRow = {
   id: string;
@@ -71,7 +72,15 @@ export async function getTemplate(orgId: string, templateId: string) {
   });
 }
 
+/** Templates can't be longer than the longest interview allowed by pricing. */
+async function assertLength(input: TemplateInput) {
+  const minutes = input.sections.filter((s) => s.enabled).reduce((a, s) => a + s.duration_minutes, 0);
+  const { maxMinutes } = await getPricing();
+  if (minutes > maxMinutes) throw new ApiError(400, `Interviews can be up to ${maxMinutes} minutes. This template is ${minutes} minutes: shorten some sections.`);
+}
+
 export async function createTemplate(orgId: string, userId: string, input: TemplateInput) {
+  await assertLength(input);
   return withOrg(orgId, async (tx) => {
     const id = await insertTemplate(tx, orgId, userId, input);
     await audit(tx, { orgId, userId, action: "template.created", entityType: "template", entityId: id });
@@ -84,6 +93,7 @@ export async function createTemplate(orgId: string, userId: string, input: Templ
  * copy of section config inside interview_plan, so edits never alter past interviews.
  */
 export async function updateTemplate(orgId: string, userId: string, templateId: string, input: TemplateInput) {
+  await assertLength(input);
   return withOrg(orgId, async (tx) => {
     const [t] = await tx`update interview_templates set name = ${input.name}, description = ${input.description}
       where id = ${templateId} and organization_id = ${orgId} returning id`;

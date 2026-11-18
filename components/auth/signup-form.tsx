@@ -3,11 +3,13 @@
 import { useRouter } from "next/navigation";
 import { AuthForm, type Field } from "./auth-form";
 
-export function SignupForm({ invite, company, mode = "code" }: {
+export function SignupForm({ invite, company, mode = "code", pack = null }: {
   invite: { token: string; email: string; orgName: string } | null;
   company?: { token: string; email: string; name: string } | null;
   /** Without an invite or approval link: start a free trial, or use an access code. */
   mode?: "trial" | "code";
+  /** A pack chosen on the pricing page: after sign-up, go to Billing with it selected. */
+  pack?: number | null;
 }) {
   const router = useRouter();
   const preset = invite?.email ?? company?.email;
@@ -30,7 +32,7 @@ export function SignupForm({ invite, company, mode = "code" }: {
       fields={fields}
       extra={{ inviteToken: invite?.token, companyInvite: company?.token, trial: trial || undefined }}
       onSuccess={() => {
-        router.push("/dashboard");
+        router.push(pack ? `/settings/billing?pack=${pack}` : "/dashboard");
         router.refresh();
       }}
     />

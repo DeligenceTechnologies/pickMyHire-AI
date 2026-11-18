@@ -15,6 +15,7 @@ import { api, ClientApiError } from "@/lib/client/api";
 import { emptyChoice, type RoundChoice, RoundPicker } from "./round-picker";
 import { emptyValues, pruneErrors, QuestionFields, valuesFromAnswers, type AnswerValues } from "@/components/applications/question-fields";
 import { validateAnswers, type ApplicationForm } from "@/lib/application-form";
+import { BalanceNote, useBalance } from "@/components/billing/balance-note";
 
 type Option = { id: string; label: string; sub?: string };
 
@@ -50,6 +51,7 @@ export function InviteDialog({ jobId, candidateId, candidateName, jobs, triggerL
   const [answers, setAnswers] = useState<AnswerValues>(emptyValues);
   const [answerErrors, setAnswerErrors] = useState<Record<string, string>>({});
   const existingId = candidateId ?? (mode === "existing" ? selectedCandidate : "");
+  const balance = useBalance(open);
 
   // The job's application questions: the person inviting fills them in from what the candidate told them.
   useEffect(() => {
@@ -227,6 +229,7 @@ export function InviteDialog({ jobId, candidateId, candidateName, jobs, triggerL
                 <label className="flex items-center gap-2 text-sm">
                   <Checkbox checked={sendInvite} onCheckedChange={(c) => setSendInvite(!!c)} /> Email the invitation to the candidate now
                 </label>
+                <BalanceNote balance={balance} minutes={choice.minutes} name={candidateName ?? (form.name.trim() || undefined)} />
                 {error && <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
               </div>
               <DialogFooter>

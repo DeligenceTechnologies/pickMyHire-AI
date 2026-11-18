@@ -19,8 +19,10 @@ export type RoundChoice = {
   newRoundName: string | null;
   reinvite: boolean;
   reason: string | null;
+  /** Length of the chosen template (for how many interviews it uses); not sent to the server. */
+  minutes?: number | null;
 };
-export const emptyChoice: RoundChoice = { roundId: null, templateId: null, newRoundName: null, reinvite: false, reason: null };
+export const emptyChoice: RoundChoice = { roundId: null, templateId: null, newRoundName: null, reinvite: false, reason: null, minutes: null };
 
 const OTHER = "__other__";
 const selectClass = "h-9 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
@@ -74,9 +76,9 @@ export function RoundPicker({ jobId, candidateId, candidateName, onChange }: {
     if (!data) return;
     if (selected === OTHER) {
       const tpl = data.templates.find((t) => t.id === templateId);
-      onChange({ ...emptyChoice, templateId: templateId || null, newRoundName: saveAsRound ? (roundName.trim() || tpl?.name || null) : null }, !templateId);
+      onChange({ ...emptyChoice, templateId: templateId || null, newRoundName: saveAsRound ? (roundName.trim() || tpl?.name || null) : null, minutes: tpl?.minutes ?? null }, !templateId);
     } else {
-      onChange({ ...emptyChoice, roundId: selected || null, reinvite: repeat, reason: repeat ? reason.trim() || null : null }, blocked);
+      onChange({ ...emptyChoice, roundId: selected || null, reinvite: repeat, reason: repeat ? reason.trim() || null : null, minutes: round?.template_id ? round.minutes : null }, blocked);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, selected, templateId, saveAsRound, roundName, reason, repeat, blocked]);

@@ -3,7 +3,7 @@ import { execSync } from "node:child_process";
 import postgres from "postgres";
 
 // Platform admin: approve an access request, the client signs up with the
-// one-time link, the free-interview quota blocks new invites, then suspend,
+// one-time link, the company runs out of interviews and gets more, then suspend,
 // disable and the shared access code switch. No AI calls are made.
 
 async function system<T>(fn: (tx: postgres.TransactionSql) => Promise<T>): Promise<T> {
@@ -79,23 +79,21 @@ test("platform admin manages access, quotas and accounts", async ({ page, browse
   await cp.goto("/admin");
   await expect(cp.getByRole("heading", { name: "Page not found" })).toBeVisible();
 
-  // One completed interview uses the whole quota; the next invite is blocked.
-  const { orgId, jobId, candidateId } = await system(async (tx) => {
+  // One interview (used when it started) uses the whole balance: the company is warned, but can still invite.
+  const { orgId } = await system(async (tx) => {
     const [org] = await tx<{ id: string }[]>`select id from organizations where name = ${company}`;
     const [job] = await tx<{ id: string }[]>`insert into jobs (organization_id, title, status) values (${org.id}, 'Quota Role', 'active') returning id`;
     const [tpl] = await tx<{ id: string }[]>`select id from interview_templates where organization_id = ${org.id} limit 1`;
     await tx`insert into job_rounds (organization_id, job_id, name, template_id) values (${org.id}, ${job.id}, 'Screening', ${tpl.id})`;
     const [c1] = await tx<{ id: string }[]>`insert into candidates (organization_id, name, email) values (${org.id}, 'Done Candidate', ${`done-${id}@e2e.test`}) returning id`;
     const [c2] = await tx<{ id: string }[]>`insert into candidates (organization_id, name, email) values (${org.id}, 'Next Candidate', ${`next-${id}@e2e.test`}) returning id`;
-    await tx`insert into interviews (organization_id, job_id, candidate_id, secure_token_hash, status, completed_at, duration_seconds)
-      values (${org.id}, ${job.id}, ${c1.id}, ${`e2e-${id}`}, 'completed', now(), 900)`;
+    await tx`insert into interviews (organization_id, job_id, candidate_id, secure_token_hash, status, completed_at, duration_seconds, credits_used, charged_at)
+      values (${org.id}, ${job.id}, ${c1.id}, ${`e2e-${id}`}, 'completed', now(), 900, 1, now())`;
     return { orgId: org.id, jobId: job.id, candidateId: c2.id };
   });
-  const blocked = await cp.request.post("/api/interviews", { data: { jobId, candidateId, sendInvite: false } });
-  expect(blocked.status()).toBe(403);
-  expect((await blocked.json()).error).toContain("used all your free interviews");
   await cp.goto("/dashboard");
-  await expect(cp.getByText("You've used all 1 free interviews")).toBeVisible();
+  await expect(cp.getByText("No interviews left.")).toBeVisible();
+  await expect(cp.getByRole("link", { name: "Buy interviews" })).toBeVisible();
   await cp.goto("/settings/usage");
   await expect(cp.getByText("of 1 used")).toBeVisible();
 
@@ -103,9 +101,9 @@ test("platform admin manages access, quotas and accounts", async ({ page, browse
   await page.goto(`/admin/companies/${orgId}`);
   await expect(page.getByRole("heading", { name: company })).toBeVisible();
   await page.getByRole("button", { name: "+1", exact: true }).click();
-  await expect(page.getByText("Free interviews updated")).toBeVisible();
+  await expect(page.getByText("Interviews updated")).toBeVisible();
   await cp.goto("/dashboard");
-  await expect(cp.getByText("1 free interview left of 2")).toBeVisible();
+  await expect(cp.getByText("1 interview left.")).toBeVisible();
 
   // Suspend: the client is signed out and can't sign back in.
   await page.getByRole("button", { name: "Suspend" }).click();

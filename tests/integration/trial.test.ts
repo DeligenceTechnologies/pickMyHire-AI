@@ -3,7 +3,7 @@ import { json, withOrg, withSystem } from "@/lib/database/db";
 import { sendEmailVerification, signup, verifyEmail } from "@/lib/services/accounts";
 import { updateCompany } from "@/lib/services/admin";
 import { DEFAULT_TRIAL } from "@/lib/services/platform";
-import { assertQuotaAvailable, getQuotaStatus } from "@/lib/services/quota";
+import { assertCanInvite as canInvite, getQuotaStatus } from "@/lib/services/quota";
 
 // Free trial against the local database. The trial setting is restored afterwards.
 const id = Date.now().toString(36);
@@ -17,7 +17,7 @@ async function setTrial(patch: Partial<typeof DEFAULT_TRIAL>) {
     insert into platform_settings (key, value) values ('free_trial', ${json({ ...DEFAULT_TRIAL, ...patch })})
     on conflict (key) do update set value = excluded.value`);
 }
-const assertCanInvite = () => withOrg(orgId, (tx) => assertQuotaAvailable(tx, orgId));
+const assertCanInvite = () => withOrg(orgId, (tx) => canInvite(tx, orgId));
 
 beforeAll(async () => {
   [{ value: saved } = { value: null }] = await withSystem((tx) => tx<{ value: unknown }[]>`select value from platform_settings where key = 'free_trial'`);

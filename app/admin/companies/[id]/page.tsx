@@ -9,6 +9,11 @@ import { isUuid } from "@/lib/ids";
 import { getCompany } from "@/lib/services/admin";
 import { getBrand } from "@/lib/services/branding";
 import { BrandingManager } from "@/components/branding/branding-manager";
+import { CompanyPricingCard } from "@/components/admin/company-pricing-card";
+import { getCompanyPricing, getPricing } from "@/lib/services/pricing";
+import { PurchaseMoves } from "@/components/billing/purchase-moves";
+import { listAllPurchases } from "@/lib/services/billing";
+import { money } from "@/lib/pricing";
 
 export const metadata = { title: "Company" };
 
@@ -23,7 +28,8 @@ export default async function CompanyPage(props: PageProps<"/admin/companies/[id
   if (!isUuid(id)) notFound();
   const company = await getCompany(id);
   if (!company) notFound();
-  const brand = await getBrand(id);
+  const [brand, standard, ownPricing, purchases] = await Promise.all([getBrand(id), getPricing(), getCompanyPricing(id), listAllPurchases(id)]);
+  const paidCents = purchases.reduce((a, p) => a + p.total_cents - p.refunded_cents, 0);
   const data = JSON.parse(JSON.stringify(company)) as CompanyData;
   const { usage } = company;
   return (
@@ -49,10 +55,25 @@ export default async function CompanyPage(props: PageProps<"/admin/companies/[id
               ].map(([k, v]) => <div key={String(k)}><dt className="text-xs text-muted-foreground">{k}</dt><dd className="mt-0.5 font-semibold tabular">{v}</dd></div>)}
             </dl>
           </FormCard>
+          <FormCard title="Purchases" description={purchases.length ? `${purchases.length} ${purchases.length === 1 ? "payment" : "payments"} · ${money(paidCents)} paid after refunds. Refund in the Stripe dashboard: unused interviews are taken back automatically.` : "Online payments by this company."}>
+            {purchases.length ? (
+              <ul className="divide-y text-sm">
+                {purchases.map((p) => (
+                  <li key={p.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2.5 first:pt-0 last:pb-0">
+                    <span><b className="font-medium">{p.quantity} interviews · {money(p.total_cents)}</b> <span className="text-muted-foreground">({money(p.unit_cents)} each)</span><PurchaseMoves p={p} /></span>
+                    <span className="text-xs text-muted-foreground">
+                      {formatDate(p.paid_at ?? p.created_at)}{p.bought_by ? ` · ${p.bought_by}` : ""} · {p.status === "paid" ? (p.expired_at ? `expired, ${p.interviews_expired} unused` : `valid until ${formatDate(p.expires_at)}`) : p.status === "refunded" ? "refunded" : `${money(p.refunded_cents)} refunded`}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : <p className="text-sm text-muted-foreground">No purchases yet.</p>}
+          </FormCard>
         </div>
         <div className="min-w-0 space-y-6">
           {company.org.plan === "trial" && <TrialCard id={id} endsAt={data.org.trial_ends_at} daysLeft={company.org.trial_days_left} domain={company.org.signup_domain} />}
           <QuotaCard id={id} quota={data.quota} />
+          <CompanyPricingCard id={id} standard={standard} initial={ownPricing} />
           <NotesCard id={id} notes={company.org.admin_notes} />
         </div>
       </div>

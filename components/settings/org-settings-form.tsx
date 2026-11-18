@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { api } from "@/lib/client/api";
 import { FormCard } from "./form-card";
 
-type Settings = { interviewer_name: string; invite_expiry_days: number; show_scores: boolean; notify_on_completion: boolean; candidate_feedback_email: boolean };
+type Settings = { interviewer_name: string; invite_expiry_days: number; show_scores: boolean; notify_on_completion: boolean; candidate_feedback_email: boolean; candidate_contact_email: string | null; candidate_contact_phone: string | null };
 
 export function OrgSettingsForm({ orgName, settings, canEdit, ai }: { orgName: string; settings: Settings; canEdit: boolean; ai: { live: boolean; models: Record<string, string> | null } }) {
   const router = useRouter();
@@ -23,13 +23,24 @@ export function OrgSettingsForm({ orgName, settings, canEdit, ai }: { orgName: s
       <FormCard title="Workspace & interviewer" description="How your company and AI interviewer appear to candidates."
         footer={canEdit && <Button disabled={busy} onClick={async () => {
           setBusy(true);
-          try { await api("/api/organizations", { method: "PATCH", body: { name, settings: s } }); toast.success("Settings saved"); router.refresh(); }
+          const clean = { ...s, candidate_contact_email: s.candidate_contact_email?.trim() || null, candidate_contact_phone: s.candidate_contact_phone?.trim() || null };
+          try { await api("/api/organizations", { method: "PATCH", body: { name, settings: clean } }); toast.success("Settings saved"); router.refresh(); }
           catch (e) { toast.error((e as Error).message); } finally { setBusy(false); }
         }}>{busy && <Loader2 className="animate-spin" />}Save changes</Button>}>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5"><Label htmlFor="o-name" required>Company name</Label><Input id="o-name" value={name} disabled={!canEdit} onChange={(e) => setName(e.target.value)} /></div>
           <div className="space-y-1.5"><Label htmlFor="o-int" required>AI interviewer name</Label><Input id="o-int" value={s.interviewer_name} disabled={!canEdit} onChange={(e) => setS({ ...s, interviewer_name: e.target.value })} /></div>
           <div className="space-y-1.5"><Label htmlFor="o-exp" required>Invitation link validity (days)</Label><Input id="o-exp" type="number" min={1} max={90} value={s.invite_expiry_days} disabled={!canEdit} onChange={(e) => setS({ ...s, invite_expiry_days: Math.max(1, Math.min(90, Number(e.target.value) || 1)) })} /></div>
+        </div>
+        <div className="space-y-3 rounded-lg border p-4">
+          <div>
+            <p className="text-sm font-medium">Contact for candidates</p>
+            <p className="text-xs text-muted-foreground">Shown when a candidate can&apos;t start because your company has no interviews left, so they can call or email you. Without an email here, they see the email of the person who invited them.</p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5"><Label htmlFor="o-cemail">Email <span className="font-normal text-muted-foreground">(optional)</span></Label><Input id="o-cemail" type="email" placeholder="hiring@yourcompany.com" value={s.candidate_contact_email ?? ""} disabled={!canEdit} onChange={(e) => setS({ ...s, candidate_contact_email: e.target.value })} /></div>
+            <div className="space-y-1.5"><Label htmlFor="o-cphone">Phone <span className="font-normal text-muted-foreground">(optional)</span></Label><Input id="o-cphone" type="tel" placeholder="+91 98765 43210" value={s.candidate_contact_phone ?? ""} disabled={!canEdit} onChange={(e) => setS({ ...s, candidate_contact_phone: e.target.value })} /></div>
+          </div>
         </div>
         <label className="flex items-start gap-3 text-sm"><Switch checked={s.show_scores} disabled={!canEdit} onCheckedChange={(c) => setS({ ...s, show_scores: !!c })} /><span><span className="font-medium">Show 1–5 section scores</span><br /><span className="text-muted-foreground">Only for sections where scoring is enabled in the template. Scores are evidence summaries, never hiring decisions.</span></span></label>
         <label className="flex items-start gap-3 text-sm"><Switch checked={s.notify_on_completion} disabled={!canEdit} onCheckedChange={(c) => setS({ ...s, notify_on_completion: !!c })} /><span><span className="font-medium">Email recruiters when an interview completes</span></span></label>
