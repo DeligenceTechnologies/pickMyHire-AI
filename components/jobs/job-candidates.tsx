@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import {
-  AlertTriangle, Ban, BarChart3, CalendarClock, CheckCircle2, Clock3, ExternalLink, FileText, Loader2,
+  Ban, BarChart3, CalendarClock, CheckCircle2, Clock3, ExternalLink, FileText, Loader2,
   MoreVertical, PlayCircle, Search, Send, TimerOff, UserRound, Users, XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -17,6 +17,7 @@ import { BalanceNote, useBalance } from "@/components/billing/balance-note";
 import { InviteDialog } from "@/components/interview/invite-dialog";
 import { MatchCell, avatarTone } from "@/components/candidates/candidate-list";
 import { FitBadge } from "@/components/applications/answers-card";
+import { ExperienceFlags } from "@/components/candidates/experience-flags";
 import { api } from "@/lib/client/api";
 import { emailFailedIn, toastEmailResult } from "@/lib/client/email-result";
 import { initials, timeAgo } from "@/lib/format";
@@ -221,7 +222,7 @@ function Row({ r, jobId, listQuery, bulk, invitable, canInvite, checked, onCheck
             <p className="flex items-center gap-1.5 text-xs whitespace-nowrap text-muted-foreground">
               {r.source === "applied" ? "Applied" : "Added"}
               {r.experience_months !== null && <><span aria-hidden>·</span><span className="tabular">{r.experience_approximate ? "~" : ""}{shortExperience(r.experience_months)}</span></>}
-              {flags.length > 0 && <AlertTriangle className="size-3.5 text-amber-500" aria-label={`Check experience: ${flags.map((f) => f.message).join("; ")}`} />}
+              <ExperienceFlags flags={flags} />
               {!r.has_resume && <><span aria-hidden>·</span>No resume</>}
               {r.fit !== "none" && <FitBadge fit={{ level: r.fit }} className="ml-0.5 px-1.5 py-0 text-[11px]" />}
             </p>

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AlertTriangle, Archive, BriefcaseBusiness, Loader2 } from "lucide-react";
 import { StatusBadge } from "@/components/common/status-badge";
 import { ArchiveButton } from "@/components/candidates/archive-button";
+import { ExperienceFlags } from "@/components/candidates/experience-flags";
 import { initials, timeAgo } from "@/lib/format";
 import { shortExperience } from "@/lib/resume/experience";
 import { STAGE_GROUP_LABEL, STAGE_GROUPS, STAGE_STYLE, type StageGroup } from "@/lib/candidates/stages";
@@ -50,12 +51,11 @@ export function ExperienceCell({ r }: { r: Pick<CandidateListRow, "experience_mo
   if (r.experience_months === null && !flags.length) {
     return <span className="text-xs text-muted-foreground">{r.has_resume ? (r.parse_status === "completed" ? "—" : "Reading…") : "No resume"}</span>;
   }
-  const tip = flags.map((f) => f.message).join("\n");
   return (
-    <span className={cn("inline-flex items-center gap-1 text-xs tabular", flags.length ? "text-amber-800 dark:text-amber-300" : "text-foreground")} title={tip || undefined}>
+    <span className={cn("inline-flex items-center gap-1 text-xs tabular", flags.length ? "text-amber-800 dark:text-amber-300" : "text-foreground")}>
       <BriefcaseBusiness className="size-3.5 text-muted-foreground" aria-hidden />
       {r.experience_months === null ? "Unclear" : `${r.experience_approximate ? "~" : ""}${shortExperience(r.experience_months)}`}
-      {flags.length > 0 && <AlertTriangle className="size-3.5 text-amber-500" aria-label={`Check: ${tip}`} />}
+      <ExperienceFlags flags={flags} />
     </span>
   );
 }

@@ -90,11 +90,17 @@ export default async function JobPage(props: PageProps<"/jobs/[jobId]">) {
         </div>
         <div className="min-w-0 space-y-6">
           {canSeeCandidates && <ApplyLinkCard jobId={job.id} enabled={job.apply_enabled} url={job.apply_slug ? applyUrl(job.apply_slug) : null} jobActive={job.status === "active"} canEdit={can(auth.role, "job:write")} />}
-          <section className="rounded-xl border bg-card p-5">
-            <div className="mb-3 flex items-center justify-between">
+          {/* Folded like the job description: hidden until opened. */}
+          <details className="group rounded-xl border bg-card">
+            <summary className="flex cursor-pointer list-none items-center gap-2 px-5 py-4 [&::-webkit-details-marker]:hidden">
               <h2 className="flex items-center gap-2 font-semibold"><Sparkles className="size-4 text-primary" /> Parsed requirements</h2>
               {parsing && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Loader2 className="size-3 animate-spin" /> Analyzing</span>}
-            </div>
+              <span className="ml-auto inline-flex items-center gap-1 text-sm font-medium text-primary">
+                <span className="group-open:hidden">View</span><span className="hidden group-open:inline">Hide</span>
+                <ChevronDown className="size-4 transition-transform group-open:rotate-180" aria-hidden />
+              </span>
+            </summary>
+            <div className="border-t px-5 py-4">
             {job.parse_status === "failed" && <p className="mb-3 rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">{job.parse_error}</p>}
             {req ? (
               <div className="space-y-4 text-sm">
@@ -116,7 +122,8 @@ export default async function JobPage(props: PageProps<"/jobs/[jobId]">) {
                 )}
               </div>
             ) : !parsing && <p className="text-sm text-muted-foreground">Add a job description to extract structured requirements.</p>}
-          </section>
+            </div>
+          </details>
           <section className="rounded-xl border bg-card p-5">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="font-semibold">Interview rounds</h2>
