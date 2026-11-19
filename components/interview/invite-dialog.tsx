@@ -25,8 +25,11 @@ const selectClass = "h-9 w-full rounded-lg border border-input bg-background px-
  * Invite a candidate to an AI interview. Used from a job (pick/create a
  * candidate) or from a candidate (pick a job).
  */
-export function InviteDialog({ jobId, candidateId, candidateName, jobs, triggerLabel = "Invite candidate" }: {
+export function InviteDialog({ jobId, candidateId, candidateName, jobs, triggerLabel = "Invite candidate", triggerSize, triggerVariant }: {
   jobId?: string;
+  /** For a small button inside a list row. */
+  triggerSize?: "sm";
+  triggerVariant?: "outline";
   candidateId?: string;
   candidateName?: string;
   jobs?: Option[];
@@ -173,7 +176,7 @@ export function InviteDialog({ jobId, candidateId, candidateName, jobs, triggerL
 
   return (
     <>
-      <Button onClick={() => { reset(); setOpen(true); }}><Send /> {triggerLabel}</Button>
+      <Button size={triggerSize} variant={triggerVariant} onClick={() => { reset(); setOpen(true); }}><Send /> {triggerLabel}</Button>
       <Dialog open={open} onOpenChange={(o) => !busy && setOpen(o)}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
           {link ? (

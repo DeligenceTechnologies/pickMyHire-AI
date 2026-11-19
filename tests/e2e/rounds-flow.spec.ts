@@ -52,7 +52,7 @@ test("job rounds and the invite round picker", async ({ page }) => {
 
   // The picker defaults to the next round and flags the completed one.
   await page.reload();
-  await page.getByRole("button", { name: "Invite candidate" }).click();
+  await page.getByRole("button", { name: "Add candidate" }).click();
   const dlg = page.getByRole("dialog");
   await dlg.getByRole("button", { name: "Existing candidate" }).click();
   await dlg.getByRole("button", { name: /Dana Done/ }).click();

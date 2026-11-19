@@ -22,7 +22,7 @@ export type CandidateListRow = {
   match_level: string | null; match_met: number | null; match_total: number | null; match_status: string | null;
 };
 
-export type CandidateListQuery = { q?: string; jobId?: string; stage?: StageGroup; sort?: CandidateSort; archived?: boolean; page?: number; board?: boolean };
+export type CandidateListQuery = { q?: string; jobId?: string; stage?: StageGroup; sort?: CandidateSort; archived?: boolean; page?: number; board?: boolean; size?: number };
 
 const MATCH_RANK = `case x.match_level when 'strong_match' then 5 when 'good_match' then 4 when 'partial_match' then 3 when 'low_match' then 2 when 'insufficient_information' then 1 else 0 end`;
 
@@ -79,6 +79,7 @@ export async function listCandidatePage(orgId: string, opts: CandidateListQuery)
   const q = opts.q?.trim() ? `%${opts.q.trim()}%` : null;
   const page = Math.max(1, opts.page ?? 1);
   const sort = opts.sort ?? "new";
+  const size = opts.size ?? PAGE_SIZE;
   return withOrg(orgId, async (tx) => {
     const base = tx`(${rowsSql(tx, orgId, jobId)}) x
       where (x.archived_at is not null) = ${archived}
@@ -87,8 +88,8 @@ export async function listCandidatePage(orgId: string, opts: CandidateListQuery)
       : sort === "experience" ? tx`x.experience_months desc nulls last, x.created_at desc`
       : archived ? tx`x.archived_at desc` : tx`x.created_at desc`;
     const stageFilter = opts.stage ? tx`and x.stage = ${opts.stage}` : tx``;
-    const limit = opts.board ? BOARD_LIMIT * STAGE_GROUPS.length : PAGE_SIZE;
-    const offset = opts.board ? 0 : (page - 1) * PAGE_SIZE;
+    const limit = opts.board ? BOARD_LIMIT * STAGE_GROUPS.length : size;
+    const offset = opts.board ? 0 : (page - 1) * size;
     const rows = await tx<(Omit<CandidateListRow, "skills" | "other_jobs"> & { skills_json: unknown; job_count: number })[]>`
       select * from ${base} ${stageFilter} order by ${order} limit ${limit} offset ${offset}`;
     const counts = await tx<{ stage: StageGroup; n: number }[]>`select x.stage, count(*)::int as n from ${base} group by x.stage`;
@@ -130,7 +131,7 @@ export async function listCandidatePage(orgId: string, opts: CandidateListQuery)
       rows: rows.map(({ skills_json, job_count, ...r }) => ({
         ...r, skills: Array.isArray(skills_json) ? (skills_json as string[]).slice(0, 6) : [], other_jobs: Math.max(0, job_count - 1),
       })) as CandidateListRow[],
-      byStage, allStages, total, page, pageSize: PAGE_SIZE, jobs, reasons, archivedCount: archived_count, activeCount: active_count,
+      byStage, allStages, total, page, pageSize: size, jobs, reasons, archivedCount: archived_count, activeCount: active_count,
     };
   });
 }

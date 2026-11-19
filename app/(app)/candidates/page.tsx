@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { Archive, LayoutGrid, List, Loader2, Users } from "lucide-react";
 import { PageHeader } from "@/components/common/page-header";
-import { Pagination } from "@/components/common/pagination";
+import { CandidatePager } from "@/components/candidates/candidate-pager";
 import { SearchBar } from "@/components/common/search-bar";
 import { EmptyState } from "@/components/common/states";
 import { CandidateBoard, CandidateRow, STAGE_STYLE } from "@/components/candidates/candidate-list";
@@ -30,9 +30,10 @@ export default async function CandidatesPage(props: PageProps<"/candidates">) {
   const archived = one(sp.archived) === "1";
   const board = one(sp.view) === "board";
   const page = Number(one(sp.page) ?? 1) || 1;
+  const size = [5, 10, 25].find((n) => String(n) === one(sp.size)) ?? 5;
   const canEdit = can(auth.role, "candidate:write");
   const [data, activeJobs] = await Promise.all([
-    listCandidatePage(auth.orgId, { q, jobId, stage, sort, archived, page, board }),
+    listCandidatePage(auth.orgId, { q, jobId, stage, sort, archived, page, board, size }),
     canEdit ? listJobs(auth.orgId, { status: "active" }) : Promise.resolve([]),
   ]);
 
@@ -44,7 +45,7 @@ export default async function CandidatesPage(props: PageProps<"/candidates">) {
   // Links keep the other choices; changing job, stage or view starts from page 1.
   const href = (patch: Record<string, string | undefined>) => {
     const p = new URLSearchParams();
-    const cur: Record<string, string | undefined> = { q, job: jobId, stage, sort: sort === "new" ? undefined : sort, archived: archived ? "1" : undefined, view: board ? "board" : undefined };
+    const cur: Record<string, string | undefined> = { q, job: jobId, stage, sort: sort === "new" ? undefined : sort, archived: archived ? "1" : undefined, view: board ? "board" : undefined, size: size !== 5 ? String(size) : undefined };
     for (const [k, v] of Object.entries({ ...cur, ...patch })) if (v) p.set(k, v);
     const s = p.toString();
     return `/candidates${s ? `?${s}` : ""}`;
@@ -149,8 +150,7 @@ export default async function CandidatesPage(props: PageProps<"/candidates">) {
             {canEdit && <span className={archived ? "w-24" : "w-8"} />}
           </div>
           <ul className="divide-y">{data.rows.map((r) => <CandidateRow key={r.id} r={r} canEdit={canEdit} />)}</ul>
-          <Pagination page={data.page} pageSize={data.pageSize} total={data.total} basePath="/candidates"
-            params={{ q, job: jobId, stage, sort: sort === "new" ? undefined : sort, archived: archived ? "1" : undefined }} />
+          <Suspense><CandidatePager page={data.page} pageSize={data.pageSize} total={data.total} /></Suspense>
         </div>
       )}
     </>

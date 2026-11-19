@@ -52,7 +52,7 @@ test("recruiter to candidate to report", async ({ page, browser }) => {
   await expect(page.getByRole("heading", { name: /Senior Full Stack Engineer/ })).toBeVisible();
 
   // 3. Invite a new candidate with a resume
-  await page.getByRole("button", { name: "Invite candidate" }).click();
+  await page.getByRole("button", { name: "Add candidate" }).click();
   await page.getByLabel("Full name").fill("Taylor Morgan");
   await page.getByRole("textbox", { name: "Email" }).fill(candidateEmail);
   await page.locator("#inv-file").setInputFiles(path.join(__dirname, "fixtures/resume.txt"));

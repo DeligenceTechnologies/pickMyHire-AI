@@ -11,8 +11,8 @@ import { cn } from "@/lib/utils";
  * Previous / Next through the filtered applications list without going back to it.
  * Keys: J or → next, K or ← previous, Esc back to the list (ignored while typing or in a dialog).
  */
-export function ApplicationNav({ prevHref, nextHref, listHref, position, total, label, inList }: {
-  prevHref: string | null; nextHref: string | null; listHref: string;
+export function ApplicationNav({ prevHref, nextHref, listHref, position, total, label, inList, noun = ["application", "applications"] }: {
+  prevHref: string | null; nextHref: string | null; listHref: string; noun?: [string, string];
   position: number; total: number; label: string; inList: boolean;
 }) {
   const router = useRouter();
@@ -34,11 +34,11 @@ export function ApplicationNav({ prevHref, nextHref, listHref, position, total, 
   const nav = cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1");
   const off = cn(nav, "pointer-events-none opacity-50");
   return (
-    <nav aria-label="Applications in this list" className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card px-4 py-2.5 text-sm">
+    <nav aria-label={`${noun[1][0].toUpperCase()}${noun[1].slice(1)} in this list`} className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card px-4 py-2.5 text-sm">
       <p className="text-muted-foreground">
         {inList
-          ? <><span className="font-medium text-foreground tabular">{position} of {total}</span> {total === 1 ? "application" : "applications"}</>
-          : <><span className="font-medium text-foreground">No longer in this list</span> · {total} {total === 1 ? "application" : "applications"}</>}
+          ? <><span className="font-medium text-foreground tabular">{position} of {total}</span> {total === 1 ? noun[0] : noun[1]}</>
+          : <><span className="font-medium text-foreground">No longer in this list</span> · {total} {total === 1 ? noun[0] : noun[1]}</>}
         {label && <> · {label}</>}
       </p>
       <div className="flex items-center gap-2">

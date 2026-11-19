@@ -144,11 +144,15 @@ test("round decisions, human interview and shortlist", async ({ page }) => {
 
   // Job page pipeline.
   await page.goto(`/jobs/${jobId}`);
-  const pipeline = page.locator("section", { has: page.getByRole("heading", { name: /^Candidates/ }) });
-  await pipeline.getByRole("tab", { name: /Shortlisted/ }).click();
+  const pipeline = page.locator("section", { has: page.getByRole("heading", { name: "Candidate pipeline" }) });
+  const stage = async (name: RegExp) => {
+    await pipeline.getByRole("button", { name: /^Stage:/ }).click();
+    await page.getByRole("menuitem", { name }).click();
+  };
+  await stage(/Shortlisted/);
   await expect(pipeline.getByRole("link", { name: /Hana Kim/ })).toBeVisible();
   if (process.env.E2E_SCREENSHOTS) await page.screenshot({ path: "test-results/hiring-6-job-pipeline.png", fullPage: true });
 
-  await pipeline.getByRole("tab", { name: /In progress/ }).click();
-  await expect(pipeline.getByText("No candidates in progress.", { exact: false })).toBeVisible();
+  await stage(/Interviewing/);
+  await expect(pipeline.getByText("No one is in Interviewing.")).toBeVisible();
 });

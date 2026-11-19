@@ -85,19 +85,25 @@ test("public application with AI screening", async ({ page, browser }) => {
 
   await page.reload();
   await expect(page.getByRole("link", { name: "Morgan Applicant" })).toBeVisible();
-  // The screening result ("3/4 requirements"), not the job's "Parsed requirements" heading.
-  await expect(page.getByText(/^\d+\/\d+ requirements$/).first()).toBeVisible({ timeout: 90_000 });
-  // The fit check: 13 LPA against a 12 LPA budget is marked to check; 11 LPA fits.
+  // The screening result, shown in the Match column as e.g. "Partial 3/4".
   const morganRow = page.getByRole("row", { name: /Morgan Applicant/ });
+  await expect(morganRow.getByText(/^\d+\/\d+$/)).toBeVisible({ timeout: 90_000 });
+  // The fit check: 13 LPA against a 12 LPA budget is marked to check; 11 LPA fits.
   await expect(morganRow.getByText("Check limits")).toBeVisible();
   await expect(page.getByRole("row", { name: /Riley Applicant/ }).getByText("Fits limits")).toBeVisible();
   if (process.env.E2E_SCREENSHOTS) await page.screenshot({ path: "test-results/applications-fit.png", fullPage: true });
-  // Bulk invite: select Riley and invite in one go.
+  // Bulk invite: show "To invite", select Riley and invite in one go.
+  const stage = async (name: RegExp) => {
+    await page.getByRole("button", { name: /^Stage:/ }).click();
+    await page.getByRole("menuitem", { name }).click();
+  };
+  await stage(/To invite/);
   await page.getByRole("checkbox", { name: "Select Riley Applicant" }).check();
-  await page.getByRole("button", { name: "Invite selected to AI interview" }).click();
+  await page.getByRole("button", { name: "Invite to AI interview" }).click();
   await page.getByRole("dialog").getByRole("checkbox").uncheck(); // don't email in tests
   await page.getByRole("dialog").getByRole("button", { name: "Invite" }).click();
-  await expect(page.getByRole("row", { name: /Riley Applicant/ }).getByText("Interview invited")).toBeVisible();
+  await stage(/All active/);
+  await expect(page.getByRole("row", { name: /Riley Applicant/ }).getByText("Invited").first()).toBeVisible();
 
   await page.getByRole("link", { name: "Morgan Applicant" }).click();
   await expect(page.getByRole("heading", { name: /AI screening/ })).toBeVisible();

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Briefcase, ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { STAGE_GROUP_LABEL, STAGE_GROUPS, STAGE_STYLE, type StageCounts } from "@/lib/candidates/stages";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 export type JobChoice = { id: string | null; title: string; n: number; href: string; closed?: boolean; stages: StageCounts };
@@ -60,28 +61,44 @@ function JobCard({ job, on }: { job: JobChoice; on: boolean }) {
   const total = STAGE_GROUPS.reduce((a, s) => a + job.stages[s], 0);
   const summary = STAGE_GROUPS.filter((s) => job.stages[s]).map((s) => `${job.stages[s]} ${STAGE_GROUP_LABEL[s].toLowerCase()}`).join(", ");
   return (
-    <Link href={job.href} role="listitem" aria-current={on ? "page" : undefined} title={`${job.title}${summary ? `: ${summary}` : ""}`}
-      className={cn("group relative w-52 shrink-0 snap-start overflow-hidden rounded-xl border px-3.5 py-3 transition-all duration-200",
-        on
-          ? "border-transparent bg-gradient-to-br from-primary to-indigo-700 text-primary-foreground shadow-lg shadow-primary/30"
-          : "border-border/70 bg-card shadow-sm hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-md")}>
-      {/* soft light in the corner of the selected card */}
-      {on && <span className="pointer-events-none absolute -top-8 -right-8 size-20 rounded-full bg-white/15 blur-xl" aria-hidden />}
-      <span className="relative flex items-center gap-1.5">
-        {job.id === null && <Briefcase className={cn("size-3.5 shrink-0", on ? "text-white/90" : "text-primary")} aria-hidden />}
-        <span className={cn("truncate text-[13.5px] font-semibold tracking-tight", !on && "text-foreground group-hover:text-primary")}>{job.title}</span>
-        {job.closed && <span className={cn("shrink-0 rounded px-1 text-[10px]", on ? "bg-white/20" : "bg-muted text-muted-foreground")}>Closed</span>}
-      </span>
-      <span className={cn("relative mt-0.5 block text-xs tabular", on ? "text-white/80" : "text-muted-foreground")}>
-        <b className={cn("font-semibold", on ? "text-white" : "text-foreground")}>{job.n}</b> {job.n === 1 ? "candidate" : "candidates"}
-      </span>
-      <span className={cn("relative mt-2.5 flex h-2 gap-0.5 overflow-hidden rounded-full", on ? "bg-white/20" : "bg-muted")} aria-hidden>
-        {total > 0 && STAGE_GROUPS.map((s) => job.stages[s]
-          ? <span key={s} className={cn("h-full first:rounded-l-full last:rounded-r-full", on && s === "in_progress" ? "bg-white" : STAGE_STYLE[s].bar)} style={{ width: `${(job.stages[s] / total) * 100}%` }} />
-          : null)}
-      </span>
-      <span className="sr-only">{summary}</span>
-    </Link>
+    <Tooltip>
+      <TooltipTrigger delay={250} render={
+        <Link href={job.href} role="listitem" aria-current={on ? "page" : undefined}
+          className={cn("group relative w-52 shrink-0 snap-start overflow-hidden rounded-xl border px-3.5 py-3 transition-all duration-200",
+            on
+              ? "border-transparent bg-gradient-to-br from-primary to-indigo-700 text-primary-foreground shadow-lg shadow-primary/30"
+              : "border-border/70 bg-card shadow-sm hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-md")} />
+      }>
+        {/* soft light in the corner of the selected card */}
+        {on && <span className="pointer-events-none absolute -top-8 -right-8 size-20 rounded-full bg-white/15 blur-xl" aria-hidden />}
+        <span className="relative flex items-center gap-1.5">
+          {job.id === null && <Briefcase className={cn("size-3.5 shrink-0", on ? "text-white/90" : "text-primary")} aria-hidden />}
+          <span className={cn("truncate text-[13.5px] font-semibold tracking-tight", !on && "text-foreground group-hover:text-primary")}>{job.title}</span>
+          {job.closed && <span className={cn("shrink-0 rounded px-1 text-[10px]", on ? "bg-white/20" : "bg-muted text-muted-foreground")}>Closed</span>}
+        </span>
+        <span className={cn("relative mt-0.5 block text-xs tabular", on ? "text-white/80" : "text-muted-foreground")}>
+          <b className={cn("font-semibold", on ? "text-white" : "text-foreground")}>{job.n}</b> {job.n === 1 ? "candidate" : "candidates"}
+        </span>
+        <span className={cn("relative mt-2.5 flex h-2 gap-0.5 overflow-hidden rounded-full", on ? "bg-white/20" : "bg-muted")} aria-hidden>
+          {total > 0 && STAGE_GROUPS.map((s) => job.stages[s]
+            ? <span key={s} className={cn("h-full first:rounded-l-full last:rounded-r-full", on && s === "in_progress" ? "bg-white" : STAGE_STYLE[s].bar)} style={{ width: `${(job.stages[s] / total) * 100}%` }} />
+            : null)}
+        </span>
+        <span className="sr-only">{summary}</span>
+      </TooltipTrigger>
+      {/* What each colour in the bar means, with this job's numbers */}
+      <TooltipContent side="bottom" sideOffset={8} className="min-w-52 flex-col items-stretch gap-1.5 px-3.5 py-3">
+        <span className="max-w-60 truncate font-semibold">{job.title}</span>
+        <span className="mb-0.5 text-[11px] opacity-70">What the colours in the bar mean</span>
+        {STAGE_GROUPS.map((s) => (
+          <span key={s} className={cn("flex items-center gap-2", !job.stages[s] && "opacity-50")}>
+            <span className={cn("size-2.5 shrink-0 rounded-full", STAGE_STYLE[s].bar)} aria-hidden />
+            <span className="flex-1">{STAGE_GROUP_LABEL[s]}</span>
+            <span className="font-semibold tabular">{job.stages[s]}</span>
+          </span>
+        ))}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 

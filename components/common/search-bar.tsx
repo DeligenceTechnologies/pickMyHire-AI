@@ -4,6 +4,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Pick } from "@/components/common/list-controls";
 
 /** URL-driven search + filter controls (server components read searchParams). */
 export function SearchBar({ placeholder, filters = [] }: { placeholder: string; filters?: { name: string; label: string; options: { value: string; label: string }[] }[] }) {
@@ -35,16 +36,8 @@ export function SearchBar({ placeholder, filters = [] }: { placeholder: string; 
         <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={placeholder} className="h-9 pl-8" aria-label="Search" />
       </div>
       {filters.map((f) => (
-        <select
-          key={f.name}
-          aria-label={f.label}
-          value={sp.get(f.name) ?? ""}
-          onChange={(e) => push({ [f.name]: e.target.value })}
-          className="h-9 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-        >
-          <option value="">{f.label}</option>
-          {f.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
+        <Pick key={f.name} label={f.label} value={sp.get(f.name) ?? ""} onChange={(v) => push({ [f.name]: v })} className="h-9"
+          options={[["", f.label], ...f.options.map((o) => [o.value, o.label] as [string, string])]} />
       ))}
     </div>
   );

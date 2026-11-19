@@ -22,10 +22,10 @@ const AVATAR = [
   "bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-200", "bg-pink-100 text-pink-800 dark:bg-pink-950 dark:text-pink-200",
   "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200", "bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-200",
 ];
-const avatarTone = (id: string) => AVATAR[parseInt(id.slice(0, 2), 16) % AVATAR.length];
+export const avatarTone = (id: string) => AVATAR[parseInt(id.slice(0, 2), 16) % AVATAR.length];
 
 /** Resume vs job as a coloured pill: level, and requirements met when known. */
-export function MatchCell({ r }: { r: CandidateListRow }) {
+export function MatchCell({ r }: { r: Pick<CandidateListRow, "job_id" | "match_level" | "match_status" | "match_met" | "match_total"> }) {
   if (!r.job_id) return <span className="text-xs text-muted-foreground">—</span>;
   if (!r.match_level) {
     if (r.match_status === "pending" || r.match_status === "processing") {
@@ -45,7 +45,7 @@ export function MatchCell({ r }: { r: CandidateListRow }) {
 }
 
 /** Total experience from the resume dates, with a warning icon when some dates need a look. */
-export function ExperienceCell({ r }: { r: CandidateListRow }) {
+export function ExperienceCell({ r }: { r: Pick<CandidateListRow, "experience_months" | "experience_approximate" | "experience_flags" | "has_resume" | "parse_status"> }) {
   const flags = r.experience_flags ?? [];
   if (r.experience_months === null && !flags.length) {
     return <span className="text-xs text-muted-foreground">{r.has_resume ? (r.parse_status === "completed" ? "—" : "Reading…") : "No resume"}</span>;

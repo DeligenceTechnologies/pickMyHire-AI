@@ -10,16 +10,13 @@ import { can } from "@/lib/auth/permissions";
 import { requireAuth } from "@/lib/auth/session";
 import { formatDate } from "@/lib/format";
 import { isUuid } from "@/lib/ids";
-import { getApplication, listApplications } from "@/lib/services/applications";
+import { getApplication } from "@/lib/services/applications";
+import { jobListNav } from "@/lib/services/job-candidates";
 import { ApplicationNav } from "@/components/applications/application-nav";
-import { FIT_LABEL } from "@/lib/application-form";
-import {
-  APPLICATIONS_PAGE_SIZE, applicationFiltersQuery, describeApplicationFilters, filterApplications, matchesApplicationFilters, parseApplicationFilters, withQuery,
-} from "@/lib/applications/filters";
 import { getHrPanel } from "@/lib/services/candidate-notes";
 import { HrPanel } from "@/components/candidates/hr-panel";
 import { AnswersCard } from "@/components/applications/answers-card";
-import { answersForCandidate, fitForJob } from "@/lib/services/application-answers";
+import { answersForCandidate } from "@/lib/services/application-answers";
 import { matchLevelLabel } from "@/lib/validation/ai-schemas";
 
 export const metadata = { title: "Application" };
@@ -37,24 +34,12 @@ export default async function ApplicationPage(props: PageProps<"/jobs/[jobId]/ap
   if (!isUuid(jobId) || !isUuid(applicationId)) notFound();
   const a = await getApplication(auth.orgId, applicationId);
   if (!a || a.job_id !== jobId) notFound();
-  const [hr, answers, all, fits] = await Promise.all([
+  const [hr, answers, nav] = await Promise.all([
     getHrPanel(auth.orgId, a.candidate_id), answersForCandidate(auth.orgId, a.candidate_id),
-    listApplications(auth.orgId, jobId), fitForJob(auth.orgId, jobId),
+    // Previous / Next walk the same filtered, sorted list the job page shows.
+    jobListNav(auth.orgId, jobId, await props.searchParams, a.candidate_id),
   ]);
-  // Previous / Next walk the same filtered, sorted list the job page shows (same filter code, same order).
-  const filters = parseApplicationFilters(await props.searchParams);
-  const query = applicationFiltersQuery(filters);
-  const rows = all.map((r) => ({ ...r, fit: fits.get(r.candidate_id) ?? { level: "none" as const, items: [] } }));
-  const list = filterApplications(rows, filters, a.id); // keeps this one in place even if it no longer matches
-  const at = list.findIndex((r) => r.id === a.id);
-  const inList = matchesApplicationFilters(rows[rows.findIndex((r) => r.id === a.id)] ?? { ...a, fit: { level: "none" } }, filters);
-  const total = inList ? list.length : list.length - 1;
-  const href = (id: string) => withQuery(`/jobs/${jobId}/applications/${id}`, query);
-  const prev = at > 0 ? list[at - 1] : null;
-  const next = at >= 0 && at < list.length - 1 ? list[at + 1] : null;
-  // Back to the page of the list this application sits on.
-  const listPage = Math.floor(Math.max(0, at) / APPLICATIONS_PAGE_SIZE) + 1;
-  const listHref = withQuery(`/jobs/${jobId}`, [query, listPage > 1 ? `page=${listPage}` : ""].filter(Boolean).join("&"));
+  const listHref = nav?.listHref ?? `/jobs/${jobId}`;
   const s = a.screening;
   const busy = a.screening_status === "pending" || a.screening_status === "processing";
   const capped = s && s.ai_match_level !== a.match_level;
@@ -72,10 +57,7 @@ export default async function ApplicationPage(props: PageProps<"/jobs/[jobId]/ap
         actions={<ApplicationActions id={a.id} status={a.status} interviewId={a.interview_id} interviewStatus={a.interview_status} canWrite={can(auth.role, "candidate:write")} canInvite={can(auth.role, "interview:write")}
           jobId={a.job_id} candidateId={a.candidate_id} candidateName={a.candidate_name} />}
       />
-      {total + (inList ? 0 : 1) > 1 && (
-        <ApplicationNav prevHref={prev ? href(prev.id) : null} nextHref={next ? href(next.id) : null} listHref={listHref}
-          position={at + 1} total={total} inList={inList} label={describeApplicationFilters(filters, FIT_LABEL, APPLICATION_STATUS)} />
-      )}
+      {nav && (nav.prevHref || nav.nextHref) && <ApplicationNav {...nav} noun={["candidate", "candidates"]} />}
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <AnswersCard candidateId={a.candidate_id} items={answers.filter((x) => x.job_id === a.job_id)} canEdit={can(auth.role, "candidate:write")} />

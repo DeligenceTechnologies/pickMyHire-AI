@@ -18,11 +18,13 @@ import { formatDate } from "@/lib/format";
 import { formatInZone } from "@/lib/hiring";
 import { isUuid } from "@/lib/ids";
 import { getCandidate } from "@/lib/services/candidates";
-import { listJobs } from "@/lib/services/jobs";
+import { getJob, listJobs } from "@/lib/services/jobs";
 import { CandidatePipelines } from "@/components/hiring/candidate-pipeline";
 import { env } from "@/lib/env";
 import { listPanelCandidates } from "@/lib/services/human-interviews";
 import { getCandidatePipelines } from "@/lib/services/pipeline";
+import { jobListNav } from "@/lib/services/job-candidates";
+import { ApplicationNav } from "@/components/applications/application-nav";
 import { summariesForPipelines } from "@/lib/services/candidate-summary";
 import { getHrPanel } from "@/lib/services/candidate-notes";
 import { HrPanel } from "@/components/candidates/hr-panel";
@@ -47,11 +49,16 @@ export default async function CandidatePage(props: PageProps<"/candidates/[candi
   const summaries = Object.fromEntries([...summaryRows].map(([jobId, r]) => [jobId, { status: r.status, summary: r.summary, source: "source" in r ? r.source : null }]));
   const parsing = c.parse_status === "pending" || c.parse_status === "processing";
   const canWrite = can(auth.role, "candidate:write");
+  // Opened from a job's candidate list: Previous / Next through that list, and Back to it.
+  const sp = await props.searchParams;
+  const fromJob = typeof sp.job === "string" && isUuid(sp.job) ? sp.job : null;
+  const nav = fromJob ? await jobListNav(auth.orgId, fromJob, sp, candidateId) : null;
+  const fromJobTitle = nav ? pipelines.find((p) => p.job_id === fromJob)?.job_title ?? (await getJob(auth.orgId, fromJob!))?.title ?? "Job" : null;
   return (
     <>
       <AutoRefresh active={parsing || [...summaryRows.values()].some((r) => r.status === "processing")} />
       <PageHeader
-        back={{ href: "/candidates", label: "Candidates" }}
+        back={nav ? { href: nav.listHref, label: fromJobTitle! } : { href: "/candidates", label: "Candidates" }}
         title={c.name}
         meta={<>
           <span className="inline-flex items-center gap-1"><Mail className="size-3.5" />{c.email}</span>
@@ -66,6 +73,7 @@ export default async function CandidatePage(props: PageProps<"/candidates/[candi
             : <a href="#resume" title="The interview is planned from the resume" className={buttonVariants({ variant: "outline" })}><Upload /> Upload resume to invite</a>)}
         </>}
       />
+      {nav && (nav.prevHref || nav.nextHref) && <ApplicationNav {...nav} noun={["candidate", "candidates"]} />}
       {c.archived_at && (
         <p className="mb-6 flex items-center gap-2 rounded-xl border bg-muted/40 px-4 py-3 text-sm">
           <Archive className="size-4 shrink-0 text-muted-foreground" aria-hidden />

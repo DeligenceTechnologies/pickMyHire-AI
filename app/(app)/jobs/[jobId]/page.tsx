@@ -1,12 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { BarChart3, Loader2, MapPin, Sparkles, Users } from "lucide-react";
+import { BarChart3, ChevronDown, FileText, Loader2, MapPin, Sparkles, Users } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { AutoRefresh } from "@/components/common/auto-refresh";
 import { PageHeader } from "@/components/common/page-header";
 import { StatusBadge } from "@/components/common/status-badge";
 import { EmptyState } from "@/components/common/states";
-import { InviteDialog } from "@/components/interview/invite-dialog";
 import { InterviewTable } from "@/components/interviews/interview-table";
 import { JobActions } from "@/components/jobs/job-actions";
 import { can } from "@/lib/auth/permissions";
@@ -16,12 +15,13 @@ import { isUuid } from "@/lib/ids";
 import { countCompletedInterviews, listInterviews } from "@/lib/services/interviews";
 import { getJob } from "@/lib/services/jobs";
 import { listRounds } from "@/lib/services/rounds";
-import { applyUrl, listApplications } from "@/lib/services/applications";
+import { applyUrl } from "@/lib/services/applications";
 import { ApplyLinkCard } from "@/components/applications/apply-link-card";
-import { ApplicationsTable } from "@/components/applications/applications-table";
 import { fitForJob } from "@/lib/services/application-answers";
-import { JobPipeline } from "@/components/hiring/job-pipeline";
-import { getJobPipeline } from "@/lib/services/pipeline";
+import { JobCandidates } from "@/components/jobs/job-candidates";
+import { JobStats } from "@/components/jobs/job-stats";
+import { listJobCandidates } from "@/lib/services/job-candidates";
+import type { Fit } from "@/lib/application-form";
 
 export default async function JobPage(props: PageProps<"/jobs/[jobId]">) {
   const auth = await requireAuth();
@@ -30,16 +30,14 @@ export default async function JobPage(props: PageProps<"/jobs/[jobId]">) {
   const job = await getJob(auth.orgId, jobId);
   if (!job) notFound();
   const canSeeCandidates = can(auth.role, "candidate:view");
-  const [interviews, completedCount, applications, rounds, pipeline] = await Promise.all([
-    listInterviews(auth.orgId, { jobId }),
+  const [interviews, completedCount, rounds, people] = await Promise.all([
+    canSeeCandidates ? Promise.resolve({ rows: [], total: 0 }) : listInterviews(auth.orgId, { jobId }),
     countCompletedInterviews(auth.orgId, jobId),
-    canSeeCandidates ? listApplications(auth.orgId, jobId) : Promise.resolve([]),
     listRounds(auth.orgId, jobId),
-    canSeeCandidates ? getJobPipeline(auth.orgId, jobId) : Promise.resolve(null),
+    canSeeCandidates ? listJobCandidates(auth.orgId, jobId) : Promise.resolve(null),
   ]);
-  const fits = canSeeCandidates ? await fitForJob(auth.orgId, jobId) : new Map();
-  const screening = applications.some((a) => a.screening_status === "pending" || a.screening_status === "processing");
-  const newCount = applications.filter((a) => a.status === "new").length;
+  const fits = canSeeCandidates ? await fitForJob(auth.orgId, jobId) : new Map<string, Fit>();
+  const screening = !!people?.rows.some((r) => r.match_status === "pending" || r.match_status === "processing");
   const req = job.parsed_requirements;
   const parsing = job.parse_status === "pending" || job.parse_status === "processing";
   return (
@@ -56,50 +54,41 @@ export default async function JobPage(props: PageProps<"/jobs/[jobId]">) {
         </>}
         actions={can(auth.role, "job:write") && <JobActions jobId={job.id} status={job.status} />}
       />
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
-          {canSeeCandidates && (
-          <section className="rounded-xl border bg-card">
-            <div className="flex items-center justify-between border-b px-5 py-4">
-              <h2 className="font-semibold">Applications <span className="ml-1 text-sm font-normal text-muted-foreground">{applications.length}</span>
-                {newCount > 0 && <span className="ml-2 rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground">{newCount} new</span>}
-              </h2>
-              <span className="text-xs text-muted-foreground">AI tags help prioritise review — they are not decisions.</span>
-            </div>
-            <ApplicationsTable canInvite={can(auth.role, "interview:write") && job.status !== "closed"}
-              rows={applications.map((a) => ({ ...a, created_at: a.created_at.toISOString(), fit: fits.get(a.candidate_id) ?? { level: "none" as const, items: [] } }))} />
-          </section>
-          )}
-          {pipeline && pipeline.rows.length > 0 && (
+      {people && <JobStats jobId={job.id} rows={people.rows} interviews={people.interviewCount} />}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="min-w-0 space-y-6 lg:col-span-2">
+          {canSeeCandidates ? (
+            <JobCandidates jobId={job.id} completedCount={completedCount} canInvite={can(auth.role, "interview:write") && job.status !== "closed"}
+              rows={people!.rows.map((r) => ({
+                ...r, added_at: r.added_at.toISOString(), last_activity: r.last_activity.toISOString(), fit: fits.get(r.id)?.level ?? "none",
+                results: r.results.map((x) => ({ ...x, entry: x.entry && { kind: x.entry.kind, id: x.entry.id, status: x.entry.status } })),
+              }))} />
+          ) : (
             <section className="rounded-xl border bg-card">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b px-5 py-4">
-                <h2 className="font-semibold">Candidates <span className="ml-1 text-sm font-normal text-muted-foreground">{pipeline.rows.length}</span></h2>
-                <span className="text-xs text-muted-foreground">Open a candidate to mark rounds and shortlist.</span>
+                <h2 className="font-semibold">AI interviews <span className="ml-1 text-sm font-normal text-muted-foreground">{interviews.total}</span></h2>
+                {completedCount > 1 && <Link href={`/jobs/${job.id}/compare`} className={buttonVariants({ variant: "outline" })}><BarChart3 /> Compare</Link>}
               </div>
-              <JobPipeline rounds={pipeline.rounds} rows={pipeline.rows} />
+              {interviews.rows.length ? <InterviewTable rows={interviews.rows} hideJob showRound /> : (
+                <div className="p-5"><EmptyState icon={Users} title="No interviews yet" description="Interviews for this job will show here." /></div>
+              )}
             </section>
           )}
-          <section className="rounded-xl border bg-card">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b px-5 py-4">
-              <h2 className="font-semibold">AI interviews <span className="ml-1 text-sm font-normal text-muted-foreground">{interviews.total}</span></h2>
-              <div className="flex gap-2">
-                {completedCount > 1 && <Link href={`/jobs/${job.id}/compare`} className={buttonVariants({ variant: "outline" })}><BarChart3 /> Compare</Link>}
-                {can(auth.role, "interview:write") && job.status !== "closed" && <InviteDialog jobId={job.id} />}
-              </div>
+          <details className="group rounded-2xl border bg-card shadow-sm" open={!canSeeCandidates}>
+            <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
+              <FileText className="size-4.5 text-muted-foreground" aria-hidden />
+              <h2 className="font-semibold">Job description</h2>
+              <span className="ml-auto inline-flex items-center gap-1 text-sm font-medium text-primary">
+                <span className="group-open:hidden">View full description</span><span className="hidden group-open:inline">Hide description</span>
+                <ChevronDown className="size-4 transition-transform group-open:rotate-180" aria-hidden />
+              </span>
+            </summary>
+            <div className="border-t px-5 py-4">
+              {job.description ? <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">{job.description}</p> : <p className="text-sm text-muted-foreground">No description added.</p>}
             </div>
-            {interviews.rows.length ? <InterviewTable rows={interviews.rows} hideJob showRound /> : (
-              <div className="p-5"><EmptyState icon={Users} title="No candidates invited yet" description="Invite a candidate — upload their resume and the AI will tailor the interview to their experience." /></div>
-            )}
-            {interviews.total > interviews.rows.length && (
-              <div className="border-t px-5 py-3 text-sm"><Link className="text-primary hover:underline" href={`/interviews?jobId=${job.id}`}>View all {interviews.total} interviews</Link></div>
-            )}
-          </section>
-          <section className="rounded-xl border bg-card p-5">
-            <h2 className="mb-3 font-semibold">Job description</h2>
-            {job.description ? <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">{job.description}</p> : <p className="text-sm text-muted-foreground">No description added.</p>}
-          </section>
+          </details>
         </div>
-        <div className="space-y-6">
+        <div className="min-w-0 space-y-6">
           {canSeeCandidates && <ApplyLinkCard jobId={job.id} enabled={job.apply_enabled} url={job.apply_slug ? applyUrl(job.apply_slug) : null} jobActive={job.status === "active"} canEdit={can(auth.role, "job:write")} />}
           <section className="rounded-xl border bg-card p-5">
             <div className="mb-3 flex items-center justify-between">

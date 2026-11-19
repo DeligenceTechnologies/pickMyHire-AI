@@ -68,7 +68,7 @@ export type RoundResult = { round: PipelineRound; decision: Decision | null; sta
 
 const AI_DONE = ["completed", "processing", "report_ready"];
 
-function entriesSql(tx: Tx, where: ReturnType<Tx>) {
+export function entriesSql(tx: Tx, where: ReturnType<Tx>) {
   return tx<RoundEntry[]>`
     select * from (
       select 'ai' as kind, i.id, i.job_id, i.candidate_id, i.round_id, coalesce(i.round_name, 'Interview') as round_name, i.attempt,
