@@ -15,6 +15,7 @@ import { emptyChoice, type RoundChoice, RoundPicker } from "./round-picker";
 import { emptyValues, pruneErrors, QuestionFields, valuesFromAnswers, type AnswerValues } from "@/components/applications/question-fields";
 import { validateAnswers, type ApplicationForm } from "@/lib/application-form";
 import { BalanceNote, useBalance } from "@/components/billing/balance-note";
+import { MatchNote, type MatchInfo } from "@/components/candidates/match-note";
 
 type Option = { id: string; label: string; sub?: string };
 
@@ -51,6 +52,26 @@ export function InviteDialog({ jobId, candidateId, candidateName, jobs, triggerL
   const [answerErrors, setAnswerErrors] = useState<Record<string, string>>({});
   const existingId = candidateId ?? (mode === "existing" ? selectedCandidate : "");
   const balance = useBalance(open);
+  // Resume vs job: a low match needs a tick before inviting (a warning, never a block).
+  // Results are kept per candidate and job, so a stale one is never shown after either changes.
+  const matchKey = open && existingId && selectedJob && !link ? `${existingId}:${selectedJob}` : "";
+  const [found, setFound] = useState<{ key: string; match: MatchInfo }>({ key: "", match: null });
+  const [okKey, setOkKey] = useState("");
+  const [checkingNew, setCheckingNew] = useState(false);
+  const match = found.key === matchKey ? found.match : null;
+  const checking = checkingNew || (!!matchKey && found.key !== matchKey);
+  const lowOk = !!matchKey && okKey === matchKey;
+  const lowMatch = match?.level === "low_match" && !lowOk;
+
+  useEffect(() => {
+    if (!matchKey) return;
+    let live = true;
+    const [cid, job] = matchKey.split(":");
+    api<{ match: MatchInfo }>(`/api/candidates/${cid}/match`, { body: { jobId: job } })
+      .then((r) => live && setFound({ key: matchKey, match: r.match }))
+      .catch(() => live && setFound({ key: matchKey, match: null }));
+    return () => { live = false; };
+  }, [matchKey]);
 
   // The job's application questions: the person inviting fills them in from what the candidate told them.
   useEffect(() => {
@@ -113,7 +134,20 @@ export function InviteDialog({ jobId, candidateId, candidateName, jobs, triggerL
         fd.append("file", file);
         const res = await api<{ id: string }>("/api/candidates", { body: fd });
         cid = res.id;
-        await new Promise((r) => setTimeout(r, 400)); // let resume parsing begin before planning
+        // Check the new resume against the job before inviting. On a low match, the dialog switches to the
+        // (now existing) candidate and asks for a tick before inviting.
+        if (selectedJob) {
+          setCheckingNew(true);
+          const m = await api<{ match: MatchInfo }>(`/api/candidates/${cid}/match`, { body: { jobId: selectedJob } }).then((r) => r.match).catch(() => null).finally(() => setCheckingNew(false));
+          if (m?.level === "low_match") {
+            setFound({ key: `${cid}:${selectedJob}`, match: m });
+            setCandidates([{ id: cid, label: form.name, sub: form.email }]);
+            setSelectedCandidate(cid);
+            setMode("existing");
+            router.refresh();
+            return;
+          }
+        }
       }
       if (!cid) throw new ClientApiError("Select a candidate.", 400);
       if (!selectedJob) throw new ClientApiError("Select a job.", 400);
@@ -228,12 +262,13 @@ export function InviteDialog({ jobId, candidateId, candidateName, jobs, triggerL
                 <label className="flex items-center gap-2 text-sm">
                   <Checkbox checked={sendInvite} onCheckedChange={(c) => setSendInvite(!!c)} /> Email the invitation to the candidate now
                 </label>
+                <MatchNote match={match} checking={checking} jobTitle={jobs?.find((j) => j.id === selectedJob)?.label} confirmed={lowOk} onConfirm={(v) => setOkKey(v ? matchKey : "")} />
                 <BalanceNote balance={balance} minutes={choice.minutes} name={candidateName ?? (form.name.trim() || undefined)} />
                 {error && <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setOpen(false)} disabled={busy}>Cancel</Button>
-                <Button onClick={submit} disabled={busy || blocked}>{busy && <Loader2 className="animate-spin" />}{sendInvite ? "Send invitation" : "Create interview"}</Button>
+                <Button onClick={submit} disabled={busy || blocked || checking || lowMatch}>{busy && <Loader2 className="animate-spin" />}{sendInvite ? "Send invitation" : "Create interview"}</Button>
               </DialogFooter>
             </>
           )}

@@ -13,6 +13,7 @@ import { readSettings } from "./org-settings";
 import { assertCanInvite, COUNTED_STATUSES } from "./quota";
 import { isOpen, MAX_ROUNDS } from "./rounds";
 import { ensurePipeline, undoDeclinedReject } from "./pipeline";
+import { restoreOnInvite } from "./candidate-archive";
 
 export type InterviewListRow = {
   id: string;
@@ -191,6 +192,7 @@ export async function createInterview(orgId: string, userId: string, input: Crea
     // Whichever page the invite came from, an open (or earlier declined) application for this job is now handled,
     // and a candidate the declined application had put under Rejected is back in progress.
     await undoDeclinedReject(tx, orgId, userId, job.id, cand.id);
+    await restoreOnInvite(tx, orgId, cand.id, userId);
     await tx`update job_applications set interview_id = ${iv.id},
         status = case when status in ('new', 'declined') then 'interview_invited'::application_status else status end,
         reviewed_by = coalesce(reviewed_by, ${userId}), reviewed_at = coalesce(reviewed_at, now())

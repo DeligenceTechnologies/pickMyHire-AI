@@ -9,6 +9,14 @@ import { log } from "@/lib/logger";
 import { paths, storage } from "@/lib/storage";
 import type { ResumeProfile } from "@/lib/validation/ai-schemas";
 import { detectResumeKind, extractText } from "./document-text";
+import { calculateExperience } from "@/lib/resume/experience";
+import { refreshMatches } from "./candidate-match";
+import { ensurePipeline } from "./pipeline";
+
+/** Total experience from the resume's role dates, checked (the resume's own stated total is compared too). */
+export function experienceOf(profile: ResumeProfile | null) {
+  return calculateExperience(profile?.roles ?? [], { statedYears: profile?.years_experience ?? null });
+}
 
 export const CandidateInputSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(120),
@@ -26,6 +34,8 @@ export type CandidateRow = {
   parsed_profile: ResumeProfile | null;
   parse_status: "pending" | "processing" | "completed" | "failed" | null;
   parse_error: string | null;
+  archived_at?: Date | null;
+  archived_reason?: string | null;
   created_at: Date;
   updated_at: Date;
 };
@@ -88,9 +98,15 @@ export async function createCandidate(orgId: string, userId: string, input: Cand
  * Add a candidate with their resume (required). The file is checked first, so an unreadable resume adds
  * nobody; if storing it still fails, the new candidate is removed again.
  */
-export async function createCandidateWithResume(orgId: string, userId: string, input: CandidateInput, file: { name: string; bytes: Uint8Array }) {
+export async function createCandidateWithResume(orgId: string, userId: string, input: CandidateInput, file: { name: string; bytes: Uint8Array }, jobId: string | null = null) {
   await readResume(file);
+  if (jobId) {
+    const [job] = await withOrg(orgId, (tx) => tx`select 1 from jobs where id = ${jobId} and organization_id = ${orgId}`);
+    if (!job) throw new ApiError(404, "Job not found");
+  }
   const id = await createCandidate(orgId, userId, input);
+  // Added for a job: they join its pipeline (Not invited yet), and their resume is checked against it once analysed.
+  if (jobId) await withOrg(orgId, (tx) => ensurePipeline(tx, orgId, jobId, id));
   try {
     await uploadResume(orgId, userId, id, file);
   } catch (err) {
@@ -158,7 +174,10 @@ export async function parseCandidateResume(orgId: string, candidateId: string) {
   if (!c?.resume_text) throw new ApiError(400, "Upload a resume first.");
   try {
     const { profile } = await parseResume({ orgId, resumeText: c.resume_text });
-    await withOrg(orgId, (tx) => tx`update candidates set parsed_profile = ${json(profile)}, parse_status = 'completed' where id = ${candidateId}`);
+    const exp = experienceOf(profile);
+    await withOrg(orgId, (tx) => tx`update candidates set parsed_profile = ${json(profile)}, parse_status = 'completed',
+      experience_months = ${exp.months}, experience_approximate = ${exp.approximate}, experience_flags = ${json(exp.flags)} where id = ${candidateId}`);
+    runInBackground("candidate.match", () => refreshMatches(orgId, candidateId));
     return profile;
   } catch (err) {
     log.warn("resume.parse_failed", { candidateId, err });

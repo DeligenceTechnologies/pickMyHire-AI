@@ -15,6 +15,7 @@ import { detectResumeKind } from "./document-text";
 import { createInterview, type CreateInterviewInput } from "./interviews";
 import { checkAnswers, saveAnswersTx } from "./application-answers";
 import { DECLINED_NOTE, rejectInJob, undoDeclinedReject } from "./pipeline";
+import { jobRequirements, profileForScreening } from "./candidate-match";
 import { readForm, type ApplicationForm } from "@/lib/application-form";
 
 export type ApplicationStatus = "new" | "interview_invited" | "declined";
@@ -139,20 +140,14 @@ export async function screenApplication(orgId: string, applicationId: string) {
       c.parsed_profile, c.resume_text, a.cover_note`);
   if (!ctx) throw new ApiError(404, "Application not found");
   // Fall back to the recruiter-entered skills if the description hasn't been parsed.
-  const requirements: JobRequirements | null = ctx.parsed_requirements ?? (ctx.required_skills.length || ctx.preferred_skills.length ? {
-    summary: ctx.job_title,
-    skills: [...ctx.required_skills.map((name) => ({ name, importance: "required" as const })), ...ctx.preferred_skills.map((name) => ({ name, importance: "preferred" as const }))],
-    experience: { minimum_years: null, maximum_years: null },
-    responsibilities: [],
-    seniority: "unknown",
-  } : null);
+  const requirements = jobRequirements({ title: ctx.job_title, description: ctx.job_description, parsed_requirements: ctx.parsed_requirements, required_skills: ctx.required_skills, preferred_skills: ctx.preferred_skills });
   try {
     const { screening, source } = await screenApplicationAI({
       orgId,
       jobTitle: ctx.job_title,
       jobDescription: ctx.job_description,
       requirements,
-      profile: ctx.parsed_profile,
+      profile: profileForScreening(ctx.parsed_profile),
       resumeText: ctx.resume_text ?? "",
       coverNote: ctx.cover_note,
     });

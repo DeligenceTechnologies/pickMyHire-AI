@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Download, Loader2, Mail, Phone, Sparkles, Upload } from "lucide-react";
+import { Archive, Download, Loader2, Mail, Phone, Sparkles, Upload } from "lucide-react";
+import { ArchiveButton } from "@/components/candidates/archive-button";
 import { buttonVariants } from "@/components/ui/button";
 import { AutoRefresh } from "@/components/common/auto-refresh";
 import { PageHeader } from "@/components/common/page-header";
@@ -59,11 +60,18 @@ export default async function CandidatePage(props: PageProps<"/candidates/[candi
         </>}
         actions={<>
           <CandidateActions candidate={{ id: c.id, name: c.name, email: c.email, phone: c.phone }} canEdit={canWrite} canDelete={can(auth.role, "data:delete")} />
+          {canWrite && <ArchiveButton id={c.id} name={c.name} archived={!!c.archived_at} />}
           {jobs.length > 0 && (c.resume_file_path
             ? <InviteDialog candidateId={c.id} candidateName={c.name} jobs={jobs.map((j) => ({ id: j.id, label: j.title }))} triggerLabel="Invite to interview" />
             : <a href="#resume" title="The interview is planned from the resume" className={buttonVariants({ variant: "outline" })}><Upload /> Upload resume to invite</a>)}
         </>}
       />
+      {c.archived_at && (
+        <p className="mb-6 flex items-center gap-2 rounded-xl border bg-muted/40 px-4 py-3 text-sm">
+          <Archive className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+          <span><b>Archived</b>{c.archived_reason ? `: ${c.archived_reason}` : ""}. {c.name.split(" ")[0]} isn&apos;t in the active candidate list. Restore them, or invite them again, to bring them back.</span>
+        </p>
+      )}
       {pipelines.length > 0 && (
         <div className="mb-6 space-y-3">
           <h2 className="font-semibold">Hiring progress</h2>

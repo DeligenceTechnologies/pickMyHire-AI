@@ -9,7 +9,7 @@ export const GET = route(async (req) => {
   return listCandidates(auth.orgId, { q: sp.get("q") ?? undefined, jobId: sp.get("jobId") ?? undefined, page: Number(sp.get("page") ?? 1) });
 });
 
-/** Add a candidate: name, email, optional phone and their resume (required), as a form upload. */
+/** Add a candidate: name, email, optional phone, their resume (required) and optionally the job they're for, as a form upload. */
 export const POST = route(async (req) => {
   const auth = await requireApiAuth("candidate:write");
   const len = Number(req.headers.get("content-length") ?? 0);
@@ -25,6 +25,8 @@ export const POST = route(async (req) => {
   if (!(file instanceof File) || file.size === 0) {
     throw new ApiError(400, "Add the candidate's resume (PDF, DOCX or TXT).", "resume_required", [{ path: "file", message: "A resume is required." }]);
   }
-  const id = await createCandidateWithResume(auth.orgId, auth.userId, parsed.data, { name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) });
+  const jobId = text("jobId")?.trim() || null;
+  if (jobId && !/^[0-9a-f-]{36}$/i.test(jobId)) throw new ApiError(400, "Choose a valid job.");
+  const id = await createCandidateWithResume(auth.orgId, auth.userId, parsed.data, { name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) }, jobId);
   return { id };
 }, { rateLimit: { key: "candidate-create", limit: 120, windowMs: 60 * 60_000 } });

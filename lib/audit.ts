@@ -6,6 +6,7 @@ export type AuditAction =
   | "auth.signup" | "auth.login" | "team.invited" | "team.role_changed" | "team.removed" | "team.joined"
   | "job.created" | "job.updated" | "job.status_changed" | "job.parsed" | "job.deleted"
   | "candidate.created" | "candidate.updated" | "candidate.resume_uploaded" | "candidate.deleted" | "candidate.stage_changed"
+  | "candidate.archived" | "candidate.restored"
   | "candidate.hr_details_updated" | "candidate.answers_updated" | "candidate.note_added" | "candidate.note_updated" | "candidate.note_deleted"
   | "interview.decision"
   | "human_interview.scheduled" | "human_interview.rescheduled" | "human_interview.cancelled" | "human_interview.completed"

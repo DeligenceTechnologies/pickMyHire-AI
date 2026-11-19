@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { body, route } from "@/lib/api";
 import { requireApiAuth } from "@/lib/auth/session";
+import { runInBackground } from "@/lib/background";
+import { getMatch, matchCandidate } from "@/lib/services/candidate-match";
 import { createInterview, listInterviews } from "@/lib/services/interviews";
 import { RoundChoiceSchema } from "@/lib/validation/rounds";
 
@@ -23,5 +25,11 @@ const Schema = RoundChoiceSchema.extend({
 
 export const POST = route(async (req) => {
   const auth = await requireApiAuth("interview:write");
-  return createInterview(auth.orgId, auth.userId, await body(req, Schema));
+  const input = await body(req, Schema);
+  const result = await createInterview(auth.orgId, auth.userId, input);
+  // A candidate invited without applying gets the same resume-vs-job check as applicants (shown on the Candidates page).
+  runInBackground("candidate.match", async () => {
+    if (!(await getMatch(auth.orgId, input.candidateId, input.jobId))) await matchCandidate(auth.orgId, input.candidateId, input.jobId);
+  });
+  return result;
 }, { rateLimit: { key: "interview-create", limit: 120, windowMs: 60 * 60_000 } });

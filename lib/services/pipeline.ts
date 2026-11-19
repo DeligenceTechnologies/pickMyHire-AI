@@ -3,6 +3,7 @@ import { ApiError } from "@/lib/api";
 import { audit } from "@/lib/audit";
 import { json, withOrg, type Tx } from "@/lib/database/db";
 import type { Decision, Stage } from "@/lib/hiring";
+import { syncAutoArchive } from "./candidate-archive";
 
 // A candidate's progress in a job: each round (AI or human interview) is
 // marked Qualified / Not qualified / On hold by the team, and the overall
@@ -30,6 +31,7 @@ export async function rejectInJob(tx: Tx, orgId: string, userId: string, jobId: 
     where job_id = ${jobId} and candidate_id = ${candidateId} and organization_id = ${orgId} and stage in ('in_progress', 'shortlisted') returning stage`;
   if (!row) return false;
   await audit(tx, { orgId, userId, action: "candidate.stage_changed", entityType: "candidate", entityId: candidateId, metadata: { job_id: jobId, stage: "rejected", note: note.slice(0, 300), via } });
+  await syncAutoArchive(tx, orgId, candidateId, userId);
   return true;
 }
 
@@ -52,6 +54,7 @@ export async function undoDeclinedReject(tx: Tx, orgId: string, userId: string, 
       where job_id = ${jobId} and candidate_id = ${candidateId} and organization_id = ${orgId}`;
   }
   await audit(tx, { orgId, userId, action: "candidate.stage_changed", entityType: "candidate", entityId: candidateId, metadata: { job_id: jobId, stage: "in_progress", via: "application_reopened" } });
+  await syncAutoArchive(tx, orgId, candidateId, userId);
 }
 
 export type RoundEntry = {
@@ -207,5 +210,6 @@ export async function setStage(orgId: string, userId: string, input: { jobId: st
       orgId, userId, action: "candidate.stage_changed", entityType: "candidate", entityId: input.candidateId,
       metadata: { job_id: input.jobId, stage: input.stage, ...(note ? { note: note.slice(0, 300) } : {}) },
     });
+    await syncAutoArchive(tx, orgId, input.candidateId, userId);
   });
 }
