@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
-import { hasPurchaseAccess } from "@/lib/purchase-access";
-import { ContactBlock, Fill, LegalPage, type LegalSection } from "@/components/legal/legal-page";
+import { ContactBlock, LegalPage, SupportEmail, type LegalSection } from "@/components/legal/legal-page";
 import { LEGAL, TERMS_VERSION } from "@/lib/legal";
 import { getTrialSettings } from "@/lib/services/platform";
 import { getPricing } from "@/lib/services/pricing";
@@ -13,11 +11,9 @@ export const metadata: Metadata = {
 };
 
 export default async function TermsPage() {
-  // Drafts: hidden until launch, except for people testing with the purchase access code.
-  if (!(await hasPurchaseAccess())) notFound();
   const [pricing, trial] = await Promise.all([getPricing(), getTrialSettings()]);
   const P = LEGAL.productName;
-  const company = <Fill v={LEGAL.companyLegalName} label="legal company name" />;
+  const company = LEGAL.companyName;
 
   const sections: LegalSection[] = [
     { id: "agreement", title: "Agreement", body: <>
@@ -58,9 +54,9 @@ export default async function TermsPage() {
       {trial.enabled && <li><b>Free trial.</b> New accounts get {trial.interviews} free interviews. They have no cash value.</li>}
       <li><b>When an interview is used.</b> An interview is used when a candidate starts it, not when you invite them. If an interview ends before the candidate answers any question, it&apos;s returned to your balance automatically.</li>
       <li><b>Length.</b> An interview template up to {pricing.minutesPerInterview} minutes counts as one interview. A longer template counts as two, and you&apos;re asked to confirm this when you save it.</li>
-      <li><b>Validity.</b> Purchased interviews can be used for <Fill v={LEGAL.validityMonths} label="number of" /> months from purchase.</li>
+      <li><b>Validity.</b> Purchased interviews can be used for {LEGAL.validityMonths} months from purchase. Unused interviews then expire.</li>
       <li><b>Payment.</b> Payments are processed by Stripe. Prices exclude taxes unless shown otherwise; you pay any applicable taxes.</li>
-      <li><b>Refunds</b> are covered by our <Link href="/refunds">refund policy</Link>.</li>
+      <li><b>All purchases are final.</b> We don&apos;t refund payments. If an interview doesn&apos;t work because of a problem on our side, we add it back to your balance. See our <Link href="/refunds">refund policy</Link>.</li>
       <li><b>Price changes</b> apply to future purchases only, never to interviews you have already bought.</li>
     </ul> },
     { id: "data", title: "Your data and candidates' data", body: <>
@@ -69,12 +65,12 @@ export default async function TermsPage() {
         <li>For candidate data, you decide why and how it is used, and we process it on your behalf to provide {P}. Our <Link href="/privacy">Privacy Policy</Link> explains what we collect and which providers help us.</li>
         <li>We don&apos;t sell Customer Data, and we don&apos;t use it to train AI models.</li>
         <li><b>Retention.</b> Interview recordings are deleted after {pricing.recordingMonths} months (or sooner, if you set a shorter retention period in Settings). Reports, transcripts and decisions are kept while your account is active, and you can delete any candidate&apos;s data at any time.</li>
-        <li>If your organization needs a data processing agreement, contact <Fill v={LEGAL.privacyEmail} label="privacy email" />.</li>
+        <li>If your organization needs a data processing agreement, contact <SupportEmail />.</li>
       </ul>
     </> },
     { id: "ip", title: "Intellectual property", body: <p>We own {P}, including its software, design and content, apart from Customer Data. We give you a limited, non-transferable right to use {P} for your internal hiring while these Terms apply. If you send us feedback, we may use it freely to improve the service.</p> },
     { id: "third-party", title: "Third-party services", body: <p>{P} relies on trusted providers, for example for AI processing, hosting, email and payments. They are listed in our <Link href="/privacy#providers">Privacy Policy</Link>. We choose them carefully but aren&apos;t responsible for outages of services we don&apos;t control.</p> },
-    { id: "availability", title: "Availability and changes", body: <p>We work to keep {P} available and secure, but we can&apos;t promise it will always be uninterrupted or error-free. We may improve or change features over time. If we remove something important you have paid for, we&apos;ll give you reasonable notice and, where appropriate, a refund for unused interviews.</p> },
+    { id: "availability", title: "Availability and changes", body: <p>We work to keep {P} available and secure, but we can&apos;t promise it will always be uninterrupted or error-free. We may improve or change features over time. If we remove something important you have paid for, we&apos;ll give you reasonable notice and help you use the interviews you have left.</p> },
     { id: "disclaimer", title: "Disclaimers", body: <p>Apart from what these Terms say, {P} is provided &quot;as is&quot;. We don&apos;t guarantee any hiring outcome, or that AI outputs are complete or accurate. Nothing in these Terms limits rights you have under law that can&apos;t be limited.</p> },
     { id: "liability", title: "Limitation of liability", body: <>
       <p>To the extent the law allows:</p>
@@ -91,7 +87,7 @@ export default async function TermsPage() {
       <li>After closing, you can ask for an export of your data for 30 days. After that we delete it, except where the law requires us to keep it.</li>
     </ul> },
     { id: "changes", title: "Changes to these Terms", body: <p>We may update these Terms. For important changes we&apos;ll tell account owners by email or in the app at least 14 days before they apply, and ask you to accept the new version. The version in force is the one on this page (version {TERMS_VERSION}).</p> },
-    { id: "law", title: "Governing law", body: <p>These Terms are governed by <Fill v={LEGAL.governingLaw} label="governing law, e.g. the laws of India" />. Disputes go to <Fill v={LEGAL.courts} label="courts, e.g. the courts of Chandigarh, India" />.</p> },
+    { id: "law", title: "Governing law", body: <p>These Terms are governed by {LEGAL.governingLaw}. Before starting any formal dispute, please contact us so we can try to resolve it together. Any dispute that can&apos;t be resolved that way is decided by the competent courts in the United States.</p> },
     { id: "contact", title: "Contact", body: <ContactBlock /> },
   ];
 

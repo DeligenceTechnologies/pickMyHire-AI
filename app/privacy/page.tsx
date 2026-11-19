@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
-import { hasPurchaseAccess } from "@/lib/purchase-access";
-import { ContactBlock, Fill, LegalPage, type LegalSection } from "@/components/legal/legal-page";
+import { ContactBlock, LegalPage, SupportEmail, type LegalSection } from "@/components/legal/legal-page";
 import { LEGAL, PRIVACY_VERSION, SUBPROCESSORS } from "@/lib/legal";
 import { getPricing } from "@/lib/services/pricing";
 
@@ -12,12 +10,10 @@ export const metadata: Metadata = {
 };
 
 export default async function PrivacyPage() {
-  // Drafts: hidden until launch, except for people testing with the purchase access code.
-  if (!(await hasPurchaseAccess())) notFound();
   const pricing = await getPricing();
   const P = LEGAL.productName;
-  const company = <Fill v={LEGAL.companyLegalName} label="legal company name" />;
-  const privacyEmail = <Fill v={LEGAL.privacyEmail} label="privacy email" />;
+  const company = LEGAL.companyName;
+  const privacyEmail = <SupportEmail />;
 
   const sections: LegalSection[] = [
     { id: "who", title: "Who we are and our role", body: <>
@@ -34,7 +30,7 @@ export default async function PrivacyPage() {
         <li><b>Interview recording</b>: video and audio of your answers, and the AI interviewer&apos;s voice.</li>
         <li><b>Transcript</b>: a written record of what was said, created by speech-to-text.</li>
         <li><b>AI analysis</b>: summaries, strengths, areas to explore, section assessments and a report for the hiring team.</li>
-        <li><b>Identity check</b> (only if the employer turns it on): a reference photo at the start and a few photos during the interview. The face comparison runs <b>on your own device</b>; only those small photos and a numeric face template (128 numbers) are sent to us, so the hiring team can confirm the same person took the whole interview. This is biometric data and is used only for that check.</li>
+        <li><b>Identity check</b> (only if the employer turns it on): a reference photo at the start and a few photos during the interview. The face comparison runs <b>on your own device</b>; only those small photos and a numeric face template (128 numbers) are sent to us, so the hiring team can confirm the same person took the whole interview. This is biometric data: see <a href="#biometric">Biometric data</a> below.</li>
         <li><b>Consent</b>: when you agreed, and to which version of the consent text.</li>
         <li><b>Technical data</b>: browser, device, connection quality and error logs, used to keep the interview working.</li>
       </ul>
@@ -60,7 +56,14 @@ export default async function PrivacyPage() {
       <li>Reports are labelled as AI-generated advice and link back to what the candidate actually said.</li>
       <li><b>We don&apos;t use interview recordings, transcripts or resumes to train AI models</b>, and our AI provider doesn&apos;t use them for training under its business terms.</li>
     </ul> },
-    { id: "legal-basis", title: "Legal bases", body: <p>Where laws such as the GDPR or India&apos;s Digital Personal Data Protection Act apply, we rely on: performing our contract with hiring companies; the hiring company&apos;s legitimate interest in assessing applicants, or the candidate&apos;s consent where the law requires it (for example for recording and biometric checks); our legal obligations (for example tax records); and our legitimate interest in keeping the service secure.</p> },
+    { id: "biometric", title: "Biometric data (identity check)", body: <ul>
+      <li><b>When:</b> only if the hiring company turns on the identity check for an interview. The candidate is told on the consent screen and must agree before the interview starts.</li>
+      <li><b>What:</b> a reference photo, a few photos during the interview, and a numeric face template (128 numbers). The face comparison itself runs on the candidate&apos;s device.</li>
+      <li><b>Why:</b> only to help the hiring team confirm that the same person took the whole interview. Nothing is decided automatically; people review any flag.</li>
+      <li><b>Never</b> sold, leased, traded or used for any other purpose, and never used to train AI models.</li>
+      <li><b>Deleted</b> together with the interview recording, within {pricing.recordingMonths} months at most, or earlier if the hiring company deletes the interview or the candidate&apos;s data.</li>
+    </ul> },
+    { id: "legal-basis", title: "Legal bases", body: <p>Where laws such as the GDPR apply, we rely on: performing our contract with hiring companies; the hiring company&apos;s legitimate interest in assessing applicants, or the candidate&apos;s consent where the law requires it (for example for recording and biometric checks); our legal obligations (for example tax records); and our legitimate interest in keeping the service secure.</p> },
     { id: "providers", title: "Who we share data with", body: <>
       <p>We share data only with the hiring company you applied to, and with these providers that help us run {P}. They may only use it to provide their service to us.</p>
       <div className="overflow-x-auto rounded-xl border border-[#DCE4F0] bg-white">
@@ -73,7 +76,7 @@ export default async function PrivacyPage() {
       </div>
       <p>We may also share data if the law requires it, or as part of a merger or sale of our business (with the same protections). <b>We never sell personal data.</b></p>
     </> },
-    { id: "transfers", title: "Where data is stored", body: <p>Our database, files and servers are hosted in <Fill v={LEGAL.dataRegion} label="hosting region" />. Some providers, such as our AI provider, may process data in other countries, including the United States. Where the law requires it, we use appropriate safeguards such as standard contractual clauses.</p> },
+    { id: "transfers", title: "Where data is stored", body: <p>Our database, file storage and application servers are hosted in {LEGAL.dataRegion}. Some providers, such as our AI, email and payment providers, may process data in other countries, including the United States. Where the law requires it, we use appropriate safeguards such as standard contractual clauses.</p> },
     { id: "retention", title: "How long we keep data", body: <ul>
       <li><b>Interview recordings</b>: deleted after {pricing.recordingMonths} months at most. A hiring company can choose a shorter period.</li>
       <li><b>Transcripts, reports, scores and decisions</b>: kept while the hiring company&apos;s account is active, unless it deletes them earlier or sets a retention period.</li>
@@ -87,8 +90,9 @@ export default async function PrivacyPage() {
       <ul>
         <li><b>Candidates</b>: contact the company that invited you, or write to us at {privacyEmail} and we&apos;ll pass your request to them and help.</li>
         <li><b>Hiring teams</b>: manage most data in the workspace (for example, delete a candidate&apos;s data), or write to {privacyEmail}.</li>
-        <li><b>Grievance officer</b> (India): <Fill v={LEGAL.grievanceOfficer} label="grievance officer name and email" />.</li>
+        <li><b>US state privacy rights</b> (for example California): you can ask what personal information we hold about you, and ask us to correct or delete it. We don&apos;t sell personal information, we don&apos;t share it for targeted advertising, and we won&apos;t treat you differently for using these rights. For candidate data, we act as a service provider to the hiring company and handle your request with it.</li>
       </ul>
+      <p>We may need to confirm your identity before acting on a request. You can also send requests through our <Link href={LEGAL.contactPath}>contact form</Link>.</p>
     </> },
     { id: "children", title: "Age", body: <p>{P} is for hiring adults. Interviews aren&apos;t intended for anyone under {LEGAL.minimumCandidateAge}, and we don&apos;t knowingly process their data.</p> },
     { id: "changes", title: "Changes", body: <p>We&apos;ll update this policy when our practices change and show the date at the top. For important changes we&apos;ll inform hiring companies in advance. Current version: {PRIVACY_VERSION}.</p> },

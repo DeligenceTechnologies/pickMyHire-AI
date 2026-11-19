@@ -1,4 +1,5 @@
 import "server-only";
+import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/legal";
 import { json, withOrg, withSystem } from "@/lib/database/db";
 import { audit } from "@/lib/audit";
 import { ApiError } from "@/lib/api";
@@ -39,7 +40,7 @@ export async function signup(input: {
       await tx`insert into organization_members (organization_id, user_id, role) values (${invite.organization_id}, ${user.id}, ${invite.role})`;
       await tx`update users set email_verified_at = now() where id = ${user.id}`;
       await tx`update organization_invites set accepted_at = now() where id = ${invite.id}`;
-      await audit(tx, { orgId: invite.organization_id, userId: user.id, action: "team.joined", entityType: "user", entityId: user.id, metadata: { role: invite.role } });
+      await audit(tx, { orgId: invite.organization_id, userId: user.id, action: "team.joined", entityType: "user", entityId: user.id, metadata: { role: invite.role, terms_version: TERMS_VERSION, privacy_version: PRIVACY_VERSION } });
       return { userId: user.id, orgId: invite.organization_id };
     }
 
@@ -66,7 +67,7 @@ export async function signup(input: {
     if (companyInvite) await tx`update company_invites set used_at = now(), organization_id = ${org.id} where id = ${companyInvite.id}`;
     await tx`insert into organization_members (organization_id, user_id, role) values (${org.id}, ${user.id}, 'owner')`;
     for (const [i, t] of DEFAULT_TEMPLATES.entries()) await insertTemplate(tx, org.id, user.id, t, i === 0);
-    await audit(tx, { orgId: org.id, userId: user.id, action: "auth.signup", entityType: "organization", entityId: org.id });
+    await audit(tx, { orgId: org.id, userId: user.id, action: "auth.signup", entityType: "organization", entityId: org.id, metadata: { terms_version: TERMS_VERSION, privacy_version: PRIVACY_VERSION } });
     if (trial) await platformAudit(tx, { adminId: null, action: "company.trial_started", targetType: "organization", targetId: org.id, details: { company: orgName, email: input.email, domain: trial.domain } });
     return { userId: user.id, orgId: org.id };
   });

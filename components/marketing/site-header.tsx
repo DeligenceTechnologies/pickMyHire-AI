@@ -14,6 +14,7 @@ const NAV = [
   { href: "/#team", label: "For teams" },
   { href: "/#why", label: "Why us" },
   { href: "/#trust", label: "Trust" },
+  { href: "/pricing", label: "Pricing" },
   { href: "/#faq", label: "FAQ" },
   { href: "/guide", label: "Guide" },
 ];

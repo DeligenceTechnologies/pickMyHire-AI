@@ -23,7 +23,7 @@ export function ConsentScreen({ token, company, version, minutes, faceVerificati
         {faceVerification && (
           <section><h2 className="font-semibold">Identity check</h2><p className="text-muted-foreground">Before you start, we take a photo of you. During the interview, your device compares your face with that photo every few seconds to confirm it&apos;s still you, and takes a few more photos, including when no face, another person or a different face is seen. Face comparison runs on your device; only the photos and a numerical face template are stored. Nothing is decided automatically: {company}&apos;s hiring team reviews any flags. These photos are deleted together with your interview recording.</p></section>
         )}
-        <section><h2 className="font-semibold">Your data</h2><p className="text-muted-foreground">Recordings, transcripts and summaries are only accessible to authorized members of {company}&apos;s hiring team and are kept according to their data-retention policy. You can ask {company} to delete your data.</p></section>
+        <section><h2 className="font-semibold">Your data</h2><p className="text-muted-foreground">Recordings, transcripts and summaries are only accessible to authorized members of {company}&apos;s hiring team and are kept according to their data-retention policy. You can ask {company} to delete your data. See how PickMyHire.ai handles your data in our <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2">Privacy Policy</a>.</p></section>
       </div>
       <label className="mt-6 flex items-start gap-3 text-sm">
         <Checkbox checked={agree} onCheckedChange={(c) => setAgree(!!c)} className="mt-0.5" />

@@ -7,12 +7,6 @@ import { LEGAL } from "@/lib/legal";
 import { getTrialSettings } from "@/lib/services/platform";
 import { cn } from "@/lib/utils";
 
-/** A legal detail, or a yellow placeholder while it's still missing. */
-export function Fill({ v, label }: { v: string | number | null | undefined; label: string }) {
-  if (v !== null && v !== undefined && v !== "") return <>{v}</>;
-  return <mark className="rounded bg-amber-100 px-1 font-medium text-amber-900">[to fill: {label}]</mark>;
-}
-
 /** Terms · Privacy · Refunds · Cookies, for every public footer. */
 export function LegalLinks({ className, linkClassName = "hover:text-[#0B5BD3]" }: { className?: string; linkClassName?: string }) {
   return (
@@ -35,11 +29,6 @@ export async function LegalPage({ eyebrow, title, intro, sections }: { eyebrow: 
     <div className="min-h-screen bg-[#F8FAFD] text-[#0F1F3A]">
       <SiteHeader trial={trial.enabled} app={app} />
       <main className="mx-auto max-w-3xl px-5 py-14 sm:px-8">
-        {LEGAL.draft && (
-          <p className="mb-8 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            <b>Draft.</b> This document hasn&apos;t been reviewed by a lawyer yet. Yellow parts still need company details.
-          </p>
-        )}
         <p className="text-sm font-semibold tracking-[0.18em] text-[#0B5BD3] uppercase">{eyebrow}</p>
         <h1 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">{title}</h1>
         <p className="mt-2 text-sm text-[#5A6A86]">Last updated {LEGAL.lastUpdated}</p>
@@ -66,14 +55,21 @@ export async function LegalPage({ eyebrow, title, intro, sections }: { eyebrow: 
   );
 }
 
-/** Contact block used at the end of each legal page. */
+/** How to reach us: the support email and the contact form (which reaches the PickMyHire team). */
 export function ContactBlock() {
   return (
-    <ul>
-      <li>Company: <Fill v={LEGAL.companyLegalName} label="legal company name" /></li>
-      <li>Address: <Fill v={LEGAL.registeredAddress} label="registered address" /></li>
-      <li>Registration number: <Fill v={LEGAL.registrationNumber} label="registration number (e.g. CIN)" /> · Tax ID: <Fill v={LEGAL.taxId} label="GST / tax ID" /></li>
-      <li>Support: <Fill v={LEGAL.supportEmail} label="support email" /> · Billing: <Fill v={LEGAL.billingEmail} label="billing email" /> · Privacy: <Fill v={LEGAL.privacyEmail} label="privacy email" /></li>
-    </ul>
+    <>
+      <p>{LEGAL.productName} is provided by {LEGAL.companyName}. For questions about this page, your account, billing or your data:</p>
+      <ul>
+        <li>Email <SupportEmail /></li>
+        <li>Use the <Link href={LEGAL.contactPath}>contact form</Link> on our website, or <b>Help and support</b> inside the app if you have an account.</li>
+      </ul>
+      <p>We reply within 2 business days.</p>
+    </>
   );
+}
+
+/** The support email as a link. */
+export function SupportEmail() {
+  return <a href={`mailto:${LEGAL.supportEmail}`}>{LEGAL.supportEmail}</a>;
 }

@@ -3,8 +3,8 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { env } from "@/lib/env";
 
-// Before launch, buying online and the pricing page are open only to people who entered
-// PURCHASE_ACCESS_CODE (kept in a cookie for 30 days). Remove the variable to open them to everyone.
+// Before launch, buying online (Settings → Billing and Stripe checkout) is open only to people who entered
+// PURCHASE_ACCESS_CODE (kept in a cookie for 30 days). Remove the variable to open buying to everyone.
 const COOKIE = "pmh_buy_access";
 const MAX_AGE = 30 * 24 * 3600;
 

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AuthForm, type Field } from "./auth-form";
 
@@ -30,6 +31,9 @@ export function SignupForm({ invite, company, mode = "code", pack = null }: {
       endpoint="/api/auth/signup"
       submitLabel={invite ? `Join ${invite.orgName}` : company ? `Create ${company.name}` : trial ? "Start free trial" : "Create workspace"}
       fields={fields}
+      note={<>By {invite ? "joining" : "creating an account"}, you agree to the{" "}
+        <Link href="/terms" target="_blank" className="underline underline-offset-2 hover:text-foreground">Terms of Service</Link> and{" "}
+        <Link href="/privacy" target="_blank" className="underline underline-offset-2 hover:text-foreground">Privacy Policy</Link>.</>}
       extra={{ inviteToken: invite?.token, companyInvite: company?.token, trial: trial || undefined }}
       onSuccess={() => {
         router.push(pack ? `/settings/billing?pack=${pack}` : "/dashboard");

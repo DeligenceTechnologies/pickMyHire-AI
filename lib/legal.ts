@@ -1,37 +1,25 @@
-// Legal details shown on /terms, /privacy and /refunds. Fill the nulls before publishing:
-// every null shows on the pages as a yellow "[to fill: …]" placeholder.
+// Legal details shown on /terms, /privacy and /refunds.
 // Change a *_VERSION when the text of that document changes in a way users should accept again.
 
 export const LEGAL = {
-  /** Show the yellow "Draft, not yet reviewed by a lawyer" banner. Set to false once reviewed. */
-  draft: true,
-  lastUpdated: "14 November 2026",
+  lastUpdated: "19 November 2026",
   productName: "PickMyHire.ai",
+  /** The company that provides the service (update with the registered business name when it's final). */
+  companyName: "PickMyHire",
   website: "pickmyhire.ai",
-
-  companyLegalName: null as string | null, // e.g. "Deligence Technologies Pvt. Ltd."
-  registeredAddress: null as string | null,
-  country: null as string | null, // e.g. "India"
-  registrationNumber: null as string | null, // e.g. CIN
-  taxId: null as string | null, // e.g. GSTIN
-
-  supportEmail: null as string | null, // e.g. "support@pickmyhire.ai"
-  billingEmail: null as string | null, // e.g. "billing@pickmyhire.ai"
-  privacyEmail: null as string | null, // e.g. "privacy@pickmyhire.ai"
-  grievanceOfficer: null as string | null, // name + email, required for India (DPDP Act)
-
-  governingLaw: null as string | null, // e.g. "the laws of India"
-  courts: null as string | null, // e.g. "the courts of Chandigarh, India"
-
-  dataRegion: null as string | null, // where Supabase and Render run, e.g. "Mumbai, India (AWS ap-south-1)"
+  supportEmail: "support@pickmyhire.ai",
+  /** The contact form on the home page; it reaches the PickMyHire team (Admin → Requests). */
+  contactPath: "/#contact",
+  governingLaw: "the laws of the United States",
+  /** Where the database, file storage and application servers run. */
+  dataRegion: "Singapore",
   minimumCandidateAge: 18,
-
-  refundDays: 14 as number | null, // unused interviews can be refunded within this many days of purchase
-  validityMonths: 12 as number | null, // purchased interviews expire after this many months
+  /** Purchased interviews expire after this many months. */
+  validityMonths: 12,
 } as const;
 
-export const TERMS_VERSION = "2026-11-v1";
-export const PRIVACY_VERSION = "2026-11-v1";
+export const TERMS_VERSION = "2026-11-v2";
+export const PRIVACY_VERSION = "2026-11-v2";
 
 /** Services that process data for us. Shown on the privacy page. */
 export const SUBPROCESSORS: { name: string; purpose: string; data: string; link: string }[] = [

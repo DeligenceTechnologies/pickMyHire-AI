@@ -9,8 +9,10 @@ import { api, ClientApiError } from "@/lib/client/api";
 
 export type Field = { name: string; label: string; type?: string; autoComplete?: string; placeholder?: string; defaultValue?: string; readOnly?: boolean; hint?: string; optional?: boolean };
 
-export function AuthForm({ fields, submitLabel, endpoint, extra, onSuccess }: {
+export function AuthForm({ fields, submitLabel, endpoint, extra, onSuccess, note }: {
   fields: Field[];
+  /** Small print under the button (e.g. the terms you agree to). */
+  note?: React.ReactNode;
   submitLabel: string;
   endpoint: string;
   extra?: Record<string, string | boolean | undefined>;
@@ -53,6 +55,7 @@ export function AuthForm({ fields, submitLabel, endpoint, extra, onSuccess }: {
       <Button type="submit" className="h-10 w-full" disabled={busy}>
         {busy && <Loader2 className="animate-spin" />} {submitLabel}
       </Button>
+      {note && <p className="text-center text-xs leading-relaxed text-muted-foreground">{note}</p>}
     </form>
   );
 }

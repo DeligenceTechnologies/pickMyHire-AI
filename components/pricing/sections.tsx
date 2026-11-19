@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowRight, BadgeCheck, CheckCircle2, PlayCircle } from "lucide-react";
+import { LEGAL } from "@/lib/legal";
 import { minPurchase, money, type Pricing } from "@/lib/pricing";
 
 type Trial = { enabled: boolean; interviews: number };
@@ -56,6 +57,8 @@ export function PricingSections({ pricing, trial, start }: { pricing: Pricing; t
     ["Is there a subscription?", "No. You buy interviews when you need them. There's no monthly fee and nothing renews automatically."],
     ["How do bigger packs save money?", `The more interviews you buy at once, the less each one costs: from ${money(base)} down to ${money(lowest)}. The lower price applies to every interview in that purchase.`],
     ["Can I buy any number?", `Yes, any number from ${minPurchase(pricing)} up, like 12, 23 or 55. If a slightly bigger pack costs less in total, the calculator tells you.`],
+    ["Can I get a refund?", "All purchases are final, so we don't refund payments. But if an interview doesn't work because of a problem on our side, we give the interview back to your balance. Interviews that end before the candidate answers anything come back automatically."],
+    ["Do purchased interviews expire?", `Yes, after ${LEGAL.validityMonths} months. Buy the number you expect to use in that time; you can always add more later.`],
     ["What if we run out of interviews?", "You can still invite candidates. Anyone who opens their link sees a polite message to contact you, and you get an alert. Once you add interviews, the same link works."],
     ["How long do you keep recordings?", `Interview recordings are deleted after ${pricing.recordingMonths} months. Reports, transcripts, scores and decisions stay while your account is active, and you can delete any candidate's data at any time.`],
     ["What about hiring large volumes?", pricing.contactFrom ? `For ${pricing.contactFrom} or more interviews at once, talk to us for a custom price.` : "Larger packs get the lowest price automatically."],
@@ -110,7 +113,7 @@ export function PricingSections({ pricing, trial, start }: { pricing: Pricing; t
             </details>
           ))}
         </div>
-        <p className="mt-6 text-center text-sm text-[#5B6B86]">Prices in US dollars. Taxes may apply depending on where you are. See our <Link href="/refunds" className="text-[#0B5BD3] hover:underline">refund policy</Link> and <Link href="/terms" className="text-[#0B5BD3] hover:underline">terms</Link>.</p>
+        <p className="mt-6 text-center text-sm text-[#5B6B86]">Prices in US dollars. Taxes may apply depending on where you are. All purchases are final: if an interview doesn&apos;t work because of us, we give it back. See our <Link href="/refunds" className="text-[#0B5BD3] hover:underline">refund policy</Link> and <Link href="/terms" className="text-[#0B5BD3] hover:underline">terms</Link>.</p>
       </section>
 
       {/* Final call to action */}

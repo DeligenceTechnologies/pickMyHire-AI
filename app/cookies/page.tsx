@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { LegalLinks } from "@/components/legal/legal-page";
 import Link from "next/link";
 import { Copyright } from "@/components/layout/logo";
 import { SiteHeader } from "@/components/marketing/site-header";
@@ -69,7 +70,7 @@ export default async function CookiesPage() {
           </section>
         </div>
       </main>
-      <footer className="border-t border-[#E3EAF5] bg-white py-6 text-center"><Copyright /></footer>
+      <footer className="border-t border-[#E3EAF5] bg-white py-6 text-center"><Copyright /><LegalLinks className="mt-2" /></footer>
     </div>
   );
 }

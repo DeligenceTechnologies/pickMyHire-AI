@@ -49,9 +49,12 @@ export function BuyDialog({ pricing, qty, validMonths, testMode, onClose }: {
               <div className="flex justify-between gap-4 px-4 py-3"><dt className="font-semibold">Total</dt><dd className="text-lg font-bold tabular">{money(q.totalCents)} <span className="text-xs font-normal text-muted-foreground">USD</span></dd></div>
             </dl>
             <p className="text-xs text-muted-foreground">Interviews are added as soon as the payment goes through, and are valid for {validMonths} months. Taxes may apply depending on where you are.</p>
+            <p className="rounded-lg border bg-muted/40 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
+              <b className="text-foreground">All purchases are final. We don&apos;t refund payments.</b> If an interview doesn&apos;t work because of a problem on our side, we add it back to your balance.
+            </p>
             <label className="flex cursor-pointer items-start gap-2.5 text-sm">
               <Checkbox checked={agreed} onCheckedChange={(c) => setAgreed(c === true)} className="mt-0.5" disabled={busy} />
-              <span>I agree to the <Link href="/terms" target="_blank" className="font-medium text-primary hover:underline">Terms of Service</Link> and <Link href="/refunds" target="_blank" className="font-medium text-primary hover:underline">Refund policy</Link>.</span>
+              <span>I understand and agree to the <Link href="/terms" target="_blank" className="font-medium text-primary hover:underline">Terms of Service</Link> and <Link href="/refunds" target="_blank" className="font-medium text-primary hover:underline">Refund policy</Link>.</span>
             </label>
             {testMode && (
               <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">

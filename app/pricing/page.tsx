@@ -1,21 +1,17 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
 import { getPricingPageData, PricingShell } from "@/components/pricing/page-shell";
 import { SliderPlans } from "@/components/pricing/slider-plans";
 import { DEMO_URL } from "@/lib/marketing";
 import { money } from "@/lib/pricing";
-import { hasPurchaseAccess } from "@/lib/purchase-access";
 
 // The public pricing page: one slider, three columns (Free, Pay per interview, Enterprise).
-// Hidden ("not found") while PURCHASE_ACCESS_CODE is set, except for people who entered it.
+// Public. Buying itself (Settings → Billing) can still be limited with PURCHASE_ACCESS_CODE.
 export const metadata: Metadata = {
   title: { absolute: "Pricing · PickMyHire.ai" },
   description: "Pay per AI interview. No subscription, no monthly fees. Start with free interviews, then buy only what you need, with lower prices for larger packs.",
 };
 
 export default async function PricingPage() {
-  // Before launch: hidden ("not found") unless the visitor entered the purchase access code.
-  if (!(await hasPurchaseAccess())) notFound();
   const data = await getPricingPageData();
   const first = data.pricing.tiers[0].cents;
   const lowest = data.pricing.tiers[data.pricing.tiers.length - 1].cents;

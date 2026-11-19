@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
+import { LegalLinks } from "@/components/legal/legal-page";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { Copyright } from "@/components/layout/logo";
 import { DemoVideo, WALKTHROUGH_VIDEO } from "@/components/marketing/demo-video";
-import { CookieSettingsLink } from "@/components/analytics/analytics";
 import { SiteHeader } from "@/components/marketing/site-header";
 import { DEMO_URL } from "@/lib/marketing";
 import { getAppLink } from "@/lib/auth/session";
@@ -86,7 +86,7 @@ export default async function DemoPage() {
           <p className="mt-3 text-center text-xs text-[#7A8AA6]">Recorded with sample data, apart from the real candidate interview.</p>
         </section>
       </main>
-      <footer className="border-t border-[#E3EAF5] bg-white py-6 text-center"><Copyright /><div className="mt-2 flex items-center justify-center gap-4 text-xs text-[#5A6A86]"><Link href="/cookies" className="hover:text-[#0B5BD3]">Cookie policy</Link><CookieSettingsLink className="hover:text-[#0B5BD3]" /></div></footer>
+      <footer className="border-t border-[#E3EAF5] bg-white py-6 text-center"><Copyright /><LegalLinks className="mt-2" /></footer>
     </div>
   );
 }

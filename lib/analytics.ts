@@ -22,7 +22,7 @@ export function isTrackedPath(pathname: string) {
 
 /** Pages where the cookie banner is shown. */
 export function isBannerPath(pathname: string) {
-  return isTrackedPath(pathname) || pathname === "/cookies";
+  return isTrackedPath(pathname) || ["/cookies", "/terms", "/privacy", "/refunds"].includes(pathname);
 }
 
 const KEEP_PARAMS = /^utm_(source|medium|campaign|term|content)$/;

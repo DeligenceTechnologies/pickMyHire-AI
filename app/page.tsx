@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LegalLinks } from "@/components/legal/legal-page";
 import type { Metadata } from "next";
 import {
   ArrowRight, BarChart3, Bell, Briefcase, ClipboardCheck, Lightbulb, CalendarX2, Check, CheckCircle2, Clock, FileSearch, FileStack,
@@ -10,11 +11,12 @@ import { IdentityMock, InterviewMock, PipelineMock, ReportMock, ScreeningMock } 
 import { SiteHeader } from "@/components/marketing/site-header";
 import { DemoVideo } from "@/components/marketing/demo-video";
 import { DemoBubble } from "@/components/marketing/demo-bubble";
-import { CookieSettingsLink } from "@/components/analytics/analytics";
 import { ContactForms } from "@/components/marketing/access-request-form";
 import Image from "next/image";
 import { DEMO_URL } from "@/lib/marketing";
 import { getTrialSettings } from "@/lib/services/platform";
+import { getPricing } from "@/lib/services/pricing";
+import { money } from "@/lib/pricing";
 import { getAppLink } from "@/lib/auth/session";
 
 export const metadata: Metadata = {
@@ -155,18 +157,19 @@ const FAQ = [
   ["How do I know the assessments are right?", "You don't have to take them on trust. Every assessment comes with evidence: click it and the recording jumps to that moment, with the transcript highlighted."],
   ["Does it work for my industry?", "Yes, for any role where a structured conversation shows fit: technology, sales, support, finance, operations, healthcare administration, education and more. Questions come from your job description and each candidate's resume, and templates let you set the sections and criteria for each role. Interviews are currently in English, and they assess what candidates say, so hands-on skills such as live coding or practical trade work still need their own test."],
   ["Can you tell if someone else takes the interview?", "Yes, with the identity check, which you can switch on for each job. The candidate's photo is taken at the setup check, and during the AI interview their face is compared with it every few seconds. A different face, a second person in view or an empty frame is flagged with a photo and a link to that moment in the recording. Candidates are told about it and consent first, and the photos are deleted with the recording. Flags are for your team to review: they never end or reject an interview."],
-  ["How long is an interview?", "You decide in the template. Typical setups range from a 15-minute screen to a 45-minute structured technical interview."],
+  ["How long is an interview?", "You decide in the template. Most run from a 15-minute screen to a 30-minute structured technical interview."],
   ["What happens if a candidate's connection drops?", "Progress is saved continuously. If the candidate reopens their link within 10 minutes, they continue where they left off; after that, the interview closes with the answers given so far, and you can invite them again."],
   ["Can we run human interviews too?", "Yes. Add human rounds to a job, or schedule a one-off interview for a single candidate. Pick the panel, date and time zone, and send the invite. Each interviewer fills in a scorecard with your criteria, and your team marks the round Qualified, Not qualified or On hold. Scorecards lock once a decision is made."],
   ["Does it work with Zoom, Google Meet or Teams?", "Yes. Paste your meeting link when you schedule a human interview. It goes into the invite and the calendar file, so candidates and interviewers join with the tool you already use."],
   ["Where is our data stored, and who can see it?", "Data is stored privately, isolated per company, and access is controlled by roles. For example, interviewers and viewers can't see candidate contact details or resumes. Retention settings let you remove old recordings automatically."],
 ];
-const PRICING_FAQ = "Pricing depends on your hiring volume. Book a demo or contact us and we'll put together a plan for your team.";
 
 export default async function Home() {
-  const [trial, app] = await Promise.all([getTrialSettings(), getAppLink()]);
+  const [trial, app, pricing] = await Promise.all([getTrialSettings(), getAppLink(), getPricing()]);
   const trialLine = `${trial.interviews} AI interviews free for ${trial.days} days`;
-  const faqs = [...FAQ, ["How much does it cost?", trial.enabled ? `You can start with a free trial: ${trialLine}, no credit card needed. After that, ${PRICING_FAQ.charAt(0).toLowerCase()}${PRICING_FAQ.slice(1)}` : PRICING_FAQ]];
+  const pricingFaq = `You pay per interview, with no subscription: from ${money(pricing.tiers[0].cents)} each, down to ${money(pricing.tiers[pricing.tiers.length - 1].cents)} for larger packs. See the pricing page for details.`;
+  // The "how long" answer adds the length that counts as one interview (an admin setting).
+  const faqs = [...FAQ.map(([q, a]) => (q === "How long is an interview?" ? [q, `${a} A template can run up to ${pricing.minutesPerInterview} minutes and still count as one interview.`] : [q, a])), ["How much does it cost?", trial.enabled ? `You can start with a free trial: ${trialLine}, no credit card needed. ${pricingFaq}` : pricingFaq]];
   return (
     <div className="min-h-screen bg-[#F8FAFD] text-[#0F1F3A]">
       <SiteHeader trial={trial.enabled} app={app} />
@@ -566,7 +569,7 @@ export default async function Home() {
             </ul>
           </div>
         </div>
-        <div className="border-t border-[#E3EAF5] py-6 text-center"><Copyright /><div className="mt-2 flex items-center justify-center gap-4 text-xs text-[#5A6A86]"><Link href="/cookies" className="hover:text-[#0B5BD3]">Cookie policy</Link><CookieSettingsLink className="hover:text-[#0B5BD3]" /></div></div>
+        <div className="border-t border-[#E3EAF5] py-6 text-center"><Copyright /><LegalLinks className="mt-2" /></div>
       </footer>
       {!app && <DemoBubble cta={trial.enabled ? { href: "/signup", label: "Start free trial" } : { href: "/#request-access", label: "Request access" }} />}
     </div>

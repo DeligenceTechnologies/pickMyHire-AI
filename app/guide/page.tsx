@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
+import { LegalLinks } from "@/components/legal/legal-page";
 import Link from "next/link";
 import { ArrowRight, LifeBuoy, PlayCircle } from "lucide-react";
 import { Copyright } from "@/components/layout/logo";
-import { CookieSettingsLink } from "@/components/analytics/analytics";
 import { SiteHeader } from "@/components/marketing/site-header";
 import { DemoBubble } from "@/components/marketing/demo-bubble";
 import { getAppLink } from "@/lib/auth/session";
@@ -65,7 +65,7 @@ export default async function GuidePage() {
           </Link>
         </section>
       </main>
-      <footer className="border-t border-[#E3EAF5] bg-white py-6 text-center"><Copyright /><div className="mt-2 flex items-center justify-center gap-4 text-xs text-[#5A6A86]"><Link href="/cookies" className="hover:text-[#0B5BD3]">Cookie policy</Link><CookieSettingsLink className="hover:text-[#0B5BD3]" /></div></footer>
+      <footer className="border-t border-[#E3EAF5] bg-white py-6 text-center"><Copyright /><LegalLinks className="mt-2" /></footer>
       {!app && <DemoBubble cta={trial.enabled ? { href: "/signup", label: "Start free trial" } : { href: "/#request-access", label: "Request access" }} />}
     </div>
   );
