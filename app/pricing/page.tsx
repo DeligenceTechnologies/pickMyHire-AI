@@ -6,6 +6,9 @@ import { money } from "@/lib/pricing";
 
 // The public pricing page: one slider, three columns (Free, Pay per interview, Enterprise).
 // Public. Buying itself (Settings → Billing) can still be limited with PURCHASE_ACCESS_CODE.
+// Built on each visit: it reads prices and settings from the database (not available while building).
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: { absolute: "Pricing · PickMyHire.ai" },
   description: "Pay per AI interview. No subscription, no monthly fees. Start with free interviews, then buy only what you need, with lower prices for larger packs.",

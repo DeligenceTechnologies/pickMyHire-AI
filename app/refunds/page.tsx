@@ -4,6 +4,9 @@ import { ContactBlock, LegalPage, SupportEmail, type LegalSection } from "@/comp
 import { LEGAL } from "@/lib/legal";
 import { getTrialSettings } from "@/lib/services/platform";
 
+// Built on each visit: it reads prices and settings from the database (not available while building).
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Refund policy",
   description: "PickMyHire.ai interview purchases are final. If an interview doesn't work because of a problem on our side, we give the interview back.",

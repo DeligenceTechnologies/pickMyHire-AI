@@ -4,6 +4,9 @@ import { ContactBlock, LegalPage, SupportEmail, type LegalSection } from "@/comp
 import { LEGAL, PRIVACY_VERSION, SUBPROCESSORS } from "@/lib/legal";
 import { getPricing } from "@/lib/services/pricing";
 
+// Built on each visit: it reads prices and settings from the database (not available while building).
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Privacy Policy",
   description: "How PickMyHire.ai collects, uses and protects data about hiring teams, candidates and website visitors.",

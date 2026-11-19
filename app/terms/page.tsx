@@ -5,6 +5,9 @@ import { LEGAL, TERMS_VERSION } from "@/lib/legal";
 import { getTrialSettings } from "@/lib/services/platform";
 import { getPricing } from "@/lib/services/pricing";
 
+// Built on each visit: it reads prices and settings from the database (not available while building).
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Terms of Service",
   description: "The terms for using PickMyHire.ai, the AI interview platform for hiring teams.",
