@@ -92,12 +92,12 @@ test("public application with AI screening", async ({ page, browser }) => {
   await expect(morganRow.getByText("Check limits")).toBeVisible();
   await expect(page.getByRole("row", { name: /Riley Applicant/ }).getByText("Fits limits")).toBeVisible();
   if (process.env.E2E_SCREENSHOTS) await page.screenshot({ path: "test-results/applications-fit.png", fullPage: true });
-  // Bulk invite: show "To invite", select Riley and invite in one go.
+  // Bulk invite: show "Not invited", select Riley and invite in one go.
   const stage = async (name: RegExp) => {
     await page.getByRole("button", { name: /^Stage:/ }).click();
     await page.getByRole("menuitem", { name }).click();
   };
-  await stage(/To invite/);
+  await stage(/Not invited/);
   await page.getByRole("checkbox", { name: "Select Riley Applicant" }).check();
   await page.getByRole("button", { name: "Invite to AI interview" }).click();
   await page.getByRole("dialog").getByRole("checkbox").uncheck(); // don't email in tests

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { jobStageOf } from "@/lib/jobs/job-stages";
+import { JOB_STAGES, STAGE_GROUPS, jobStageOf } from "@/lib/jobs/job-stages";
 import type { RoundResult } from "@/lib/services/pipeline";
 
 const round = { id: "r1", job_id: "j", name: "AI screen", kind: "ai" as const, sort_order: 0 };
@@ -10,7 +10,7 @@ const entry = (kind: "ai" | "human", status: string) => ({
 const base = { pipeline_stage: null, application_status: null, interview_status: null, results: [] as RoundResult[] };
 
 describe("where a person is in a job", () => {
-  it("puts new applicants and added people with no interview in To invite", () => {
+  it("puts new applicants and added people with no interview in Not invited", () => {
     expect(jobStageOf({ ...base, application_status: "new" })).toBe("to_invite");
     expect(jobStageOf({ ...base, pipeline_stage: "in_progress" })).toBe("to_invite");
     expect(jobStageOf({ ...base, interview_status: "cancelled" })).toBe("to_invite");
@@ -32,5 +32,12 @@ describe("where a person is in a job", () => {
     expect(jobStageOf({ ...base, pipeline_stage: "hired" })).toBe("hired");
     expect(jobStageOf({ ...base, pipeline_stage: "withdrawn" })).toBe("rejected");
     expect(jobStageOf({ ...base, application_status: "declined" })).toBe("rejected");
+  });
+});
+
+describe("the job page's stage groups", () => {
+  it("put every stage in exactly one group, so the cards add up", () => {
+    const grouped = STAGE_GROUPS.flatMap((g) => g.stages as readonly string[]);
+    expect([...grouped].sort()).toEqual([...JOB_STAGES].sort());
   });
 });

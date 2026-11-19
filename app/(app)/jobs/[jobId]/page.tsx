@@ -54,7 +54,7 @@ export default async function JobPage(props: PageProps<"/jobs/[jobId]">) {
         </>}
         actions={can(auth.role, "job:write") && <JobActions jobId={job.id} status={job.status} />}
       />
-      {people && <JobStats jobId={job.id} rows={people.rows} interviews={people.interviewCount} />}
+      {people && <JobStats jobId={job.id} rows={people.rows} />}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="min-w-0 space-y-6 lg:col-span-2">
           {canSeeCandidates ? (

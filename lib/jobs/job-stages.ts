@@ -6,7 +6,7 @@ export const JOB_STAGES = ["to_invite", "invited", "interviewing", "review", "sh
 export type JobStage = (typeof JOB_STAGES)[number];
 
 export const JOB_STAGE_LABEL: Record<JobStage, string> = {
-  to_invite: "To invite", invited: "Invited", interviewing: "Interviewing", review: "To review",
+  to_invite: "Not invited", invited: "Invited", interviewing: "Interviewing", review: "Ready to review",
   shortlisted: "Shortlisted", hired: "Hired", rejected: "Rejected",
 };
 
@@ -14,11 +14,28 @@ export const JOB_STAGE_HINT: Record<JobStage, string> = {
   to_invite: "Applied or added, no interview yet",
   invited: "Invitation sent, not started",
   interviewing: "Taking an interview now, or one is scheduled",
-  review: "A round is done: decide, or invite to the next round",
+  review: "Interview done: review it and decide, or invite to the next round",
   shortlisted: "Shortlisted for this job",
   hired: "Hired for this job",
   rejected: "Not moving forward or withdrew",
 };
+
+/**
+ * The groups the job page counts and filters by, in hiring order. "Interviewing" covers both an invite
+ * that's waiting and an interview in progress. Together they add up to every active (not rejected) person.
+ */
+export const STAGE_GROUPS = [
+  { id: "to_invite", label: "Not invited", hint: "No interview sent yet", stages: ["to_invite"] },
+  { id: "interview", label: "Interviewing", hint: "Invited or taking the interview", stages: ["invited", "interviewing"] },
+  { id: "review", label: "Ready to review", hint: "Interview done, needs your decision", stages: ["review"] },
+  { id: "shortlisted", label: "Shortlisted", hint: "Moving forward", stages: ["shortlisted"] },
+  { id: "hired", label: "Hired", hint: "Hired for this job", stages: ["hired"] },
+  { id: "rejected", label: "Rejected", hint: "Not moving forward or withdrew", stages: ["rejected"] },
+] as const satisfies readonly { id: string; label: string; hint: string; stages: readonly JobStage[] }[];
+export type StageGroup = (typeof STAGE_GROUPS)[number]["id"];
+export const stageGroup = (id: string) => STAGE_GROUPS.find((g) => g.id === id);
+/** Is a person at `stage` in group `id`? */
+export const inStageGroup = (id: StageGroup, stage: JobStage) => (stageGroup(id)?.stages as readonly JobStage[] | undefined)?.includes(stage) ?? false;
 
 const INVITED = ["created", "invited", "consent_pending", "device_check", "ready"];
 const LIVE = ["in_progress", "completing"];

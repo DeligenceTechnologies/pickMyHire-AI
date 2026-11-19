@@ -1,4 +1,4 @@
-import { JOB_STAGES, JOB_STAGE_LABEL, type JobStage } from "@/lib/jobs/job-stages";
+import { inStageGroup, stageGroup, type JobStage, type StageGroup } from "@/lib/jobs/job-stages";
 
 // The job page's candidate list filters, kept in the address so they survive opening a candidate and
 // coming back, and shared with the candidate / application pages so Previous / Next walk the same list.
@@ -14,7 +14,7 @@ export type JobListSort = (typeof SORTS)[number][0];
 export const PAGE_SIZES = [5, 10, 25];
 const MATCH_RANK: Record<string, number> = { strong_match: 5, good_match: 4, partial_match: 3, low_match: 2, insufficient_information: 1 };
 
-export type JobListFilters = { stage: JobStage | ""; q: string; exp: string; match: string; sort: JobListSort; page: number; size: number };
+export type JobListFilters = { stage: StageGroup | ""; q: string; exp: string; match: string; sort: JobListSort; page: number; size: number };
 export const DEFAULT_FILTERS: JobListFilters = { stage: "", q: "", exp: "", match: "", sort: "activity", page: 1, size: 5 };
 
 type Params = URLSearchParams | Record<string, string | string[] | undefined>;
@@ -24,13 +24,15 @@ const read = (p: Params, k: string) => {
 };
 
 export function parseJobListFilters(p: Params): JobListFilters {
-  const stage = read(p, "stage");
+  // Older links used "invited" / "interviewing"; both are in the Interviewing group now.
+  const raw = read(p, "stage");
+  const stage = raw === "invited" || raw === "interviewing" ? "interview" : raw;
   const exp = read(p, "exp");
   const match = read(p, "match");
   const sort = read(p, "sort");
   const size = Number(read(p, "size"));
   return {
-    stage: (JOB_STAGES as readonly string[]).includes(stage) ? (stage as JobStage) : "",
+    stage: stageGroup(stage) ? (stage as StageGroup) : "",
     q: read(p, "q").slice(0, 100),
     exp: EXPERIENCE.some((e) => e[0] === exp) ? exp : "",
     match: MATCHES.some((m) => m[0] === match) ? match : "",
@@ -65,7 +67,7 @@ export function filterJobList<T extends ListRow>(rows: T[], f: JobListFilters): 
   const needle = f.q.trim().toLowerCase();
   const range = EXPERIENCE.find((e) => e[0] === f.exp) ?? EXPERIENCE[0];
   const time = (d: Date | string) => new Date(d).getTime();
-  const out = rows.filter((r) => (f.stage ? r.stage === f.stage : r.stage !== "rejected")
+  const out = rows.filter((r) => (f.stage ? inStageGroup(f.stage, r.stage) : r.stage !== "rejected")
     && (!needle || r.name.toLowerCase().includes(needle) || r.email.toLowerCase().includes(needle))
     && (!f.match || r.match_level === f.match)
     && (!f.exp || (r.experience_months !== null && r.experience_months >= range[2] && r.experience_months < range[3])));
@@ -83,10 +85,10 @@ export function jobRowHref(jobId: string, r: { id: string; application_id: strin
   return `${base}?${q}`;
 }
 
-/** "To review · Strong match · 2–5 years" for the Previous / Next bar. */
+/** "Ready to review · Strong match · 2–5 years" for the Previous / Next bar. */
 export function describeJobList(f: JobListFilters) {
   return [
-    f.stage ? JOB_STAGE_LABEL[f.stage] : "All active",
+    f.stage ? stageGroup(f.stage)?.label : "All active",
     f.q && `“${f.q}”`,
     f.match && MATCHES.find((m) => m[0] === f.match)?.[1],
     f.exp && EXPERIENCE.find((e) => e[0] === f.exp)?.[1],

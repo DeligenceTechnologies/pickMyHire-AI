@@ -1,31 +1,50 @@
+"use client";
+
 import Link from "next/link";
-import { CalendarDays, CheckCircle2, ClipboardCheck, Star, Users, type LucideIcon } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { CheckCircle2, ClipboardCheck, Star, UserPlus, Users, Video, type LucideIcon } from "lucide-react";
+import { parseJobListFilters } from "@/lib/jobs/job-list";
+import { inStageGroup, stageGroup, type StageGroup } from "@/lib/jobs/job-stages";
 import type { JobCandidateRow } from "@/lib/services/job-candidates";
 import { cn } from "@/lib/utils";
 
-/** The job at a glance, above the pipeline. Each card opens the matching part of the list. */
-export function JobStats({ jobId, rows, interviews }: { jobId: string; rows: Pick<JobCandidateRow, "stage">[]; interviews: number }) {
-  const n = (s: JobCandidateRow["stage"]) => rows.filter((r) => r.stage === s).length;
-  const cards: { label: string; value: number; href: string; icon: LucideIcon; tone: string; hint: string }[] = [
-    { label: "Candidates", value: rows.length, href: `/jobs/${jobId}`, icon: Users, tone: "bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-300", hint: "Everyone who applied or was added" },
-    { label: "To review", value: n("review"), href: `/jobs/${jobId}?stage=review`, icon: ClipboardCheck, tone: "bg-violet-50 text-violet-600 dark:bg-violet-950 dark:text-violet-300", hint: "A round is done and needs your decision" },
-    { label: "Shortlisted", value: n("shortlisted"), href: `/jobs/${jobId}?stage=shortlisted`, icon: Star, tone: "bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-300", hint: "Shortlisted for this job" },
-    { label: "Interviews", value: interviews, href: `/interviews?jobId=${jobId}`, icon: CalendarDays, tone: "bg-orange-50 text-orange-600 dark:bg-orange-950 dark:text-orange-300", hint: "AI interviews sent for this job" },
-    { label: "Hired", value: n("hired"), href: `/jobs/${jobId}?stage=hired`, icon: CheckCircle2, tone: "bg-teal-50 text-teal-600 dark:bg-teal-950 dark:text-teal-300", hint: "Hired for this job" },
-  ];
+const CARDS: { group: StageGroup | ""; icon: LucideIcon; tone: string }[] = [
+  { group: "", icon: Users, tone: "bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-300" },
+  { group: "to_invite", icon: UserPlus, tone: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300" },
+  { group: "interview", icon: Video, tone: "bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-300" },
+  { group: "review", icon: ClipboardCheck, tone: "bg-violet-50 text-violet-600 dark:bg-violet-950 dark:text-violet-300" },
+  { group: "shortlisted", icon: Star, tone: "bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-300" },
+  { group: "hired", icon: CheckCircle2, tone: "bg-teal-50 text-teal-600 dark:bg-teal-950 dark:text-teal-300" },
+];
+
+/**
+ * The job at a glance, above the pipeline, in hiring order. Each card opens that part of the list and
+ * counts exactly what it opens; the five stages add up to Candidates (everyone not rejected). The card for
+ * the list's current stage is highlighted.
+ */
+export function JobStats({ jobId, rows }: { jobId: string; rows: Pick<JobCandidateRow, "stage">[] }) {
+  const current = parseJobListFilters(useSearchParams()).stage;
   return (
-    <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-      {cards.map((c) => (
-        <Link key={c.label} href={c.href} scroll={false}
-          className="group flex items-center gap-3.5 rounded-2xl border bg-card px-4 py-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md">
-          <span className={cn("flex size-11 shrink-0 items-center justify-center rounded-full", c.tone)}><c.icon className="size-5" aria-hidden /></span>
-          <span className="min-w-0">
-            <span className="block truncate text-sm text-muted-foreground group-hover:text-foreground">{c.label}</span>
-            <span className="block text-2xl font-semibold tracking-tight tabular">{c.value}</span>
-            <span className="sr-only">{c.hint}</span>
-          </span>
-        </Link>
-      ))}
+    <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+      {CARDS.map((c) => {
+        const g = c.group ? stageGroup(c.group) : null;
+        const value = rows.filter((r) => (c.group ? inStageGroup(c.group, r.stage) : r.stage !== "rejected")).length;
+        const label = g?.label ?? "Candidates";
+        const hint = g?.hint ?? "Everyone active in this job";
+        return (
+          <Link key={label} href={c.group ? `/jobs/${jobId}?stage=${c.group}` : `/jobs/${jobId}`} scroll={false}
+            aria-current={current === c.group ? "true" : undefined}
+            className={cn("group min-w-0 rounded-2xl border bg-card p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md",
+              current === c.group && "border-primary/50 ring-1 ring-primary/30")}>
+            <span className="flex items-center gap-3">
+              <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-full", c.tone)}><c.icon className="size-[18px]" aria-hidden /></span>
+              <span className="text-2xl font-semibold tracking-tight tabular">{value}</span>
+            </span>
+            <span className="mt-2.5 block text-sm font-medium group-hover:text-foreground">{label}</span>
+            <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">{hint}</span>
+          </Link>
+        );
+      })}
     </div>
   );
 }

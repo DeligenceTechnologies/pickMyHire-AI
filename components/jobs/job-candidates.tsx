@@ -22,7 +22,7 @@ import { api } from "@/lib/client/api";
 import { emailFailedIn, toastEmailResult } from "@/lib/client/email-result";
 import { initials, timeAgo } from "@/lib/format";
 import { shortExperience } from "@/lib/resume/experience";
-import { JOB_STAGE_HINT, JOB_STAGE_LABEL, JOB_STAGES, type JobStage } from "@/lib/jobs/job-stages";
+import { JOB_STAGE_HINT, JOB_STAGE_LABEL, STAGE_GROUPS, inStageGroup, stageGroup, type JobStage } from "@/lib/jobs/job-stages";
 import {
   EXPERIENCE, MATCHES, SORTS, filterJobList, filtersOn, jobListQuery, jobRowHref, parseJobListFilters, type JobListFilters, type JobListSort,
 } from "@/lib/jobs/job-list";
@@ -73,7 +73,7 @@ export function JobCandidates({ jobId, rows, canInvite, completedCount }: { jobI
   const visible = shown.slice((current - 1) * pageSize, current * pageSize);
   const anyFilter = filtersOn(f);
 
-  // New applicants can be invited together while "To invite" is selected.
+  // New applicants can be invited together while "Not invited" is selected.
   const invitable = (r: JobCandidateItem) => canInvite && r.stage === "to_invite" && r.application_status === "new" && !!r.application_id;
   const bulk = stage === "to_invite" && visible.some(invitable);
   const chosen = rows.filter((r) => r.application_id && selected.has(r.application_id) && invitable(r));
@@ -126,7 +126,7 @@ export function JobCandidates({ jobId, rows, canInvite, completedCount }: { jobI
             className="h-10 w-full rounded-lg border border-input bg-background pr-3 pl-9 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/30" />
         </label>
         <Pick label="Stage" value={stage} onChange={(v) => set({ stage: v as JobListFilters["stage"] })}
-          options={[["", "All active", rows.filter((r) => r.stage !== "rejected").length], ...JOB_STAGES.map((s) => [s, JOB_STAGE_LABEL[s], rows.filter((r) => r.stage === s).length] as [string, string, number])]} />
+          options={[["", "All active", rows.filter((r) => r.stage !== "rejected").length], ...STAGE_GROUPS.map((g) => [g.id, g.label, rows.filter((r) => inStageGroup(g.id, r.stage)).length] as [string, string, number])]} />
         <Pick label="Experience" value={exp} onChange={(v) => set({ exp: v })} options={EXPERIENCE.map(([v, l]) => [v, l])} idle="Experience" />
         <Pick label="Resume match" idle="Match" value={match} onChange={(v) => set({ match: v })} options={MATCHES} />
         <Pick label="Sort" value={sort} onChange={(v) => set({ sort: v as JobListSort })} options={SORTS.map(([v, l]) => [v, l])} plain />
@@ -176,7 +176,7 @@ export function JobCandidates({ jobId, rows, canInvite, completedCount }: { jobI
             </table>
             {!shown.length && (
               <p className="px-5 py-10 text-center text-sm text-muted-foreground">
-                {anyFilter ? "No one matches these filters." : stage ? `No one is in ${JOB_STAGE_LABEL[stage]}.` : "Everyone in this job is in Rejected."}
+                {anyFilter ? "No one matches these filters." : stage ? `No one is in ${stageGroup(stage)?.label}.` : "Everyone in this job is in Rejected."}
               </p>
             )}
           </div>
