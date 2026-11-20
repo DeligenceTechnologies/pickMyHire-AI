@@ -31,6 +31,27 @@ const LABEL: Record<string, string> = {
   "user.enabled": "Enabled user",
   "user.reset_link_created": "Created password reset link",
   "settings.updated": "Updated platform settings",
+  "company.deleted": "Deleted company",
+  "user.deleted": "Deleted user",
+  "user.email_changed": "Changed user email",
+  "pricing.updated": "Updated standard prices",
+  "company.pricing_set": "Set company prices",
+  "company.pricing_cleared": "Removed company prices",
+  "coupon.created": "Created coupon",
+  "coupon.updated": "Updated coupon",
+  "coupon.deleted": "Deleted coupon",
+  "coupon.redeemed": "Coupon redeemed",
+  // Recorded automatically when Stripe reports a payment or refund.
+  "company.purchased": "Payment received",
+  "company.refunded": "Refund",
+  "billing.amount_mismatch": "Payment amount didn't match (no interviews added)",
+  "billing.paid_company_deleted": "Paid after the company was deleted (no interviews added)",
+};
+
+/** Not done by an admin: who the "Admin" column names instead. */
+const BY: Record<string, string> = {
+  "company.purchased": "Stripe", "company.refunded": "Stripe", "billing.amount_mismatch": "Stripe", "billing.paid_company_deleted": "Stripe",
+  "company.trial_started": "Self sign-up", "coupon.redeemed": "Customer",
 };
 
 function describe(details: Record<string, unknown>) {
@@ -46,7 +67,7 @@ export default async function AdminAuditPage(props: PageProps<"/admin/audit">) {
   const rows = await listPlatformAudit(page);
   return (
     <>
-      <PageHeader title="Audit log" description="Every action taken by platform admins." />
+      <PageHeader title="Audit log" description="Every action taken by platform admins, plus payments and refunds reported by Stripe." />
       {rows.length === 0 ? <EmptyState icon={ScrollText} title="No admin actions yet" /> : (
         <div className="overflow-x-auto rounded-xl border bg-card">
           <table className="w-full min-w-[720px] text-sm">
@@ -57,9 +78,14 @@ export default async function AdminAuditPage(props: PageProps<"/admin/audit">) {
               {rows.map((r) => (
                 <tr key={r.id} className="align-top">
                   <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">{formatDate(r.created_at, true)}</td>
-                  <td className="px-4 py-3">{r.admin_name ?? (r.action === "company.trial_started" ? "Self sign-up" : "—")}<p className="text-xs text-muted-foreground">{r.admin_email ?? (r.action === "company.trial_started" ? String(r.details.email ?? "") : "")}</p></td>
+                  <td className="px-4 py-3">{r.admin_name ?? BY[r.action] ?? "—"}<p className="text-xs text-muted-foreground">{r.admin_email ?? (r.action === "company.trial_started" ? String(r.details.email ?? "") : "")}</p></td>
                   <td className="px-4 py-3">
-                    {r.target_type === "organization" && r.target_id ? <Link href={`/admin/companies/${r.target_id}`} className="hover:text-primary">{LABEL[r.action] ?? r.action}</Link> : (LABEL[r.action] ?? r.action)}
+                    {r.target_type === "organization" && r.target_id && r.target_exists
+                      ? <Link href={`/admin/companies/${r.target_id}`} className="hover:text-primary">{LABEL[r.action] ?? r.action}</Link>
+                      : (LABEL[r.action] ?? r.action)}
+                    {typeof r.details.reference === "string" && (
+                      <Link href={`/admin/payments?q=${encodeURIComponent(r.details.reference)}`} className="block text-xs whitespace-nowrap text-primary hover:underline">View payment {r.details.reference}</Link>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-xs text-muted-foreground">{describe(r.details)}</td>
                 </tr>

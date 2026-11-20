@@ -142,6 +142,7 @@ export function DeleteCompanyButton({ id, name }: { id: string; name: string }) 
               <div className="rounded-lg bg-destructive/10 p-3 text-destructive">
                 <p className="font-medium">{summary(preview)}{preview.recording_bytes > 0 ? `, ${Math.round(preview.recording_bytes / 1048576)} MB of recordings` : ""}, plus resumes, reports, notes and settings.</p>
               </div>
+              <p className="text-xs text-muted-foreground">Payment records are kept for accounting: they stay in Admin → Payments, marked &ldquo;Company deleted&rdquo;.</p>
               {preview.onlyHere.length > 0 && (
                 <label className="flex items-start gap-2">
                   <Checkbox checked={members} onCheckedChange={(c) => setMembers(!!c)} className="mt-0.5" />

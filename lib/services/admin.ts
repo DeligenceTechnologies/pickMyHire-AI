@@ -391,8 +391,9 @@ export async function savePlatformSettings(adminId: string, input: { signupCodeE
 export const PLATFORM_AUDIT_PAGE_SIZE = 50;
 
 export async function listPlatformAudit(page = 1) {
-  return withSystem((tx) => tx<{ id: string; action: string; target_type: string; target_id: string | null; details: Record<string, unknown>; created_at: Date; admin_name: string | null; admin_email: string | null }[]>`
-    select l.id, l.action, l.target_type, l.target_id, l.details, l.created_at, u.name as admin_name, u.email as admin_email
+  return withSystem((tx) => tx<{ id: string; action: string; target_type: string; target_id: string | null; target_exists: boolean; details: Record<string, unknown>; created_at: Date; admin_name: string | null; admin_email: string | null }[]>`
+    select l.id, l.action, l.target_type, l.target_id, l.details, l.created_at, u.name as admin_name, u.email as admin_email,
+      (l.target_type = 'organization' and exists (select 1 from organizations o where o.id = l.target_id)) as target_exists
     from platform_audit_logs l left join users u on u.id = l.admin_user_id
     order by l.created_at desc limit ${PLATFORM_AUDIT_PAGE_SIZE} offset ${(Math.max(1, page) - 1) * PLATFORM_AUDIT_PAGE_SIZE}`);
 }

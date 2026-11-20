@@ -10,7 +10,9 @@ import { DEMO_URL } from "@/lib/marketing";
 import { money } from "@/lib/pricing";
 import { getPricingFor } from "@/lib/services/pricing";
 import { getQuotaStatus } from "@/lib/services/quota";
-import { fulfilCheckout, listPurchases, VALID_MONTHS, type FulfilResult } from "@/lib/services/billing";
+import { fulfilCheckout, getPurchaseDetails, listPurchases, VALID_MONTHS, type FulfilResult } from "@/lib/services/billing";
+import { PaymentSuccessDialog } from "@/components/billing/payment-success-dialog";
+import { LEGAL } from "@/lib/legal";
 import { paymentsEnabled, paymentsTestMode } from "@/lib/stripe";
 import { log } from "@/lib/logger";
 
@@ -29,6 +31,7 @@ export default async function BillingPage(props: PageProps<"/settings/billing">)
       return { status: "pending" as const };
     });
   }
+  const details = paid?.status === "paid" ? await getPurchaseDetails(auth.orgId, paid.purchaseId) : null;
   const cancelled = params.cancelled === "1";
   const [quota, { pricing, custom }, purchases, canBuy] = await Promise.all([getQuotaStatus(auth.orgId), getPricingFor(auth.orgId), listPurchases(auth.orgId), hasPurchaseAccess()]);
   const left = quota.remaining;
@@ -38,6 +41,7 @@ export default async function BillingPage(props: PageProps<"/settings/billing">)
   return (
     <>
       <BillingTabs active="buy" count={purchases.length || undefined} />
+      {details && <PaymentSuccessDialog p={details} company={auth.orgName} balance={left} waiting={quota.onHold} supportEmail={LEGAL.supportEmail} />}
       {paid?.status === "paid" && (
         <p className="flex items-start gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-200">
           <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden />

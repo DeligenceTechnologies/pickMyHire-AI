@@ -21,6 +21,8 @@ const EnvSchema = z.object({
   STRIPE_SECRET_KEY: z.string().startsWith("sk_", "STRIPE_SECRET_KEY must start with sk_").optional(),
   /** Signing secret of the Stripe webhook (whsec_…), from the Stripe dashboard or `stripe listen`. */
   STRIPE_WEBHOOK_SECRET: z.string().startsWith("whsec_", "STRIPE_WEBHOOK_SECRET must start with whsec_").optional(),
+  /** The Stripe Product (prod_…) purchases are filed under. Unset = a plain "AI interviews" line. Prices always come from our app. */
+  STRIPE_PRODUCT_ID: z.string().startsWith("prod_", "STRIPE_PRODUCT_ID must start with prod_").optional(),
   /** While set, buying online and the pricing page are only for people who entered this code (testing before launch). */
   PURCHASE_ACCESS_CODE: z.string().min(8, "PURCHASE_ACCESS_CODE must be at least 8 characters").optional(),
 });
