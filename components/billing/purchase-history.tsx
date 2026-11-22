@@ -1,11 +1,10 @@
 import Link from "next/link";
 import { ArrowUpRight, History, ShoppingCart } from "lucide-react";
 import { EmptyState } from "@/components/common/states";
-import { PurchaseBadge, purchaseKind, purchaseMoves, type PurchaseKind } from "@/components/billing/purchase-moves";
-import { formatDate } from "@/lib/format";
-import { purchaseRef } from "@/lib/purchase-ref";
+import { OrderList } from "@/components/billing/order-list";
+import type { Order } from "@/components/billing/order-details";
+import { purchaseKind, purchaseMoves, type PurchaseKind } from "@/components/billing/purchase-moves";
 import { money } from "@/lib/pricing";
-import type { PurchaseRow } from "@/lib/services/billing";
 import { cn } from "@/lib/utils";
 
 export type HistoryFilter = "all" | Exclude<PurchaseKind, "open">;
@@ -19,9 +18,9 @@ export const HISTORY_FILTERS: { key: HistoryFilter; label: string }[] = [
 
 type Balance = { quota: number | null; used: number; inProgress: number; remaining: number | null };
 
-/** Purchase history: the balance explained, then every purchase in a simple table. */
-export function PurchaseHistory({ balance, rows, filter, validMonths, basePath = "/settings/billing/history" }: {
-  balance: Balance; rows: PurchaseRow[]; filter: HistoryFilter; validMonths: number; basePath?: string;
+/** Purchase history: the balance explained, then every order (click one for its details and documents). */
+export function PurchaseHistory({ balance, rows, filter, validMonths, company, basePath = "/settings/billing/history" }: {
+  balance: Balance; rows: Order[]; filter: HistoryFilter; validMonths: number; company: string; basePath?: string;
 }) {
   const kinds = rows.map((p) => purchaseKind(p));
   const matches = (k: PurchaseKind, f: HistoryFilter) => f === "all" || k === f || (f === "incomplete" && k === "open");
@@ -40,8 +39,8 @@ export function PurchaseHistory({ balance, rows, filter, validMonths, basePath =
       <section className="overflow-hidden rounded-xl border bg-card">
         <header className="flex flex-wrap items-center justify-between gap-3 px-5 pt-4 pb-3">
           <div>
-            <h2 className="font-semibold">Purchases</h2>
-            <p className="text-xs text-muted-foreground">{t.spent ? `${money(t.spent)} spent${t.refunded ? ` · ${money(t.refunded)} refunded` : ""}` : "Payments, refunds, receipts and invoices."}</p>
+            <h2 className="font-semibold">Orders</h2>
+            <p className="text-xs text-muted-foreground">{t.spent ? `${money(t.spent)} spent${t.refunded ? ` · ${money(t.refunded)} refunded` : ""}` : "Your orders, with receipts and invoices."}</p>
           </div>
           <nav aria-label="Filter purchases" className="flex flex-wrap rounded-lg bg-muted p-0.5 text-xs font-medium">
             {HISTORY_FILTERS.map((f) => {
@@ -59,51 +58,7 @@ export function PurchaseHistory({ balance, rows, filter, validMonths, basePath =
         </header>
 
         {shown.length ? (
-          <>
-            {/* Wide screens: table (scrolls inside its box if it ever gets too tight). */}
-            <div className="hidden overflow-x-auto xl:block">
-            <table className="w-full text-sm">
-              <thead className="border-y bg-muted/40 text-left text-xs text-muted-foreground">
-                <tr>
-                  <th scope="col" className="py-2 pr-3 pl-5 font-medium">Date</th>
-                  <th scope="col" className="px-3 py-2 font-medium">Purchase</th>
-                  <th scope="col" className="px-3 py-2 font-medium">Status</th>
-                  <th scope="col" className="px-3 py-2 text-right font-medium">Interviews</th>
-                  <th scope="col" className="px-3 py-2 font-medium">Valid until</th>
-                  <th scope="col" className="py-2 pr-5 pl-3 text-right font-medium"><span className="sr-only">Receipt and invoice</span></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {shown.map((p) => (
-                  <tr key={p.id} className="align-top hover:bg-muted/30">
-                    <td className="py-3 pr-3 pl-5 whitespace-nowrap text-muted-foreground">{formatDate(p.paid_at ?? p.created_at)}</td>
-                    <td className="px-3 py-3"><PurchaseCell p={p} /></td>
-                    <td className="px-3 py-3"><PurchaseBadge p={p} /></td>
-                    <td className="px-3 py-3 text-right"><InterviewsCell p={p} /></td>
-                    <td className="px-3 py-3 whitespace-nowrap text-muted-foreground">{validUntil(p)}</td>
-                    <td className="py-3 pr-5 pl-3 text-right"><ReceiptLink p={p} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            </div>
-            {/* Phones and narrower screens: one card per purchase. */}
-            <ul className="divide-y border-t xl:hidden">
-              {shown.map((p) => (
-                <li key={p.id} className="space-y-2 px-5 py-3.5">
-                  <div className="flex items-start justify-between gap-3">
-                    <PurchaseCell p={p} />
-                    <PurchaseBadge p={p} />
-                  </div>
-                  <div className="flex items-end justify-between gap-3 text-xs text-muted-foreground">
-                    <span>{formatDate(p.paid_at ?? p.created_at)}{validUntil(p) !== "—" ? ` · valid until ${validUntil(p)}` : ""}</span>
-                    <InterviewsCell p={p} />
-                  </div>
-                  <ReceiptLink p={p} />
-                </li>
-              ))}
-            </ul>
-          </>
+          <OrderList rows={shown} company={company} />
         ) : (
           <EmptyState
             icon={rows.length ? History : ShoppingCart}
@@ -166,63 +121,5 @@ function BalanceCard({ balance, t }: { balance: Balance; t: { bought: number; ta
         </dl>
       )}
     </section>
-  );
-}
-
-function PurchaseCell({ p }: { p: PurchaseRow }) {
-  return (
-    <div className="min-w-0">
-      <p className="font-medium">{p.quantity} interviews · {money(p.total_cents)}</p>
-      <p className="text-xs text-muted-foreground">
-        {money(p.unit_cents)} each{p.bought_by ? ` · ${p.bought_by}` : ""}
-        {p.refunded_cents ? <span className="text-rose-700 dark:text-rose-300"> · {money(p.refunded_cents)} refunded</span> : null}
-      </p>
-      {/* What to quote when contacting us about this payment. */}
-      <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
-        <span title="Purchase reference">{purchaseRef(p.id)}</span>{p.invoice_number ? <> · <span title="Invoice number">Invoice {p.invoice_number}</span></> : null}{p.payment_method ? <span className="font-sans"> · {p.payment_method}</span> : null}
-      </p>
-    </div>
-  );
-}
-
-function InterviewsCell({ p }: { p: PurchaseRow }) {
-  const m = purchaseMoves(p);
-  if (!m.bought) return <span className="text-muted-foreground">—</span>;
-  const changed = m.takenBack > 0 || m.expired > 0;
-  return (
-    <div className="tabular">
-      <p className="font-semibold">{changed ? `${m.kept} of ${m.bought}` : `+${m.bought}`}</p>
-      {changed && (
-        <p className="text-xs text-muted-foreground">
-          {m.takenBack > 0 && <span className="text-rose-700 dark:text-rose-300">−{m.takenBack} refunded</span>}
-          {m.takenBack > 0 && m.expired > 0 && " · "}
-          {m.expired > 0 && <span className="text-amber-800 dark:text-amber-300">−{m.expired} expired</span>}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function validUntil(p: PurchaseRow) {
-  return purchaseMoves(p).bought && p.expires_at && p.status !== "refunded" ? formatDate(p.expires_at) : "—";
-}
-
-function ReceiptLink({ p }: { p: PurchaseRow }) {
-  const links = [
-    // Through our server: it checks access and gets a fresh link from Stripe (Stripe's own links expire).
-    p.receipt_url && { href: `/api/billing/purchases/${p.id}/receipt`, label: "Receipt", hint: "Stripe's receipt for this payment" },
-    p.invoice_url && { href: `/api/billing/purchases/${p.id}/invoice`, label: "Invoice", hint: "The paid invoice, with your company details" },
-    p.invoice_pdf && { href: `/api/billing/purchases/${p.id}/pdf`, label: "PDF", hint: "Download the invoice as a PDF" },
-  ].filter((l): l is { href: string; label: string; hint: string } => !!l);
-  if (!links.length) return null;
-  return (
-    <span className="inline-flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
-      {links.map((l) => (
-        <a key={l.label} href={l.href} target="_blank" rel="noopener noreferrer" aria-label={`${l.hint} (opens in a new tab)`}
-          className="inline-flex items-center gap-1 text-xs font-medium whitespace-nowrap text-primary hover:underline">
-          {l.label}<ArrowUpRight className="size-3" aria-hidden />
-        </a>
-      ))}
-    </span>
   );
 }

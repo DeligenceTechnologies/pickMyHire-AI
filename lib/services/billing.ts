@@ -350,10 +350,11 @@ export async function expirePurchases(tx: Tx, orgId: string): Promise<number> {
 // ---------------------------------------------------------------- history
 
 /** The company's purchases (paid, refunded). With `all`, unfinished checkouts (cancelled, failed, expired) too. */
-export async function listPurchases(orgId: string, opts: { all?: boolean } = {}): Promise<PurchaseRow[]> {
-  return withOrg(orgId, (tx) => tx<PurchaseRow[]>`
+export async function listPurchases(orgId: string, opts: { all?: boolean } = {}): Promise<(PurchaseRow & { buyer_email: string | null })[]> {
+  return withOrg(orgId, (tx) => tx<(PurchaseRow & { buyer_email: string | null })[]>`
     select p.id, p.quantity, p.unit_cents, p.total_cents, p.currency, p.status, p.interviews_added, p.interviews_expired, p.refunded_cents,
-      p.receipt_url, p.invoice_url, p.invoice_pdf, p.invoice_number, p.payment_method, p.paid_at, p.expires_at, p.expired_at, p.created_at, coalesce(u.name, p.bought_by_name) as bought_by
+      p.receipt_url, p.invoice_url, p.invoice_pdf, p.invoice_number, p.payment_method, p.paid_at, p.expires_at, p.expired_at, p.created_at, coalesce(u.name, p.bought_by_name) as bought_by,
+      coalesce(p.bought_by_email, u.email) as buyer_email
     from purchases p left join users u on u.id = p.user_id
     where p.organization_id = ${orgId} ${opts.all ? tx`` : tx`and p.status in ('paid', 'refunded', 'partially_refunded')`}
     order by p.created_at desc limit ${opts.all ? 300 : 100}`);

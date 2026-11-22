@@ -49,7 +49,7 @@ export default async function PaymentsPage(props: PageProps<"/admin/payments">) 
       </dl>
 
       <FilterTabs base="/admin/payments" param="filter" current={filter} tabs={TABS} />
-      <div className="mb-4"><SearchBar placeholder="Search reference (PMH-…), invoice number, company or buyer…" /></div>
+      <div className="mb-4"><SearchBar placeholder="Search order ID (PMH-…), invoice number, company or buyer…" /></div>
 
       {rows.length === 0 ? <EmptyState icon={CreditCard} title={q || filter !== "all" ? "No payments match" : "No payments yet"} /> : (
         <div className="overflow-x-auto rounded-xl border bg-card">
@@ -58,7 +58,7 @@ export default async function PaymentsPage(props: PageProps<"/admin/payments">) 
               <tr>
                 <th className="px-4 py-2.5 font-medium">Date</th>
                 <th className="px-4 py-2.5 font-medium">Company</th>
-                <th className="px-4 py-2.5 font-medium">Reference</th>
+                <th className="px-4 py-2.5 font-medium">Order ID</th>
                 <th className="px-4 py-2.5 text-right font-medium">Amount</th>
                 <th className="px-4 py-2.5 font-medium">Bought by</th>
                 <th className="px-4 py-2.5 font-medium">Status</th>

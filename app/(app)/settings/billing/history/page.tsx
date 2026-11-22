@@ -14,7 +14,7 @@ export default async function PurchaseHistoryPage(props: PageProps<"/settings/bi
   return (
     <>
       <BillingTabs active="history" count={rows.filter((p) => purchaseMoves(p).bought).length || undefined} />
-      <PurchaseHistory balance={quota} rows={rows} filter={filter} validMonths={VALID_MONTHS} />
+      <PurchaseHistory balance={quota} rows={rows} filter={filter} validMonths={VALID_MONTHS} company={auth.orgName} />
     </>
   );
 }

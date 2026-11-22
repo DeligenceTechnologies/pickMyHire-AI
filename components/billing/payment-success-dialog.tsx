@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowUpRight, CheckCircle2, FileText, LifeBuoy, Mail, Receipt } from "lucide-react";
-import { CopyButton } from "@/components/common/copy-button";
+import { CheckCircle2 } from "lucide-react";
+import { OrderDocumentButtons, OrderHelp } from "@/components/billing/order-details";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatDate } from "@/lib/format";
@@ -16,8 +16,8 @@ import type { PurchaseDetails } from "@/lib/services/billing";
  * invoice are, and the details to quote if they need to contact us. Closing it drops `?purchase=` from the
  * address, so a refresh doesn't show it again (the history page keeps the same details).
  */
-export function PaymentSuccessDialog({ p, company, balance, waiting, supportEmail }: {
-  p: PurchaseDetails; company: string; balance: number | null; waiting: number; supportEmail: string;
+export function PaymentSuccessDialog({ p, company, balance, waiting }: {
+  p: PurchaseDetails; company: string; balance: number | null; waiting: number;
 }) {
   const [open, setOpen] = useState(true);
   const router = useRouter();
@@ -30,7 +30,7 @@ export function PaymentSuccessDialog({ p, company, balance, waiting, supportEmai
     window.history.replaceState(null, "", url.pathname + url.search);
   };
   const rows: [string, string][] = [
-    ["Reference", p.reference],
+    ["Order ID", p.reference],
     ...(p.invoice_number ? [["Invoice number", p.invoice_number] as [string, string]] : []),
     ["Amount paid", `${money(p.total_cents)} USD`],
     ["Interviews", `${p.quantity} × ${money(p.unit_cents)} each`],
@@ -39,9 +39,6 @@ export function PaymentSuccessDialog({ p, company, balance, waiting, supportEmai
     ["Valid until", formatDate(p.expires_at)],
     ...(p.buyer_email ? [["Receipt sent to", p.buyer_email] as [string, string]] : []),
   ];
-  const summary = [`PickMyHire.ai payment — ${company}`, ...rows.map(([k, v]) => `${k}: ${v}`)].join("\n");
-  const subject = encodeURIComponent(`Question about payment ${p.reference}`);
-  const body = encodeURIComponent(`Hi,\n\nI have a question about this payment:\n\n${summary}\n\n`);
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) close(); }}>
@@ -67,31 +64,13 @@ export function PaymentSuccessDialog({ p, company, balance, waiting, supportEmai
           {rows.map(([k, v]) => (
             <div key={k} className="flex items-baseline justify-between gap-4 px-4 py-2">
               <dt className="shrink-0 text-muted-foreground">{k}</dt>
-              <dd className={k === "Reference" || k === "Invoice number" ? "min-w-0 truncate font-mono text-[13px] font-medium" : "min-w-0 truncate text-right font-medium"}>{v}</dd>
+              <dd className={k === "Order ID" || k === "Invoice number" ? "min-w-0 truncate font-mono text-[13px] font-medium" : "min-w-0 truncate text-right font-medium"}>{v}</dd>
             </div>
           ))}
         </dl>
 
-        {(p.invoice_url || p.invoice_pdf || p.receipt_url) && (
-          <div className="flex flex-wrap gap-2">
-            {p.invoice_url && <DocLink href={`/api/billing/purchases/${p.id}/invoice`} icon={FileText}>View invoice</DocLink>}
-            {p.invoice_pdf && <DocLink href={`/api/billing/purchases/${p.id}/pdf`} icon={FileText}>Invoice PDF</DocLink>}
-            {p.receipt_url && <DocLink href={`/api/billing/purchases/${p.id}/receipt`} icon={Receipt}>Receipt</DocLink>}
-            <CopyButton value={summary} label="Copy details" />
-          </div>
-        )}
-
-        <div className="flex gap-3 rounded-xl bg-muted/50 px-4 py-3 text-sm">
-          <LifeBuoy className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
-          <p className="text-muted-foreground">
-            Questions about this payment? Email{" "}
-            <a href={`mailto:${supportEmail}?subject=${subject}&body=${body}`} className="inline-flex items-center gap-1 font-medium text-primary hover:underline">
-              <Mail className="size-3.5" aria-hidden />{supportEmail}
-            </a>{" "}
-            or <Link href="/help" className="font-medium text-primary hover:underline">contact support</Link>, and quote reference{" "}
-            <span className="font-mono font-medium whitespace-nowrap text-foreground">{p.reference}</span>. These details are also in Purchase history.
-          </p>
-        </div>
+        <OrderDocumentButtons p={p} company={company} />
+        <OrderHelp p={p} company={company} />
 
         <DialogFooter>
           <Link href="/settings/billing/history" onClick={() => setOpen(false)} className={buttonVariants({ variant: "outline" })}>Purchase history</Link>
@@ -99,13 +78,5 @@ export function PaymentSuccessDialog({ p, company, balance, waiting, supportEmai
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function DocLink({ href, icon: Icon, children }: { href: string; icon: typeof FileText; children: React.ReactNode }) {
-  return (
-    <a href={href} target="_blank" rel="noopener noreferrer" className={buttonVariants({ variant: "outline", size: "sm" })}>
-      <Icon aria-hidden />{children}<ArrowUpRight className="opacity-60" aria-hidden /><span className="sr-only"> (opens in a new tab)</span>
-    </a>
   );
 }
