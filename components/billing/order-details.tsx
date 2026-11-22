@@ -19,11 +19,15 @@ import { cn } from "@/lib/utils";
 export type Order = PurchaseRow & { buyer_email?: string | null };
 
 /** The order's documents. They open through our server, which checks access and gets a fresh Stripe link. */
-export function orderDocuments(p: Pick<Order, "id" | "invoice_url" | "invoice_pdf" | "receipt_url">) {
+export const CUSTOMER_DOCS = "/api/billing/purchases";
+/** Platform admin: any company's documents. */
+export const ADMIN_DOCS = "/api/admin/purchases";
+
+export function orderDocuments(p: Pick<Order, "id" | "invoice_url" | "invoice_pdf" | "receipt_url">, base = CUSTOMER_DOCS) {
   return [
-    p.invoice_url && { key: "invoice", label: "View invoice", icon: FileText, href: `/api/billing/purchases/${p.id}/invoice` },
-    p.invoice_pdf && { key: "pdf", label: "Download invoice (PDF)", icon: Download, href: `/api/billing/purchases/${p.id}/pdf` },
-    p.receipt_url && { key: "receipt", label: "View receipt", icon: Receipt, href: `/api/billing/purchases/${p.id}/receipt` },
+    p.invoice_url && { key: "invoice", label: "View invoice", icon: FileText, href: `${base}/${p.id}/invoice` },
+    p.invoice_pdf && { key: "pdf", label: "Download invoice (PDF)", icon: Download, href: `${base}/${p.id}/pdf` },
+    p.receipt_url && { key: "receipt", label: "View receipt", icon: Receipt, href: `${base}/${p.id}/receipt` },
   ].filter((d): d is { key: string; label: string; icon: typeof FileText; href: string } => !!d);
 }
 
@@ -93,8 +97,8 @@ export function OrderFactList({ p, className }: { p: Order; className?: string }
 }
 
 /** The order's documents as a list of full-width rows (invoice, PDF, receipt), plus Copy details. */
-export function OrderDocumentButtons({ p, company }: { p: Order; company: string }) {
-  const docs = orderDocuments(p);
+export function OrderDocumentButtons({ p, company, docBase }: { p: Order; company: string; docBase?: string }) {
+  const docs = orderDocuments(p, docBase);
   return (
     <section>
       <div className="mb-1.5 flex items-center justify-between gap-3">
@@ -141,8 +145,8 @@ export function OrderHelp({ p, company, className }: { p: Order; company: string
 }
 
 /** The ⋮ menu items for an order: details, its documents, and copying the order ID. */
-export function OrderMenuItems({ p, onDetails }: { p: Order; onDetails: () => void }) {
-  const docs = orderDocuments(p);
+export function OrderMenuItems({ p, onDetails, docBase }: { p: Order; onDetails: () => void; docBase?: string }) {
+  const docs = orderDocuments(p, docBase);
   return (
     <>
       <DropdownMenuItem onClick={onDetails}><ExternalLink /> View details</DropdownMenuItem>

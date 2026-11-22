@@ -42,7 +42,7 @@ vi.mock("@/lib/stripe", () => ({
   }),
 }));
 
-const { applyRefund, expirePurchases, fulfilCheckout, getPurchaseDetails, handleStripeEvent, listAdminPayments, listPurchases, packLine, paymentMethodLabel, purchaseDocumentUrl, startCheckout } = await import("@/lib/services/billing");
+const { adminPurchaseDocumentUrl, applyRefund, expirePurchases, fulfilCheckout, getPurchaseDetails, handleStripeEvent, listAdminPayments, orderIdSearch, listPurchases, packLine, paymentMethodLabel, purchaseDocumentUrl, startCheckout } = await import("@/lib/services/billing");
 const { purchaseRef } = await import("@/lib/purchase-ref");
 const { DEFAULT_PRICING, quote } = await import("@/lib/pricing");
 const { getQuotaStatus, readQuota } = await import("@/lib/services/quota");
@@ -340,5 +340,23 @@ describe("admin payments, and a company being deleted", () => {
     expect(await fulfilCheckout(sid2)).toEqual({ status: "unknown" });
     const after = (await listAdminPayments({ q: `Billing Co ${id} late` })).rows[0];
     expect(after).toMatchObject({ status: "paid", organization_id: null, interviews_added: 0 });
+  });
+});
+
+describe("admin: order ID search and documents", () => {
+  it("reads an order ID however it's typed", () => {
+    for (const q of ["PMH-D6C43DAF", "pmh-d6c43daf", "PMH D6C43DAF", " #D6C43DAF ", "d6c43daf", "PMH-D6C4"]) expect(orderIdSearch(q), q).toMatch(/^d6c4/);
+    for (const q of ["", "PMH-", "abc", "Northwind", "pcvlugti-0001"]) expect(orderIdSearch(q), q).toBeNull();
+  });
+
+  it("finds a payment by part of its ID, in any style, and opens its documents for the admin", async () => {
+    const sid = await buy(10);
+    const r = await fulfilCheckout(sid) as { purchaseId: string };
+    const ref = purchaseRef(r.purchaseId);
+    for (const q of [ref.toLowerCase(), ref.replace("-", " "), ref.slice(4, 10), `#${ref.slice(4)}`]) {
+      expect((await listAdminPayments({ q })).rows.some((p) => p.id === r.purchaseId), q).toBe(true);
+    }
+    expect(await adminPurchaseDocumentUrl(r.purchaseId, "invoice")).toBe(`https://invoice.stripe.com/fresh/in_${sid}`);
+    expect(await adminPurchaseDocumentUrl("00000000-0000-4000-8000-000000000000", "invoice")).toBeNull();
   });
 });

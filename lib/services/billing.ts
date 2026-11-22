@@ -381,10 +381,22 @@ export type PurchaseDoc = "invoice" | "pdf" | "receipt";
  * link saved at payment is the fallback if Stripe can't be reached. Only for the purchase's own company.
  */
 export async function purchaseDocumentUrl(orgId: string, purchaseId: string, doc: PurchaseDoc): Promise<string | null> {
-  const [p] = await withOrg(orgId, (tx) => tx<{ stripe_invoice_id: string | null; stripe_payment_intent: string | null; invoice_url: string | null; invoice_pdf: string | null; receipt_url: string | null }[]>`
+  const [p] = await withOrg(orgId, (tx) => tx<DocRow[]>`
     select stripe_invoice_id, stripe_payment_intent, invoice_url, invoice_pdf, receipt_url
     from purchases where organization_id = ${orgId} and id = ${purchaseId}`);
-  if (!p) return null;
+  return p ? freshDocumentUrl(p, purchaseId, doc) : null;
+}
+
+/** The same, for the platform admin: any company's purchase, including deleted companies. */
+export async function adminPurchaseDocumentUrl(purchaseId: string, doc: PurchaseDoc): Promise<string | null> {
+  const [p] = await withSystem((tx) => tx<DocRow[]>`
+    select stripe_invoice_id, stripe_payment_intent, invoice_url, invoice_pdf, receipt_url from purchases where id = ${purchaseId}`);
+  return p ? freshDocumentUrl(p, purchaseId, doc) : null;
+}
+
+type DocRow = { stripe_invoice_id: string | null; stripe_payment_intent: string | null; invoice_url: string | null; invoice_pdf: string | null; receipt_url: string | null };
+
+async function freshDocumentUrl(p: DocRow, purchaseId: string, doc: PurchaseDoc): Promise<string | null> {
   const saved = doc === "invoice" ? p.invoice_url : doc === "pdf" ? p.invoice_pdf : p.receipt_url;
   if (!paymentsEnabled()) return saved;
   try {
@@ -412,6 +424,15 @@ export async function getStripeCustomerId(orgId: string): Promise<string | null>
 
 // ---------------------------------------------------------------- platform admin: all payments
 
+/**
+ * The hex part of an order ID typed into search, however it's written: "PMH-D6C43DAF", "pmh d6c4",
+ * "#D6C43DAF", or a full purchase id. Null when the text isn't one (4+ hex characters).
+ */
+export function orderIdSearch(q: string): string | null {
+  const hex = q.trim().replace(/^#/, "").replace(/^pmh/i, "").replace(/[\s-]/g, "").toLowerCase();
+  return /^[0-9a-f]{4,32}$/.test(hex) ? hex : null;
+}
+
 export const ADMIN_PAYMENTS_PAGE_SIZE = 50;
 export type AdminPaymentFilter = "all" | "paid" | "refunded" | "deleted";
 export type AdminPayment = PurchaseRow & {
@@ -425,7 +446,7 @@ export type AdminPayment = PurchaseRow & {
 export async function listAdminPayments(opts: { q?: string; filter?: AdminPaymentFilter; page?: number } = {}) {
   const q = (opts.q ?? "").trim().slice(0, 100);
   const like = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
-  const ref = /^(pmh-?)?[0-9a-f]{4,8}$/i.test(q) ? `${q.replace(/^pmh-?/i, "").toLowerCase()}%` : null;
+  const ref = orderIdSearch(q);
   const page = Math.max(1, Math.floor(opts.page ?? 1));
   return withSystem(async (tx) => {
     const where = tx`p.status in ('paid', 'refunded', 'partially_refunded')
@@ -434,7 +455,7 @@ export async function listAdminPayments(opts: { q?: string; filter?: AdminPaymen
         : opts.filter === "deleted" ? tx`and p.organization_id is null` : tx``}
       ${q ? tx`and (coalesce(o.name, p.company_name) ilike ${like} or p.invoice_number ilike ${like}
         or coalesce(p.bought_by_email, u.email) ilike ${like} or coalesce(u.name, p.bought_by_name) ilike ${like}
-        ${ref ? tx`or replace(p.id::text, '-', '') like ${ref}` : tx``})` : tx``}`;
+        ${ref ? tx`or replace(p.id::text, '-', '') like ${`%${ref}%`}` : tx``})` : tx``}`;
     const rows = await tx<Omit<AdminPayment, "reference">[]>`
       select p.id, p.organization_id, coalesce(o.name, p.company_name, 'Deleted company') as company, p.quantity, p.unit_cents, p.total_cents,
         p.currency, p.status, p.interviews_added, p.interviews_expired, p.refunded_cents, p.receipt_url, p.invoice_url, p.invoice_pdf,

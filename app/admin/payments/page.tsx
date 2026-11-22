@@ -1,13 +1,12 @@
 import Link from "next/link";
-import { ArrowUpRight, CreditCard } from "lucide-react";
+import { CreditCard } from "lucide-react";
+import { PaymentsTable } from "@/components/admin/payments-table";
 import { FilterTabs } from "@/components/admin/filter-tabs";
-import { PurchaseBadge } from "@/components/billing/purchase-moves";
 import { PageHeader } from "@/components/common/page-header";
 import { SearchBar } from "@/components/common/search-bar";
 import { EmptyState } from "@/components/common/states";
-import { formatDate } from "@/lib/format";
 import { money } from "@/lib/pricing";
-import { listAdminPayments, type AdminPaymentFilter } from "@/lib/services/billing";
+import { listAdminPayments, orderIdSearch, type AdminPaymentFilter } from "@/lib/services/billing";
 import { paymentsTestMode } from "@/lib/stripe";
 
 export const metadata = { title: "Payments" };
@@ -32,7 +31,7 @@ export default async function PaymentsPage(props: PageProps<"/admin/payments">) 
   };
   return (
     <>
-      <PageHeader title="Payments" description="Every online payment by every company, including companies that were deleted. Refund in Stripe: unused interviews are taken back automatically." />
+      <PageHeader title="Payments" description="Every online payment by every company, including deleted companies. Click a payment for its details. Refund in Stripe: unused interviews are taken back automatically." />
 
       <dl className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {([
@@ -51,58 +50,9 @@ export default async function PaymentsPage(props: PageProps<"/admin/payments">) 
       <FilterTabs base="/admin/payments" param="filter" current={filter} tabs={TABS} />
       <div className="mb-4"><SearchBar placeholder="Search order ID (PMH-…), invoice number, company or buyer…" /></div>
 
-      {rows.length === 0 ? <EmptyState icon={CreditCard} title={q || filter !== "all" ? "No payments match" : "No payments yet"} /> : (
-        <div className="overflow-x-auto rounded-xl border bg-card">
-          <table className="w-full min-w-[900px] text-sm">
-            <thead className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
-              <tr>
-                <th className="px-4 py-2.5 font-medium">Date</th>
-                <th className="px-4 py-2.5 font-medium">Company</th>
-                <th className="px-4 py-2.5 font-medium">Order ID</th>
-                <th className="px-4 py-2.5 text-right font-medium">Amount</th>
-                <th className="px-4 py-2.5 font-medium">Bought by</th>
-                <th className="px-4 py-2.5 font-medium">Status</th>
-                <th className="px-4 py-2.5 font-medium"><span className="sr-only">Stripe</span></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {rows.map((p) => (
-                <tr key={p.id} className="align-top hover:bg-muted/30">
-                  <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">{formatDate(p.paid_at ?? p.created_at, true)}</td>
-                  <td className="px-4 py-3">
-                    {p.organization_id
-                      ? <Link href={`/admin/companies/${p.organization_id}`} className="font-medium hover:text-primary">{p.company}</Link>
-                      : <span className="font-medium">{p.company}</span>}
-                    {!p.organization_id && <p className="text-xs font-medium text-rose-700 dark:text-rose-300">Company deleted</p>}
-                  </td>
-                  <td className="px-4 py-3">
-                    <p className="font-mono text-[13px] font-medium whitespace-nowrap">{p.reference}</p>
-                    {p.invoice_number && <p className="font-mono text-xs whitespace-nowrap text-muted-foreground">Invoice {p.invoice_number}</p>}
-                  </td>
-                  <td className="px-4 py-3 text-right whitespace-nowrap">
-                    <p className="font-medium tabular">{money(p.total_cents)}</p>
-                    <p className="text-xs text-muted-foreground">{p.quantity} × {money(p.unit_cents)}</p>
-                    {p.refunded_cents > 0 && <p className="text-xs text-rose-700 dark:text-rose-300">−{money(p.refunded_cents)} refunded</p>}
-                  </td>
-                  <td className="px-4 py-3">
-                    <p>{p.bought_by ?? "—"}</p>
-                    {p.buyer_email && <p className="text-xs text-muted-foreground">{p.buyer_email}</p>}
-                    {p.payment_method && <p className="text-xs text-muted-foreground">{p.payment_method}</p>}
-                  </td>
-                  <td className="px-4 py-3"><PurchaseBadge p={p} /></td>
-                  <td className="px-4 py-3 text-right">
-                    {p.stripe_payment_intent && (
-                      <a href={`${stripe}${p.stripe_payment_intent}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-medium whitespace-nowrap text-primary hover:underline">
-                        Open in Stripe<ArrowUpRight className="size-3" aria-hidden /><span className="sr-only"> (opens in a new tab)</span>
-                      </a>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {rows.length === 0
+        ? <EmptyState icon={CreditCard} title={q || filter !== "all" ? "No payments match" : "No payments yet"} description={q ? "Try the order ID (PMH-…), the invoice number, the company or the buyer's email." : undefined} />
+        : <PaymentsTable rows={rows} stripePayments={stripe} autoOpen={!!(q && orderIdSearch(q))} />}
       <div className="mt-4 flex justify-between text-sm">
         {page > 1 ? <Link href={pageHref(page - 1)} className="text-primary hover:underline">Newer</Link> : <span />}
         {hasMore && <Link href={pageHref(page + 1)} className="text-primary hover:underline">Older</Link>}
