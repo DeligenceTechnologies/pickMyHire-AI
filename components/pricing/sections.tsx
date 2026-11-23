@@ -113,7 +113,7 @@ export function PricingSections({ pricing, trial, start }: { pricing: Pricing; t
             </details>
           ))}
         </div>
-        <p className="mt-6 text-center text-sm text-[#5B6B86]">Prices in US dollars. Taxes may apply depending on where you are. All purchases are final: if an interview doesn&apos;t work because of us, we give it back. See our <Link href="/refunds" className="text-[#0B5BD3] hover:underline">refund policy</Link> and <Link href="/terms" className="text-[#0B5BD3] hover:underline">terms</Link>.</p>
+        <p className="mt-6 text-center text-sm text-[#5B6B86]">Prices in US dollars. At checkout, Stripe can show and charge the price in your own currency at a guaranteed rate (a small conversion fee may apply). Taxes may apply depending on where you are. All purchases are final: if an interview doesn&apos;t work because of us, we give it back. See our <Link href="/refunds" className="text-[#0B5BD3] hover:underline">refund policy</Link> and <Link href="/terms" className="text-[#0B5BD3] hover:underline">terms</Link>.</p>
       </section>
 
       {/* Final call to action */}

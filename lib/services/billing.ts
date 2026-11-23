@@ -30,6 +30,8 @@ export type PurchaseRow = {
   id: string; quantity: number; unit_cents: number; total_cents: number; currency: string; status: PurchaseStatus;
   interviews_added: number; interviews_expired: number; refunded_cents: number; receipt_url: string | null;
   invoice_url: string | null; invoice_pdf: string | null; invoice_number: string | null; payment_method: string | null;
+  /** What the buyer paid in their own currency, when Stripe converted it (minor units, e.g. paise). */
+  local_amount?: number | null; local_currency?: string | null;
   paid_at: Date | null; expires_at: Date | null; expired_at: Date | null; created_at: Date; bought_by: string | null;
 };
 
@@ -138,8 +140,10 @@ export async function startCheckout(auth: AuthContext, quantity: number): Promis
     const customer = await stripeCustomerFor(auth);
     session = await stripe().checkout.sessions.create({
       mode: "payment",
-      // Charge the exact USD price we show; no automatic conversion to the buyer's currency (and its fee).
-      adaptive_pricing: { enabled: false },
+      // Our price is in USD. Stripe shows and charges it in the buyer's own currency where it can (Adaptive
+      // Pricing: Stripe's guaranteed rate, its conversion fee paid by the buyer); the session and payment stay
+      // in USD, so our amount check and totals don't change. Where it can't, the buyer simply pays in USD.
+      adaptive_pricing: { enabled: true },
       client_reference_id: purchase.id,
       customer,
       // The buyer's company name, billing address and (optional) tax ID go on the invoice and stay on the customer.
@@ -182,6 +186,14 @@ export async function startCheckout(auth: AuthContext, quantity: number): Promis
 
 // ---------------------------------------------------------------- paid
 
+/** What the buyer paid in their own currency, when Stripe converted it; null when they paid in USD. */
+export function localPaid(session: Pick<Stripe.Checkout.Session, "presentment_details" | "currency">): { amount: number; currency: string } | null {
+  const d = session.presentment_details;
+  if (!d?.presentment_currency || d.presentment_amount == null) return null;
+  const currency = d.presentment_currency.toLowerCase();
+  return currency === session.currency?.toLowerCase() ? null : { amount: d.presentment_amount, currency };
+}
+
 export type FulfilResult = { status: "paid"; quantity: number; added: boolean; purchaseId: string } | { status: "pending" } | { status: "unknown" };
 
 /**
@@ -196,6 +208,7 @@ export async function fulfilCheckout(sessionId: string, orgId?: string): Promise
   const intent = typeof session.payment_intent === "object" ? session.payment_intent : null;
   const charge = intent && typeof intent.latest_charge === "object" ? intent.latest_charge : null;
   const invoice = typeof session.invoice === "object" ? session.invoice : null;
+  const local = localPaid(session);
 
   const done = await withSystem(async (tx) => {
     const [p] = await tx<{ id: string; organization_id: string | null; company_name: string | null; user_id: string | null; quantity: number; total_cents: number; currency: string; status: PurchaseStatus }[]>`
@@ -207,6 +220,7 @@ export async function fulfilCheckout(sessionId: string, orgId?: string): Promise
       if (invoice) await tx`update purchases set stripe_invoice_id = ${invoice.id}, invoice_url = ${invoice.hosted_invoice_url ?? null}, invoice_pdf = ${invoice.invoice_pdf ?? null},
           invoice_number = ${invoice.number ?? null}
         where id = ${p.id} and invoice_url is null`;
+      if (local) await tx`update purchases set local_amount = ${local.amount}, local_currency = ${local.currency} where id = ${p.id} and local_currency is null`;
       return { status: "paid" as const, quantity: p.quantity, added: false, purchaseId: p.id };
     }
     // Never add interviews for a payment that doesn't match what we asked for.
@@ -219,7 +233,8 @@ export async function fulfilCheckout(sessionId: string, orgId?: string): Promise
       status = 'paid', paid_at = now(), stripe_session_id = ${session.id}, stripe_payment_intent = ${intent?.id ?? null},
       receipt_url = ${charge?.receipt_url ?? null},
       stripe_invoice_id = ${invoice?.id ?? null}, invoice_url = ${invoice?.hosted_invoice_url ?? null}, invoice_pdf = ${invoice?.invoice_pdf ?? null},
-      invoice_number = ${invoice?.number ?? null}, payment_method = ${paymentMethodLabel(charge?.payment_method_details)}`;
+      invoice_number = ${invoice?.number ?? null}, payment_method = ${paymentMethodLabel(charge?.payment_method_details)},
+      local_amount = ${local?.amount ?? null}, local_currency = ${local?.currency ?? null}`;
     if (!p.organization_id) {
       // Paid after the company was deleted: keep the record (so it can be refunded) but there's nowhere to add interviews.
       await tx`update purchases set ${paidFields} where id = ${p.id}`;
@@ -353,7 +368,7 @@ export async function expirePurchases(tx: Tx, orgId: string): Promise<number> {
 export async function listPurchases(orgId: string, opts: { all?: boolean } = {}): Promise<(PurchaseRow & { buyer_email: string | null })[]> {
   return withOrg(orgId, (tx) => tx<(PurchaseRow & { buyer_email: string | null })[]>`
     select p.id, p.quantity, p.unit_cents, p.total_cents, p.currency, p.status, p.interviews_added, p.interviews_expired, p.refunded_cents,
-      p.receipt_url, p.invoice_url, p.invoice_pdf, p.invoice_number, p.payment_method, p.paid_at, p.expires_at, p.expired_at, p.created_at, coalesce(u.name, p.bought_by_name) as bought_by,
+      p.receipt_url, p.invoice_url, p.invoice_pdf, p.invoice_number, p.payment_method, p.local_amount, p.local_currency, p.paid_at, p.expires_at, p.expired_at, p.created_at, coalesce(u.name, p.bought_by_name) as bought_by,
       coalesce(p.bought_by_email, u.email) as buyer_email
     from purchases p left join users u on u.id = p.user_id
     where p.organization_id = ${orgId} ${opts.all ? tx`` : tx`and p.status in ('paid', 'refunded', 'partially_refunded')`}
@@ -366,7 +381,7 @@ export type PurchaseDetails = PurchaseRow & { reference: string; buyer_email: st
 export async function getPurchaseDetails(orgId: string, purchaseId: string): Promise<PurchaseDetails | null> {
   const [row] = await withOrg(orgId, (tx) => tx<(PurchaseRow & { buyer_email: string | null })[]>`
     select p.id, p.quantity, p.unit_cents, p.total_cents, p.currency, p.status, p.interviews_added, p.interviews_expired, p.refunded_cents,
-      p.receipt_url, p.invoice_url, p.invoice_pdf, p.invoice_number, p.payment_method, p.paid_at, p.expires_at, p.expired_at, p.created_at,
+      p.receipt_url, p.invoice_url, p.invoice_pdf, p.invoice_number, p.payment_method, p.local_amount, p.local_currency, p.paid_at, p.expires_at, p.expired_at, p.created_at,
       coalesce(u.name, p.bought_by_name) as bought_by, coalesce(p.bought_by_email, u.email) as buyer_email
     from purchases p left join users u on u.id = p.user_id
     where p.organization_id = ${orgId} and p.id = ${purchaseId}`);
@@ -459,7 +474,7 @@ export async function listAdminPayments(opts: { q?: string; filter?: AdminPaymen
     const rows = await tx<Omit<AdminPayment, "reference">[]>`
       select p.id, p.organization_id, coalesce(o.name, p.company_name, 'Deleted company') as company, p.quantity, p.unit_cents, p.total_cents,
         p.currency, p.status, p.interviews_added, p.interviews_expired, p.refunded_cents, p.receipt_url, p.invoice_url, p.invoice_pdf,
-        p.invoice_number, p.payment_method, p.paid_at, p.expires_at, p.expired_at, p.created_at, p.stripe_payment_intent,
+        p.invoice_number, p.payment_method, p.local_amount, p.local_currency, p.paid_at, p.expires_at, p.expired_at, p.created_at, p.stripe_payment_intent,
         coalesce(u.name, p.bought_by_name) as bought_by, coalesce(p.bought_by_email, u.email) as buyer_email
       from purchases p left join organizations o on o.id = p.organization_id left join users u on u.id = p.user_id
       where ${where}
@@ -481,7 +496,7 @@ export async function listAdminPayments(opts: { q?: string; filter?: AdminPaymen
 export async function listAllPurchases(orgId?: string): Promise<(PurchaseRow & { company: string; organization_id: string | null })[]> {
   return withSystem((tx) => tx<(PurchaseRow & { company: string; organization_id: string | null })[]>`
     select p.id, p.organization_id, coalesce(o.name, p.company_name, 'Deleted company') as company, p.quantity, p.unit_cents, p.total_cents, p.currency, p.status, p.interviews_added,
-      p.interviews_expired, p.refunded_cents, p.receipt_url, p.invoice_url, p.invoice_pdf, p.invoice_number, p.payment_method, p.paid_at, p.expires_at, p.expired_at, p.created_at, coalesce(u.name, p.bought_by_name) as bought_by
+      p.interviews_expired, p.refunded_cents, p.receipt_url, p.invoice_url, p.invoice_pdf, p.invoice_number, p.payment_method, p.local_amount, p.local_currency, p.paid_at, p.expires_at, p.expired_at, p.created_at, coalesce(u.name, p.bought_by_name) as bought_by
     from purchases p left join organizations o on o.id = p.organization_id left join users u on u.id = p.user_id
     where p.status in ('paid', 'refunded', 'partially_refunded') ${orgId ? tx`and p.organization_id = ${orgId}` : tx``}
     order by p.created_at desc limit 200`);

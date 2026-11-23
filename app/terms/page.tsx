@@ -53,7 +53,7 @@ export default async function TermsPage() {
       </ul>
     </> },
     { id: "pricing", title: "Interviews, prices and payment", body: <ul>
-      <li><b>Pay per interview.</b> You buy interviews in advance. There is no subscription and nothing renews automatically. Prices are shown on the <Link href="/pricing">pricing page</Link> (or agreed with you separately) and are in US dollars.</li>
+      <li><b>Pay per interview.</b> You buy interviews in advance. There is no subscription and nothing renews automatically. Prices are shown on the <Link href="/pricing">pricing page</Link> (or agreed with you separately) and are in US dollars. At checkout our payment provider, Stripe, may let you pay in your own currency at a rate it guarantees (it may charge a small conversion fee); a refund of such a payment goes back in that currency at the same rate.</li>
       {trial.enabled && <li><b>Free trial.</b> New accounts get {trial.interviews} free interviews. They have no cash value.</li>}
       <li><b>When an interview is used.</b> An interview is used when a candidate starts it, not when you invite them. If an interview ends before the candidate answers any question, it&apos;s returned to your balance automatically.</li>
       <li><b>Length.</b> An interview template up to {pricing.minutesPerInterview} minutes counts as one interview. A longer template counts as two, and you&apos;re asked to confirm this when you save it.</li>

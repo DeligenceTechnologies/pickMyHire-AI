@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { formatDate } from "@/lib/format";
-import { money } from "@/lib/pricing";
+import { localPaidNote, money } from "@/lib/pricing";
 import { purchaseRef } from "@/lib/purchase-ref";
 import { cn } from "@/lib/utils";
 
@@ -55,6 +55,7 @@ export function OrderList({ rows, company }: { rows: Order[]; company: string })
                   <p className="font-semibold tabular">{money(p.total_cents)}</p>
                   {p.refunded_cents > 0
                     ? <p className="text-xs text-rose-700 dark:text-rose-300">−{money(p.refunded_cents)} refunded</p>
+                    : localPaidNote(p) ? <p className="text-xs text-muted-foreground" title="What you paid in your own currency">{localPaidNote(p)}</p>
                     : <p className="text-xs text-muted-foreground sm:hidden">{p.quantity} interviews</p>}
                 </div>
                 <div className="col-span-2 sm:col-span-1"><PurchaseBadge p={p} /></div>

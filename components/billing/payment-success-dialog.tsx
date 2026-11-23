@@ -8,7 +8,7 @@ import { OrderDocumentButtons, OrderHelp } from "@/components/billing/order-deta
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatDate } from "@/lib/format";
-import { money } from "@/lib/pricing";
+import { localPaidNote, money } from "@/lib/pricing";
 import type { PurchaseDetails } from "@/lib/services/billing";
 
 /**
@@ -33,6 +33,7 @@ export function PaymentSuccessDialog({ p, company, balance, waiting }: {
     ["Order ID", p.reference],
     ...(p.invoice_number ? [["Invoice number", p.invoice_number] as [string, string]] : []),
     ["Amount paid", `${money(p.total_cents)} USD`],
+    ...(localPaidNote(p) ? [["Paid in your currency", localPaidNote(p)!] as [string, string]] : []),
     ["Interviews", `${p.quantity} × ${money(p.unit_cents)} each`],
     ["Paid on", formatDate(p.paid_at ?? p.created_at, true)],
     ...(p.payment_method ? [["Paid with", p.payment_method] as [string, string]] : []),

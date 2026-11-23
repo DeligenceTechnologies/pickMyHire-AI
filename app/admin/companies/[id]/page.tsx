@@ -15,7 +15,7 @@ import { getCompanyPricing, getPricing } from "@/lib/services/pricing";
 import { PurchaseMoves } from "@/components/billing/purchase-moves";
 import { getStripeCustomerId, listAllPurchases } from "@/lib/services/billing";
 import { paymentsTestMode } from "@/lib/stripe";
-import { money } from "@/lib/pricing";
+import { localPaidNote, money } from "@/lib/pricing";
 import { purchaseRef } from "@/lib/purchase-ref";
 
 export const metadata = { title: "Company" };
@@ -63,7 +63,7 @@ export default async function CompanyPage(props: PageProps<"/admin/companies/[id
               <ul className="divide-y text-sm">
                 {purchases.map((p) => (
                   <li key={p.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2.5 first:pt-0 last:pb-0">
-                    <span><b className="font-medium">{p.quantity} interviews · {money(p.total_cents)}</b> <span className="text-muted-foreground">({money(p.unit_cents)} each)</span><PurchaseMoves p={p} /> <span className="font-mono text-xs text-muted-foreground">{purchaseRef(p.id)}{p.invoice_number ? ` · ${p.invoice_number}` : ""}</span></span>
+                    <span><b className="font-medium">{p.quantity} interviews · {money(p.total_cents)}</b>{localPaidNote(p) && <span className="text-muted-foreground"> (paid {localPaidNote(p)})</span>} <span className="text-muted-foreground">({money(p.unit_cents)} each)</span><PurchaseMoves p={p} /> <span className="font-mono text-xs text-muted-foreground">{purchaseRef(p.id)}{p.invoice_number ? ` · ${p.invoice_number}` : ""}</span></span>
                     <span className="text-xs text-muted-foreground">
                       {formatDate(p.paid_at ?? p.created_at)}{p.bought_by ? ` · ${p.bought_by}` : ""} · {p.status === "paid" ? (p.expired_at ? `expired, ${p.interviews_expired} unused` : `valid until ${formatDate(p.expires_at)}`) : p.status === "refunded" ? "refunded" : `${money(p.refunded_cents)} refunded`}
                     </span>

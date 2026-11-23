@@ -164,7 +164,7 @@ export function SliderPlans({ pricing, trial, start, packHref, packLabel, contac
           <List items={["Everything in Pay per interview", "A custom price for your volume", "A call with our team to plan it"]} />
         </Col>
       </div>
-      <p className="mt-3 text-center text-[13px] text-[#5B6B86]">Prices in US dollars. An interview is only used when the candidate starts it.</p>
+      <p className="mt-3 text-center text-[13px] text-[#5B6B86]">Prices in US dollars; at checkout you can pay in your own currency. An interview is only used when the candidate starts it.</p>
     </div>
   );
 }

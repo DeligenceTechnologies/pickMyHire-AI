@@ -67,7 +67,7 @@ export function BuyDialog({ pricing, qty, validMonths, testMode, onClose }: {
           <Button onClick={pay} disabled={!agreed || busy} className="h-11 w-full">
             {busy ? <Loader2 className="animate-spin" /> : <Lock />} {busy ? "Opening secure payment…" : `Pay ${q ? money(q.totalCents) : ""} securely`}
           </Button>
-          <p className="text-center text-xs text-muted-foreground">You&apos;ll pay on Stripe&apos;s secure page. We never see your card details.</p>
+          <p className="text-center text-xs text-muted-foreground">You&apos;ll pay on Stripe&apos;s secure page. We never see your card details. Stripe can show the price in your own currency and convert it at a guaranteed rate.</p>
         </DialogFooter>
       </DialogContent>
     </Dialog>

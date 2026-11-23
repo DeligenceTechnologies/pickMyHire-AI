@@ -125,6 +125,25 @@ export function money(cents: number, opts: { whole?: boolean } = {}): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: whole ? 0 : 2 }).format(cents / 100);
 }
 
+/**
+ * An amount Stripe gives in a currency's smallest unit (paise, cents, or whole yen), e.g. what a buyer
+ * paid in their own currency: localMoney(254000, "inr") → "₹2,540.00".
+ */
+export function localMoney(amount: number, currency: string): string {
+  try {
+    const f = new Intl.NumberFormat("en-US", { style: "currency", currency: currency.toUpperCase() });
+    const digits = f.resolvedOptions().maximumFractionDigits ?? 2;
+    return f.format(amount / 10 ** digits);
+  } catch {
+    return `${(amount / 100).toFixed(2)} ${currency.toUpperCase()}`;
+  }
+}
+
+/** "$29.90 USD (paid ₹2,540.00 INR)" style note, or null when the buyer paid in USD. */
+export function localPaidNote(p: { local_amount?: number | null; local_currency?: string | null }): string | null {
+  return p.local_amount != null && p.local_currency ? `${localMoney(p.local_amount, p.local_currency)} ${p.local_currency.toUpperCase()}` : null;
+}
+
 const TIER_NAMES = ["Starter", "Growth", "Scale", "Volume"];
 /** A short name for each volume price, for the pack cards. */
 export const tierName = (i: number) => TIER_NAMES[i] ?? `Pack ${i + 1}`;

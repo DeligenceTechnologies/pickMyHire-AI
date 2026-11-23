@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { formatDate } from "@/lib/format";
-import { money } from "@/lib/pricing";
+import { localPaidNote, money } from "@/lib/pricing";
 import type { AdminPayment } from "@/lib/services/billing";
 
 /**
@@ -77,6 +77,7 @@ export function PaymentsTable({ rows, stripePayments, autoOpen }: { rows: AdminP
                   <p className="font-semibold tabular">{money(p.total_cents)}</p>
                   {p.refunded_cents > 0
                     ? <p className="text-xs text-rose-700 dark:text-rose-300">−{money(p.refunded_cents)} refunded</p>
+                    : localPaidNote(p) ? <p className="text-xs text-muted-foreground" title="What the buyer paid in their own currency">paid {localPaidNote(p)}</p>
                     : <p className="text-xs text-muted-foreground">{p.quantity} × {money(p.unit_cents)}</p>}
                 </td>
                 <td className="px-4 py-3">

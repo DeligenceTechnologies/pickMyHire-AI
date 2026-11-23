@@ -42,9 +42,9 @@ vi.mock("@/lib/stripe", () => ({
   }),
 }));
 
-const { adminPurchaseDocumentUrl, applyRefund, expirePurchases, fulfilCheckout, getPurchaseDetails, handleStripeEvent, listAdminPayments, orderIdSearch, listPurchases, packLine, paymentMethodLabel, purchaseDocumentUrl, startCheckout } = await import("@/lib/services/billing");
+const { adminPurchaseDocumentUrl, applyRefund, expirePurchases, fulfilCheckout, localPaid, getPurchaseDetails, handleStripeEvent, listAdminPayments, orderIdSearch, listPurchases, packLine, paymentMethodLabel, purchaseDocumentUrl, startCheckout } = await import("@/lib/services/billing");
 const { purchaseRef } = await import("@/lib/purchase-ref");
-const { DEFAULT_PRICING, quote } = await import("@/lib/pricing");
+const { DEFAULT_PRICING, localMoney, localPaidNote, quote } = await import("@/lib/pricing");
 const { getQuotaStatus, readQuota } = await import("@/lib/services/quota");
 
 const id = Date.now().toString(36);
@@ -202,6 +202,26 @@ describe("company Stripe account: customer, invoice, pack details", () => {
     expect(c.invoice_creation?.invoice_data?.description).toContain("Growth pack: $2.49 per interview (save 17%)");
     expect(JSON.stringify(c.custom_text)).toContain("Growth pack");
     expect(c.line_items![0].price_data!.unit_amount).toBe(249);
+  });
+
+  it("lets Stripe show the USD price in the buyer's currency, and keeps what they paid", async () => {
+    const sessionId = await buy(10);
+    expect(created.at(-1)!.adaptive_pricing).toEqual({ enabled: true });
+    expect(created.at(-1)!.line_items![0].price_data!.currency).toBe("usd");
+    // Stripe charged ₹2,540.00 for the $29.90 price; the session itself stays in USD.
+    sessions.set(sessionId, { ...sessions.get(sessionId)!, presentment_details: { presentment_amount: 254000, presentment_currency: "inr" } } as Stripe.Checkout.Session);
+    expect((await fulfilCheckout(sessionId)).status).toBe("paid");
+    const [row] = await listPurchases(orgId, { all: true }).then((r) => r.filter((x) => x.total_cents === 2990));
+    expect(row).toMatchObject({ local_amount: 254000, local_currency: "inr" });
+    expect(localPaidNote(row)).toBe("₹2,540.00 INR");
+    expect(localMoney(1500, "jpy")).toBe("¥1,500");
+    expect(localPaidNote({ local_amount: null, local_currency: null })).toBeNull();
+  });
+
+  it("a buyer who pays in USD has no local amount", () => {
+    expect(localPaid({ currency: "usd", presentment_details: { presentment_amount: 2990, presentment_currency: "usd" } } as Stripe.Checkout.Session)).toBeNull();
+    expect(localPaid({ currency: "usd" } as Stripe.Checkout.Session)).toBeNull();
+    expect(localPaid({ currency: "usd", presentment_details: { presentment_amount: 2750, presentment_currency: "EUR" } } as Stripe.Checkout.Session)).toEqual({ amount: 2750, currency: "eur" });
   });
 
   it("makes one Stripe customer per company and reuses it", async () => {

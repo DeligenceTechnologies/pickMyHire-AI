@@ -8,7 +8,7 @@ import { DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdow
 import { purchaseMoves } from "@/components/billing/purchase-moves";
 import { formatDate } from "@/lib/format";
 import { LEGAL } from "@/lib/legal";
-import { money } from "@/lib/pricing";
+import { localPaidNote, money } from "@/lib/pricing";
 import { purchaseRef } from "@/lib/purchase-ref";
 import type { PurchaseRow } from "@/lib/services/billing";
 import { cn } from "@/lib/utils";
@@ -44,6 +44,7 @@ export function orderFacts(p: Order) {
         ["Date", formatDate(p.paid_at ?? p.created_at, true)],
         ["Interviews", `${p.quantity} × ${money(p.unit_cents)} each`],
         [paid ? "Total paid" : "Total", `${money(p.total_cents)} USD`],
+        ...(localPaidNote(p) ? [["Paid in your currency", localPaidNote(p)!]] as [string, string][] : []),
         ...(p.refunded_cents ? [["Refunded", `−${money(p.refunded_cents)}`, tone.refund], ["Net paid", money(p.total_cents - p.refunded_cents)]] as [string, string, string?][] : []),
       ],
     },
