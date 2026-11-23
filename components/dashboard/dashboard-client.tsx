@@ -25,7 +25,7 @@ export function DashboardFilters({ periods, period, scope, jobs }: { periods: { 
       <select id="dash-job" className={cn(cls, "max-w-56 truncate")} value={scope}
         onChange={(e) => { const v = e.target.value; go({ jobs: v === "mine" ? "mine" : null, job: v === "all" || v === "mine" ? null : v }); }}>
         <option value="all">All jobs</option>
-        <option value="mine">Jobs I created</option>
+        <option value="mine">My jobs</option>
         {jobs.length > 0 && (
           <optgroup label="One job">
             {jobs.map((j) => <option key={j.id} value={j.id}>{j.title}</option>)}

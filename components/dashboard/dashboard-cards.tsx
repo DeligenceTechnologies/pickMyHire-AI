@@ -112,10 +112,10 @@ export function StageCards({ t }: { t: Dashboard["totals"] }) {
       action: t.to_invite ? { href: "/candidates?stage=not_invited", label: "Invite" } : undefined },
     { label: "Interviewing", hint: "Invited or taking the interview", n: t.interview, icon: Video, tone: TONE.amber,
       extra: t.notStarted ? `${t.notStarted} not opened yet` : t.liveNow ? `${t.liveNow} taking it right now` : pct(t.interview), tone2: t.notStarted ? "warn" : undefined,
-      action: t.notStarted ? { href: "/interviews?status=pending", label: "Remind" } : undefined },
+      action: t.notStarted ? { href: "/interviews?status=pending&sort=waiting", label: "Remind" } : undefined },
     { label: "Ready to review", hint: "Interview done, needs your decision", n: t.review, icon: ClipboardCheck, tone: TONE.violet,
       extra: t.reviewWaiting ? `${t.reviewWaiting} waiting ${STALE_DAYS}+ days` : pct(t.review), tone2: t.reviewWaiting ? "warn" : undefined,
-      action: t.review ? { href: "/interviews?status=completed", label: "Review" } : undefined },
+      action: t.review ? { href: "/interviews?status=review&sort=waiting", label: "Review" } : undefined },
     { label: "Shortlisted", hint: "Moving forward", n: t.shortlisted, icon: Star, tone: TONE.emerald, extra: t.shortlistedInPeriod ? `+${t.shortlistedInPeriod} this period` : "None new", tone2: t.shortlistedInPeriod ? "good" : undefined },
     { label: "Hired", hint: "Hired for a job", n: t.hired, icon: CheckCircle2, tone: TONE.teal, extra: t.hiredInPeriod ? `+${t.hiredInPeriod} this period` : "None new", tone2: t.hiredInPeriod ? "good" : undefined },
   ];

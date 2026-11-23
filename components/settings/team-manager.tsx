@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Trash2, UserPlus } from "lucide-react";
+import { Check, Loader2, Minus, Trash2, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -9,17 +9,12 @@ import { Label } from "@/components/ui/label";
 import { CopyButton } from "@/components/common/copy-button";
 import { useAction } from "@/lib/client/use-action";
 import { formatDate, initials } from "@/lib/format";
+import { ROLE_INFO, ROLE_MATRIX, ROLE_ORDER } from "@/lib/auth/role-info";
+import { cn } from "@/lib/utils";
 import { FormCard } from "./form-card";
 
 type Role = "owner" | "admin" | "recruiter" | "interviewer" | "viewer";
-const LABEL: Record<Role, string> = { owner: "Owner", admin: "Admin", recruiter: "Recruiter", interviewer: "Interviewer", viewer: "Viewer" };
-const DESC: Record<Role, string> = {
-  owner: "Everything, including billing and organization settings",
-  admin: "Manage jobs, candidates, templates, team, privacy and usage",
-  recruiter: "Jobs, candidates, templates, interviews and reports",
-  interviewer: "View interviews, reports and recordings",
-  viewer: "Read-only access to interviews and reports",
-};
+const LABEL = Object.fromEntries(ROLE_ORDER.map((r) => [r, ROLE_INFO[r].label])) as Record<Role, string>;
 
 export function TeamManager({ members, invites, me, assignable, canManage }: {
   members: { id: string; user_id: string; name: string; email: string; role: Role; created_at: string }[];
@@ -45,7 +40,7 @@ export function TeamManager({ members, invites, me, assignable, canManage }: {
                 <>
                   <select aria-label={`Role for ${m.name}`} value={m.role} disabled={!!pending} onChange={(e) => run("role", `/api/organizations/members/${m.id}`, { method: "PATCH", body: { role: e.target.value }, success: "Role updated" })}
                     className="h-8 rounded-lg border border-input bg-background px-2 text-sm">
-                    {assignable.map((r) => <option key={r} value={r}>{LABEL[r]}</option>)}
+                    {assignable.map((r) => <option key={r} value={r} title={ROLE_INFO[r].summary}>{LABEL[r]}</option>)}
                   </select>
                   <Button variant="ghost" size="icon-sm" aria-label={`Remove ${m.name}`} onClick={() => run("rm", `/api/organizations/members/${m.id}`, { method: "DELETE", success: "Member removed" })}><Trash2 /></Button>
                 </>
@@ -66,22 +61,60 @@ export function TeamManager({ members, invites, me, assignable, canManage }: {
           </ul>
         </FormCard>
       )}
-      <FormCard title="Roles">
-        <dl className="grid gap-3 text-sm sm:grid-cols-2">{(Object.keys(LABEL) as Role[]).map((r) => <div key={r}><dt className="font-medium">{LABEL[r]}</dt><dd className="text-muted-foreground">{DESC[r]}</dd></div>)}</dl>
+      <FormCard title="Roles" description="What each role can do. Pick the smallest role that lets someone do their job.">
+        <div className="-mx-1 overflow-x-auto">
+          <table className="w-full min-w-[620px] text-sm">
+            <thead>
+              <tr className="text-left text-xs text-muted-foreground">
+                <th className="px-1 py-2 font-medium"><span className="sr-only">Can</span></th>
+                {ROLE_ORDER.map((r) => <th key={r} className="px-1 py-2 text-center font-medium text-foreground">{LABEL[r]}</th>)}
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {ROLE_MATRIX.map((row) => (
+                <tr key={row.label}>
+                  <th scope="row" className="px-1 py-2 text-left font-normal text-muted-foreground">{row.label}</th>
+                  {ROLE_ORDER.map((r) => {
+                    const v = row.can[r];
+                    return (
+                      <td key={r} className="px-1 py-2 text-center">
+                        {v === true ? <Check className="mx-auto size-4 text-emerald-600 dark:text-emerald-400" aria-label="Yes" />
+                          : v === false ? <Minus className="mx-auto size-4 text-muted-foreground/50" aria-label="No" />
+                          : <span className="text-xs text-amber-700 dark:text-amber-300">{v}</span>}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </FormCard>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader><DialogTitle>Invite a team member</DialogTitle><DialogDescription>They&apos;ll get an email with a link to join. Links expire after 7 days.</DialogDescription></DialogHeader>
           {link ? (
             <div className="space-y-2"><p className="text-sm">Invitation sent. You can also share this link directly:</p><div className="flex gap-2"><Input readOnly value={link} className="font-mono text-xs" /><CopyButton value={link} /></div></div>
           ) : (
             <div className="space-y-3">
               <div className="space-y-1.5"><Label htmlFor="inv-email" required>Email</Label><Input id="inv-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
-              <div className="space-y-1.5"><Label htmlFor="inv-role" required>Role</Label>
-                <select id="inv-role" value={role} onChange={(e) => setRole(e.target.value as Role)} className="h-9 w-full rounded-lg border border-input bg-background px-2.5 text-sm">
-                  {assignable.map((r) => <option key={r} value={r}>{LABEL[r]} — {DESC[r]}</option>)}
-                </select>
-              </div>
+              <fieldset className="space-y-1.5">
+                <legend className="mb-1.5 text-sm font-medium">Role <span className="font-normal text-muted-foreground">· pick the smallest one that fits</span></legend>
+                <div className="space-y-2">
+                  {assignable.map((r) => (
+                    <label key={r} className={cn("flex cursor-pointer gap-3 rounded-xl border px-3.5 py-3 transition-colors has-focus-visible:ring-2 has-focus-visible:ring-ring",
+                      role === r ? "border-primary bg-primary/5 ring-1 ring-primary/30" : "hover:bg-muted/50")}>
+                      <input type="radio" name="inv-role" value={r} checked={role === r} onChange={() => setRole(r)} className="mt-1 size-4 shrink-0 accent-primary" />
+                      <span className="min-w-0">
+                        <span className="flex flex-wrap items-baseline gap-x-2 text-sm font-medium">{LABEL[r]}{r === "recruiter" && <span className="text-xs font-normal text-muted-foreground">Most common</span>}</span>
+                        <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">{ROLE_INFO[r].summary}</span>
+                        <span className="mt-1 block text-xs"><span className="text-muted-foreground">Best for: </span>{ROLE_INFO[r].bestFor}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                {!assignable.includes("admin") && <p className="pt-1 text-xs text-muted-foreground">Only the Owner can add Admins.</p>}
+              </fieldset>
             </div>
           )}
           <DialogFooter>

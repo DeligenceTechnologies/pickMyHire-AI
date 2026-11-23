@@ -1,5 +1,5 @@
 import "server-only";
-import { json, withOrg } from "@/lib/database/db";
+import { json, withOrg, type Tx } from "@/lib/database/db";
 import { audit } from "@/lib/audit";
 import { ApiError } from "@/lib/api";
 import { runInBackground } from "@/lib/background";
@@ -33,6 +33,10 @@ export type InterviewListRow = {
   report_status: string | null;
   round_name: string | null;
   attempt: number;
+  decision: "qualified" | "not_qualified" | "on_hold" | null;
+  last_reminder_at: Date | null;
+  /** The candidate's stage in the job (shortlisted, hired…), when set. */
+  job_stage?: string | null;
 };
 
 export const INTERVIEW_PAGE_SIZE = 25;
@@ -46,36 +50,74 @@ export async function countCompletedInterviews(orgId: string, jobId: string) {
   });
 }
 
-export async function listInterviews(orgId: string, opts: { q?: string; status?: string; jobId?: string; page?: number; from?: string; to?: string } = {}) {
+/** The Interviews page's tabs. "review" = finished with no decision yet; "reviewed" = finished and decided. */
+export const INTERVIEW_TABS = ["pending", "in_progress", "review", "reviewed", "closed"] as const;
+export type InterviewTab = (typeof INTERVIEW_TABS)[number];
+const WAITING = ["created", "invited", "consent_pending", "device_check", "ready"];
+const RUNNING = ["in_progress", "completing"];
+const FINISHED = ["completed", "processing", "report_ready"];
+const ENDED = ["cancelled", "expired", "failed"];
+
+export async function listInterviews(orgId: string, opts: {
+  q?: string; status?: string; jobId?: string; page?: number; from?: string; to?: string;
+  /** Rows per page (default 25). */
+  size?: number;
+  /** Only interviews with activity in the last this many days. */
+  days?: number;
+  /** "recent": latest activity first (default); "waiting": longest waiting first. */
+  sort?: "recent" | "waiting";
+  /** Also count each tab (with the other filters applied). */
+  counts?: boolean;
+} = {}) {
   const q = opts.q?.trim() ? `%${opts.q.trim()}%` : null;
   const page = Math.max(1, opts.page ?? 1);
-  const statusGroup: Record<string, InterviewStatus[]> = {
-    pending: ["created", "invited", "consent_pending", "device_check", "ready"],
-    in_progress: ["in_progress", "completing"],
-    completed: ["completed", "processing", "report_ready"],
-    closed: ["cancelled", "expired", "failed"],
-  };
-  const statuses = opts.status ? statusGroup[opts.status] ?? [opts.status] : null;
+  const size = opts.size ?? INTERVIEW_PAGE_SIZE;
+  const groups: Record<string, string[]> = { pending: WAITING, in_progress: RUNNING, completed: FINISHED, review: FINISHED, reviewed: FINISHED, closed: ENDED };
+  const statuses = opts.status ? groups[opts.status] ?? [opts.status] : null;
+  const last = (tx: Tx) => tx`coalesce(i.completed_at, i.started_at, i.invited_at, i.created_at)`;
   return withOrg(orgId, async (tx) => {
-    const where = tx`i.organization_id = ${orgId}
-      ${statuses ? tx`and i.status::text = any(${statuses})` : tx``}
+    // Everything but the tab, so each tab can be counted with the same filters.
+    const base = tx`i.organization_id = ${orgId}
       ${opts.jobId ? tx`and i.job_id = ${opts.jobId}` : tx``}
       ${opts.from ? tx`and i.created_at >= ${opts.from}::date` : tx``}
       ${opts.to ? tx`and i.created_at < (${opts.to}::date + 1)` : tx``}
+      ${opts.days ? tx`and ${last(tx)} >= now() - make_interval(days => ${opts.days})` : tx``}
       ${q ? tx`and (c.name ilike ${q} or c.email::text ilike ${q} or j.title ilike ${q})` : tx``}`;
+    // Decided: the interview has a decision, or the candidate was already shortlisted, hired or rejected for the job.
+    const decided = tx`(i.decision is not null or coalesce(jc.stage, '') in ('shortlisted', 'hired', 'rejected', 'withdrawn'))`;
+    const where = tx`${base}
+      ${statuses ? tx`and i.status::text = any(${statuses})` : tx``}
+      ${opts.status === "review" ? tx`and not ${decided}` : opts.status === "reviewed" ? tx`and ${decided}` : tx``}`;
+    const from = tx`interviews i join candidates c on c.id = i.candidate_id join jobs j on j.id = i.job_id
+      left join job_candidates jc on jc.candidate_id = i.candidate_id and jc.job_id = i.job_id`;
+    const order = opts.sort === "waiting"
+      ? tx`coalesce(i.completed_at, i.invited_at, i.created_at) asc`
+      : tx`${last(tx)} desc`;
     const rows = await tx<InterviewListRow[]>`
       select i.id, i.status, i.plan_status, i.created_at, i.invited_at, i.started_at, i.completed_at, i.duration_seconds, i.round_name, i.attempt,
+        i.decision, i.last_reminder_at, jc.stage as job_stage,
         c.id as candidate_id, c.name as candidate_name, c.email as candidate_email, j.id as job_id, j.title as job_title,
         r.status::text as report_status,
         (select count(*)::int from interview_feedback f where f.interview_id = i.id and f.kind = 'issue') as issue_count
-      from interviews i join candidates c on c.id = i.candidate_id join jobs j on j.id = i.job_id
+      from ${from}
       left join interview_reports r on r.interview_id = i.id
       where ${where}
-      order by coalesce(i.completed_at, i.started_at, i.created_at) desc
-      limit ${INTERVIEW_PAGE_SIZE} offset ${(page - 1) * INTERVIEW_PAGE_SIZE}`;
+      order by ${order}, i.id
+      limit ${size} offset ${(page - 1) * size}`;
     const [{ total }] = await tx<{ total: number }[]>`
-      select count(*)::int as total from interviews i join candidates c on c.id = i.candidate_id join jobs j on j.id = i.job_id where ${where}`;
-    return { rows, total, page, pageSize: INTERVIEW_PAGE_SIZE };
+      select count(*)::int as total from ${from} where ${where}`;
+    let counts: Record<InterviewTab | "all", number> | null = null;
+    if (opts.counts) {
+      [counts] = await tx<Record<InterviewTab | "all", number>[]>`
+        select count(*)::int as "all",
+          count(*) filter (where i.status::text = any(${WAITING}))::int as pending,
+          count(*) filter (where i.status::text = any(${RUNNING}))::int as in_progress,
+          count(*) filter (where i.status::text = any(${FINISHED}) and not ${decided})::int as review,
+          count(*) filter (where i.status::text = any(${FINISHED}) and ${decided})::int as reviewed,
+          count(*) filter (where i.status::text = any(${ENDED}))::int as closed
+        from ${from} where ${base}`;
+    }
+    return { rows, total, page, pageSize: size, counts };
   });
 }
 

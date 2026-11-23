@@ -380,17 +380,22 @@ export type HumanTableRow = {
 };
 
 /** All human interviews, newest first; interviewers see only those they're on. */
-export async function listHumanInterviews(orgId: string, viewer: { userId: string; role: Role }, opts: { q?: string; jobId?: string; status?: string; page?: number } = {}) {
+export const HUMAN_TABS = ["scheduled", "completed", "no_show", "cancelled"] as const;
+export async function listHumanInterviews(orgId: string, viewer: { userId: string; role: Role }, opts: {
+  q?: string; jobId?: string; status?: string; page?: number; size?: number; days?: number; sort?: "recent" | "waiting"; counts?: boolean;
+} = {}) {
+  const size = opts.size ?? HUMAN_PAGE_SIZE;
   const page = Math.max(1, opts.page ?? 1);
   const q = opts.q?.trim() ? `%${opts.q.trim()}%` : null;
   const status = opts.status && ["scheduled", "completed", "cancelled", "no_show"].includes(opts.status) ? opts.status : null;
   return withOrg(orgId, async (tx) => {
-    const where = tx`
+    const base = tx`
       h.organization_id = ${orgId}
       ${opts.jobId ? tx`and h.job_id = ${opts.jobId}` : tx``}
-      ${status ? tx`and h.status = ${status}` : tx``}
+      ${opts.days ? tx`and h.scheduled_at >= now() - make_interval(days => ${opts.days})` : tx``}
       ${q ? tx`and (c.name ilike ${q} or c.email::text ilike ${q} or j.title ilike ${q})` : tx``}
       ${viewer.role === "interviewer" ? tx`and exists (select 1 from human_interview_panel p where p.human_interview_id = h.id and p.user_id = ${viewer.userId})` : tx``}`;
+    const where = tx`${base} ${status ? tx`and h.status = ${status}` : tx``}`;
     const [{ total }] = await tx<{ total: number }[]>`select count(*)::int as total from human_interviews h join candidates c on c.id = h.candidate_id join jobs j on j.id = h.job_id where ${where}`;
     const rows = await tx<HumanTableRow[]>`
       select h.id, h.job_id, j.title as job_title, h.candidate_id, c.name as candidate_name, c.email as candidate_email, h.round_name, h.attempt,
@@ -400,8 +405,18 @@ export async function listHumanInterviews(orgId: string, viewer: { userId: strin
         (select count(*)::int from human_interview_scorecards s where s.human_interview_id = h.id and s.submitted_at is not null) as scorecards
       from human_interviews h join candidates c on c.id = h.candidate_id join jobs j on j.id = h.job_id
       where ${where}
-      order by h.scheduled_at desc
-      limit ${HUMAN_PAGE_SIZE} offset ${(page - 1) * HUMAN_PAGE_SIZE}`;
-    return { rows, total, pageSize: HUMAN_PAGE_SIZE };
+      order by h.scheduled_at ${opts.sort === "waiting" ? tx`asc` : tx`desc`}, h.id
+      limit ${size} offset ${(page - 1) * size}`;
+    let counts: Record<(typeof HUMAN_TABS)[number] | "all", number> | null = null;
+    if (opts.counts) {
+      [counts] = await tx<Record<(typeof HUMAN_TABS)[number] | "all", number>[]>`
+        select count(*)::int as "all",
+          count(*) filter (where h.status = 'scheduled')::int as scheduled,
+          count(*) filter (where h.status = 'completed')::int as completed,
+          count(*) filter (where h.status = 'no_show')::int as no_show,
+          count(*) filter (where h.status = 'cancelled')::int as cancelled
+        from human_interviews h join candidates c on c.id = h.candidate_id join jobs j on j.id = h.job_id where ${base}`;
+    }
+    return { rows, total, pageSize: size, counts };
   });
 }
