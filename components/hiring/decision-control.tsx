@@ -11,6 +11,7 @@ import { useAction } from "@/lib/client/use-action";
 import { DECISION_LABEL, DECISIONS, type Decision } from "@/lib/hiring";
 import { cn } from "@/lib/utils";
 import { DecisionBadge } from "./badges";
+import { decisionEmailReady, DecisionEmailOption, NO_DECISION_EMAIL, sendDecisionEmailIfTicked, type DecisionEmailValue } from "./decision-email-option";
 
 const ICON = { qualified: Check, not_qualified: X, on_hold: Pause } as const;
 const ACTIVE: Record<Decision, string> = {
@@ -20,11 +21,13 @@ const ACTIVE: Record<Decision, string> = {
 };
 
 /** The team's decision on one interview round. The AI report and scorecards are advice; this is the call. */
-export function DecisionControl({ endpoint, decision, note, decidedBy, decidedOn, canEdit, hint }: {
+export function DecisionControl({ endpoint, decision, note, decidedBy, decidedOn, canEdit, hint, email }: {
   /** `decidedOn` is already formatted by the server (avoids time-zone differences while hydrating). */
   endpoint: string; decision: Decision | null; note: string | null; decidedBy: string | null; decidedOn: string | null; canEdit: boolean;
   /** e.g. "2 of 2 interviewers recommend Qualified" */
   hint?: string | null;
+  /** The round's candidate and job: "Not qualified" + Rejected can also email the candidate. */
+  email?: { candidateId: string; jobId: string; name: string };
 }) {
   const { run, pending } = useAction();
   const [choice, setChoice] = useState<Decision | null>(null);
@@ -33,12 +36,15 @@ export function DecisionControl({ endpoint, decision, note, decidedBy, decidedOn
   const [reason, setReason] = useState("");
   // Not qualified usually ends the candidate's application: offer to move them to Rejected in the same step.
   const [reject, setReject] = useState(true);
+  const [mail, setMail] = useState<DecisionEmailValue>(NO_DECISION_EMAIL);
+  const offerEmail = !!email && choice === "not_qualified" && reject;
   const save = async (d: Decision | null, n: string | null) => {
     const alsoReject = d === "not_qualified" && reject;
     const ok = await run("decide", endpoint, {
       body: { decision: d, note: n, ...(alsoReject ? { reject: true } : {}) },
       success: d ? `Marked ${DECISION_LABEL[d]}${alsoReject ? " and moved to Rejected" : ""}` : "Round reopened",
     });
+    if (ok && alsoReject && email) await sendDecisionEmailIfTicked(email.candidateId, "rejected", mail, email.name);
     if (ok) { setChoice(null); setClearing(false); }
   };
   return (
@@ -57,7 +63,7 @@ export function DecisionControl({ endpoint, decision, note, decidedBy, decidedOn
             const Icon = ICON[d];
             return (
               <Button key={d} size="sm" variant="outline" disabled={!!pending} className={cn(decision === d && ACTIVE[d])}
-                onClick={() => { setText(decision === d ? note ?? "" : ""); setReject(true); setChoice(d); }} aria-pressed={decision === d}>
+                onClick={() => { setText(decision === d ? note ?? "" : ""); setReject(true); setMail(NO_DECISION_EMAIL); setChoice(d); }} aria-pressed={decision === d}>
                 <Icon /> {DECISION_LABEL[d]}
               </Button>
             );
@@ -82,7 +88,7 @@ export function DecisionControl({ endpoint, decision, note, decidedBy, decidedOn
         </DialogContent>
       </Dialog>
       <Dialog open={!!choice} onOpenChange={(o) => !o && setChoice(null)}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Mark this round {choice ? DECISION_LABEL[choice] : ""}?</DialogTitle>
             <DialogDescription>Your team sees the decision on the candidate&apos;s profile and the job pipeline.</DialogDescription>
@@ -100,9 +106,10 @@ export function DecisionControl({ endpoint, decision, note, decidedBy, decidedOn
               </span>
             </label>
           )}
+          {offerEmail && <DecisionEmailOption candidateId={email.candidateId} kind="rejected" jobIds={[email.jobId]} value={mail} onChange={setMail} />}
           <DialogFooter>
             <Button variant="outline" onClick={() => setChoice(null)}>Cancel</Button>
-            <Button disabled={!!pending} onClick={() => choice && save(choice, text.trim() || null)}>{pending && <Loader2 className="animate-spin" />} Save decision</Button>
+            <Button disabled={!!pending || (offerEmail && !decisionEmailReady(mail))} onClick={() => choice && save(choice, text.trim() || null)}>{pending && <Loader2 className="animate-spin" />} Save decision</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

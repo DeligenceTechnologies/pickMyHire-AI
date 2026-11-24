@@ -58,7 +58,8 @@ export async function InterviewPage({ params, tab }: { params: Promise<{ intervi
           </div>
           <div className="min-w-0 sm:max-w-md">
             <DecisionControl endpoint={`/api/interviews/${detail.id}/decision`} decision={detail.decision} note={detail.decision_note} decidedBy={detail.decided_by_name}
-              decidedOn={detail.decided_at ? formatDate(detail.decided_at) : null} canEdit={can(auth.role, "decision:write")} />
+              decidedOn={detail.decided_at ? formatDate(detail.decided_at) : null} canEdit={can(auth.role, "decision:write")}
+              email={can(auth.role, "candidate:write") ? { candidateId: detail.candidate_id, jobId: detail.job_id, name: detail.candidate_name } : undefined} />
           </div>
         </section>
       )}

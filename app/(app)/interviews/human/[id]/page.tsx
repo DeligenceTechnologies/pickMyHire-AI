@@ -137,7 +137,8 @@ export default async function HumanInterviewPage(props: PageProps<"/interviews/h
         <div className="min-w-0 space-y-6">
           <FormCard title="Decision" description="Your team's call for this round. Scorecards are recommendations, and they lock once you decide (clear the decision to unlock them).">
             <DecisionControl endpoint={`/api/human-interviews/${h.id}/decision`} decision={h.decision} note={h.decision_note} decidedBy={h.decided_by_name}
-              decidedOn={h.decided_at ? formatDate(h.decided_at) : null} canEdit={canDecide && h.status !== "cancelled"} hint={hint} />
+              decidedOn={h.decided_at ? formatDate(h.decided_at) : null} canEdit={canDecide && h.status !== "cancelled"} hint={hint}
+              email={can(auth.role, "candidate:write") ? { candidateId: h.candidate_id, jobId: h.job_id, name: h.candidate_name } : undefined} />
           </FormCard>
           <FormCard title="Interview guide">
             <div className="space-y-3 text-sm">

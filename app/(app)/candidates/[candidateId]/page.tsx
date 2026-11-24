@@ -28,6 +28,7 @@ import { ApplicationNav } from "@/components/applications/application-nav";
 import { summariesForPipelines } from "@/lib/services/candidate-summary";
 import { getHrPanel, visibleHrPanel } from "@/lib/services/candidate-notes";
 import { candidateJobsInScope } from "@/lib/auth/job-scope";
+import { listDecisionEmails } from "@/lib/services/decision-email";
 import { HrPanel } from "@/components/candidates/hr-panel";
 import { AnswersCard } from "@/components/applications/answers-card";
 import { answersForCandidate } from "@/lib/services/application-answers";
@@ -56,6 +57,7 @@ export default async function CandidatePage(props: PageProps<"/candidates/[candi
   const answers = allAnswers.filter((a) => inScope(a.job_id));
   const hr = visibleHrPanel(hrAll, salary, scope);
   const interviews = c.interviews.filter((i) => inScope(i.job_id));
+  const decisionEmails = (await listDecisionEmails(auth.orgId, candidateId)).filter((e) => inScope(e.job_id));
   const summaryRows = await summariesForPipelines(auth.orgId, candidateId, pipelines);
   const summaries = Object.fromEntries([...summaryRows].map(([jobId, r]) => [jobId, { status: r.status, summary: r.summary, source: "source" in r ? r.source : null }]));
   const parsing = c.parse_status === "pending" || c.parse_status === "processing";
@@ -98,6 +100,16 @@ export default async function CandidatePage(props: PageProps<"/candidates/[candi
           <h2 className="font-semibold">Hiring progress</h2>
           <CandidatePipelines pipelines={pipelines} candidateId={c.id} candidateName={c.name} canDecide={can(auth.role, "decision:write")} canSchedule={canSchedule}
             members={members.map((m) => ({ user_id: m.user_id, name: m.name, role: m.role }))} emailLive={env().EMAIL_PROVIDER !== "log"} summaries={summaries} />
+          {decisionEmails.length > 0 && (
+            <ul className="space-y-1 text-xs text-muted-foreground">
+              {decisionEmails.map((e) => (
+                <li key={`${e.job_id}-${e.kind}`} className="flex items-center gap-1.5">
+                  <Mail className="size-3.5 shrink-0" aria-hidden />
+                  {e.kind === "rejected" ? "\u201cNot moving forward\u201d" : "\u201cMoving forward\u201d"} email for {e.job_title} sent on {formatDate(e.sent_at)}{e.sent_by_name ? ` by ${e.sent_by_name}` : ""}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
       {answers.length > 0 && <div className="mb-6"><AnswersCard candidateId={c.id} items={answers} canEdit={canWrite} showJob /></div>}

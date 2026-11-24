@@ -12,6 +12,7 @@ import { CopyButton } from "@/components/common/copy-button";
 import { useAction } from "@/lib/client/use-action";
 import { emptyChoice, type RoundChoice, RoundPicker } from "@/components/interview/round-picker";
 import { BalanceNote, useBalance } from "@/components/billing/balance-note";
+import { decisionEmailReady, DecisionEmailOption, NO_DECISION_EMAIL, sendDecisionEmailIfTicked, type DecisionEmailValue } from "@/components/hiring/decision-email-option";
 
 export function ApplicationActions({ id, status, interviewId, interviewStatus = null, canWrite, canInvite, jobId, candidateId, candidateName }: {
   id: string; status: string; interviewId: string | null; canWrite: boolean; canInvite: boolean; jobId: string; candidateId: string; candidateName: string;
@@ -25,6 +26,8 @@ export function ApplicationActions({ id, status, interviewId, interviewStatus = 
   const [link, setLink] = useState<string | null>(null);
   const [choice, setChoice] = useState<RoundChoice>(emptyChoice);
   const [blocked, setBlocked] = useState(false);
+  const [declining, setDeclining] = useState(false);
+  const [email, setEmail] = useState<DecisionEmailValue>(NO_DECISION_EMAIL);
   const balance = useBalance(open);
 
   const invited = !!interviewId;
@@ -40,7 +43,7 @@ export function ApplicationActions({ id, status, interviewId, interviewStatus = 
         </Button>
       )}
       {closable && canWrite && status !== "declined" && (
-        <Button variant="outline" disabled={!!pending} onClick={() => run("decline", `/api/applications/${id}`, { method: "PATCH", body: { status: "declined" }, success: "Marked as not moving forward" })}>
+        <Button variant="outline" disabled={!!pending} onClick={() => { setEmail(NO_DECISION_EMAIL); setDeclining(true); }}>
           <XCircle /> Not moving forward
         </Button>
       )}
@@ -52,6 +55,24 @@ export function ApplicationActions({ id, status, interviewId, interviewStatus = 
           <Send /> {invited ? "Invite to another round" : "Invite to AI interview"}
         </Button>
       )}
+      <Dialog open={declining} onOpenChange={(o) => !pending && setDeclining(o)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Not moving forward with {candidateName}?</DialogTitle>
+            <DialogDescription>The application is closed. You can reopen it later. Nothing is sent to them unless you tick the email below.</DialogDescription>
+          </DialogHeader>
+          {declining && <DecisionEmailOption candidateId={candidateId} kind="rejected" jobIds={[jobId]} value={email} onChange={setEmail} />}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeclining(false)} disabled={!!pending}>Cancel</Button>
+            <Button disabled={!!pending || !decisionEmailReady(email)} onClick={async () => {
+              const ok = await run("decline", `/api/applications/${id}`, { method: "PATCH", body: { status: "declined" }, success: "Marked as not moving forward" });
+              if (!ok) return;
+              await sendDecisionEmailIfTicked(candidateId, "rejected", email, candidateName);
+              setDeclining(false);
+            }}>{pending === "decline" && <Loader2 className="animate-spin" />}Not moving forward</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog open={open} onOpenChange={(o) => !pending && setOpen(o)}>
         <DialogContent className="sm:max-w-lg">
           {link ? (
