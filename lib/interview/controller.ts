@@ -36,6 +36,7 @@ import { processInterview } from "./processing";
 import { hasFaceReference } from "./face";
 import { REENTRY_WINDOW_MS } from "./outcome";
 import { MAX_REPEATS, type RequestKind } from "./repeat";
+import { introLines } from "./intro";
 import { rephraseQuestion } from "@/lib/ai/question-rephrase";
 
 export const CONSENT_VERSION = "2026-09-v1";
@@ -173,6 +174,17 @@ async function assertLinkUsable(ctx: InterviewCtx) {
   if (left) throw new ApiError(410, LINK_USED_MESSAGE);
 }
 
+/** The introduction's words, before the interview starts (null once it has started or ended). */
+export async function getIntroText(token: string): Promise<string | null> {
+  const ctx = await resolveToken(token);
+  await assertLinkUsable(ctx);
+  if (ACTIVE.includes(ctx.status) || FINISHED.includes(ctx.status) || !ctx.plan) return null;
+  return introLines({
+    firstName: ctx.candidateName.split(" ")[0], interviewerName: ctx.interviewerName, jobTitle: ctx.jobTitle, companyName: ctx.companyName,
+    minutes: Math.round(totalPlannedMs(ctx.plan) / 60_000),
+  }).join(" ");
+}
+
 /** Candidate-safe public view. Never includes plan questions, criteria or evaluations. */
 export async function getPublicInterview(token: string) {
   const ctx = await resolveToken(token);
@@ -193,6 +205,11 @@ export async function getPublicInterview(token: string) {
     plan_ready: ctx.planStatus === "completed" && !!ctx.plan,
     plan_failed: ctx.planStatus === "failed",
     total_minutes: ctx.plan ? Math.round(totalPlannedMs(ctx.plan) / 60_000) : null,
+    // Played before Start; a resumed interview doesn't hear it again.
+    intro_lines: ACTIVE.includes(ctx.status) || FINISHED.includes(ctx.status) ? null : introLines({
+      firstName: ctx.candidateName.split(" ")[0], interviewerName: ctx.interviewerName, jobTitle: ctx.jobTitle, companyName: ctx.companyName,
+      minutes: ctx.plan ? Math.round(totalPlannedMs(ctx.plan) / 60_000) : null,
+    }),
     section_names: ctx.plan?.sections.map((s) => s.name) ?? [],
     progress: progressOf(ctx),
     demo_mode: !aiIsLive(),
@@ -232,16 +249,6 @@ export async function completeDeviceCheck(token: string, result: { camera: boole
     });
   }
   return { status: "ready" as const };
-}
-
-function composeIntro(ctx: InterviewCtx, plan: StoredPlan, firstQuestion: string) {
-  const minutes = Math.round(totalPlannedMs(plan) / 60_000);
-  const first = ctx.candidateName.split(" ")[0];
-  return `Hi ${first}, I'm ${ctx.interviewerName}, the AI interviewer for the ${ctx.jobTitle} role at ${ctx.companyName}. `
-    + `This takes about ${minutes} minutes. When you finish an answer, just pause or select "Done answering". `
-    + `I may take a few seconds to reply or move on, so please wait for me. `
-    + `You can ask me to repeat a question anytime. `
-    + `Let's begin with ${plan.sections[0].name.toLowerCase()}. ${firstQuestion}`;
 }
 
 function clockMs(startedAt: Date | null): number {
@@ -325,7 +332,8 @@ export async function startInterview(token: string): Promise<SessionPayload & { 
     const section = plan.sections[0];
     const q = section.questions[0];
     await tx`update interview_sections set status = 'in_progress', started_at = now(), start_ms = 0 where id = ${section.section_id}`;
-    const spoken = composeIntro(ctx, plan, q.question);
+    // The introduction was played on the Ready screen: the interview opens with the first question.
+    const spoken = q.question;
     const questionId = await insertQuestion(tx, ctx, {
       sectionId: section.section_id, text: q.question, spoken, type: "planned", intent: q.intent, criteria: q.evaluation_criteria,
       planKey: q.key, parentId: null, decision: null, askedAtMs: 0,
@@ -540,7 +548,8 @@ export async function submitAnswer(token: string, input: {
         await tx`update interview_sections set status = 'in_progress', started_at = now(), start_ms = ${nowMs} where id = ${s.section_id}`;
       }
       const lead = transition ?? (input.ack_spoken ? "" : "Thank you.");
-      const spoken = [lead, newSection ? `Let's move on to ${s.name.toLowerCase()}.` : "", q.question].filter(Boolean).join(" ");
+      // No "Let's move on to <section>": section names are for the recruiter, not the candidate.
+      const spoken = [lead, q.question].filter(Boolean).join(" ");
       const id = await insertQuestion(tx, ctx, {
         sectionId: s.section_id, text: q.question, spoken, type: "planned", intent: q.intent, criteria: q.evaluation_criteria,
         planKey: q.key, parentId: null, decision: decisionRecord, askedAtMs: nowMs,

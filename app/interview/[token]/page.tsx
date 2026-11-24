@@ -15,23 +15,31 @@ export default async function WelcomePage(props: PageProps<"/interview/[token]">
   if (step === "session") redirect(`/interview/${token}/session`);
   return (
     <CandidateShell brand={data.brand} job={data.job_title} step={0}>
-      <h1 className="text-3xl font-semibold tracking-tight">Hi {data.candidate_first_name}, welcome.</h1>
-      <p className="mt-3 text-muted-foreground">
+      <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Hi {data.candidate_first_name}, welcome.</h1>
+      <p className="mt-2 text-[15px] leading-relaxed text-muted-foreground">
         {data.company_name} has invited you to an AI-assisted interview for the <strong className="text-foreground">{data.job_title}</strong> role.
         {" "}{data.interviewer_name}, an AI interviewer, will ask you questions by voice — one at a time — and may ask short follow-ups.
       </p>
-      <div className="mt-8 grid gap-4 sm:grid-cols-2">
+      <ul className="mt-5 grid gap-3 sm:grid-cols-2">
         {[
-          { icon: Clock, t: "About " + (data.total_minutes ? `${data.total_minutes} minutes` : "30–45 minutes"), d: data.section_names.length ? `${data.section_names.length} parts: ${data.section_names.join(", ")}.` : "Your interview is being prepared." },
+          { icon: Clock, t: "About " + (data.total_minutes ? `${data.total_minutes} minutes` : "30–45 minutes"), d: data.section_names.length ? `In ${data.section_names.length} parts, one question at a time.` : "One question at a time, by voice." },
           { icon: Camera, t: "Camera & microphone", d: "Use a computer with a working camera and microphone. Headphones help." },
           { icon: Mic, t: "Speak naturally", d: "Take your time. Pause or select “Done answering” when you finish an answer." },
           { icon: ShieldCheck, t: "Recorded & reviewed by people", d: "Your interview is recorded and transcribed. The hiring team makes all decisions." },
         ].map(({ icon: Icon, t, d }) => (
-          <div key={t} className="rounded-xl border bg-card p-5"><Icon className="size-5 text-primary" /><p className="mt-3 font-medium">{t}</p><p className="mt-1 text-sm text-muted-foreground">{d}</p></div>
+          <li key={t} className="flex gap-3 rounded-xl border bg-card p-4">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><Icon className="size-[18px]" aria-hidden /></span>
+            <span className="min-w-0">
+              <span className="block font-medium">{t}</span>
+              <span className="mt-0.5 block text-sm leading-snug text-muted-foreground">{d}</span>
+            </span>
+          </li>
         ))}
+      </ul>
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-5">
+        <Link href={`/interview/${token}/${step === "device-check" ? "device-check" : "consent"}`} className={`${buttonVariants({ size: "lg" })} h-11 shrink-0 px-8`}>Get started</Link>
+        <p className="text-sm leading-snug text-muted-foreground">Find a quiet, well-lit place. If you get disconnected, reopen this link within 10 minutes to continue where you left off. After that, the link closes and your interview is sent as it is.</p>
       </div>
-      <p className="mt-8 text-sm text-muted-foreground">Find a quiet, well-lit place. If you get disconnected, reopen this link within 10 minutes to continue where you left off. After that, the link closes and your interview is sent as it is.</p>
-      <Link href={`/interview/${token}/${step === "device-check" ? "device-check" : "consent"}`} className={`${buttonVariants({ size: "lg" })} mt-8 h-11 px-6`}>Get started</Link>
     </CandidateShell>
   );
 }

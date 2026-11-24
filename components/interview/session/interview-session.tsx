@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { AlertTriangle, Captions, CheckCircle2, CloudUpload, Keyboard, Loader2, Mic, MicOff, PhoneOff, Radio, Wifi, WifiOff } from "lucide-react";
+import { AlertTriangle, Captions, CheckCircle2, CloudUpload, Keyboard, Loader2, Mic, MicOff, PhoneOff, Play, Radio, RotateCcw, SkipForward, Wifi, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ConfirmDialog } from "@/components/common/confirm-dialog";
@@ -19,6 +19,7 @@ type Utterance = { question_id: string | null; text: string; kind: "question" | 
 type Progress = { section_index: number; section_count: number; section_name: string; total_minutes: number };
 type Payload = { status: string; utterance: Utterance | null; progress: Progress | null; started_at: string | null; server_now: number; finished: boolean; resumed?: boolean; duplicate?: boolean };
 type AIState = "idle" | "connecting" | "speaking" | "listening" | "thinking" | "finishing";
+type IntroState = "loading" | "needs_click" | "playing" | "done" | "failed";
 
 const nowMs = () => Date.now();
 
@@ -59,8 +60,10 @@ async function post<T>(url: string, body: unknown, opts: { retries?: number; onR
   }
 }
 
-export function InterviewSession({ token, company, job, interviewerName, demoMode, candidateName, brand }: {
+export function InterviewSession({ token, company, job, interviewerName, demoMode, candidateName, brand, introLines }: {
   token: string; company: string; job: string; interviewerName: string; demoMode: boolean; candidateName: string; brand: Brand;
+  /** The interviewer's introduction, played on the Ready screen; null when resuming (it was heard already). */
+  introLines: string[] | null;
 }) {
   const router = useRouter();
   const [stage, setStage] = useState<"intro" | "starting" | "live" | "finishing" | "error">("intro");
@@ -82,6 +85,12 @@ export function InterviewSession({ token, company, job, interviewerName, demoMod
   const [saving, setSaving] = useState(false);
   const [micNotice, setMicNotice] = useState<string | null>(null);
   const [endedBy, setEndedBy] = useState<"finished" | "candidate_ended" | "time_limit">("finished");
+  // The introduction on the Ready screen: plays by itself when the browser allows sound, else on a click.
+  const [intro, setIntro] = useState<IntroState>(introLines?.length ? "loading" : "done");
+  const introRef = useRef<IntroState>(intro);
+  const setIntroState = (s: IntroState) => { introRef.current = s; setIntro(s); };
+  /** The introduction as an audio file (the interviewer's voice); null in demo mode, where the browser speaks it. */
+  const introAudio = useRef<HTMLAudioElement | null>(null);
 
   const video = useRef<HTMLVideoElement>(null);
   const camera = useRef<MediaStream | null>(null);
@@ -426,52 +435,6 @@ export function InterviewSession({ token, company, job, interviewerName, demoMod
   };
   });
 
-  const begin = async () => {
-    setStage("starting");
-    setAiState("connecting");
-    setError(null);
-    try {
-      const media = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 854 }, height: { ideal: 480 }, frameRate: { ideal: 24 } },
-        audio: AUDIO,
-      });
-      camera.current = media;
-      if (unmounted.current) { stopMedia(); return; } // left the page while the camera was starting
-      watchMic(media);
-      if (video.current) video.current.srcObject = media;
-      startMicMeter(media);
-
-      const start = await post<Payload>(`/api/public/interview/${token}/start`, {}, { retries: 3 });
-      if (start.finished) { stopMedia(); return router.replace(`/interview/${token}/completed`); }
-      clockBase.current = { startedAt: new Date(start.started_at!).getTime(), skew: start.server_now - nowMs() };
-      setProgress(start.progress);
-      logEvent(start.resumed ? "session_resumed_client" : "session_started_client", { engine: demoMode ? "browser" : "openai" });
-
-      recorder.current = new InterviewRecorder(token, setUpload, { clock, onEvent: logEvent });
-      await recorder.current.start(media).catch(() => {
-        setUpload({ state: "failed", pending: 0, uploaded: 0 });
-        logEvent("recording_start_failed");
-      });
-
-      const e = await createEngine();
-      await e.connect();
-      engine.current = e;
-      setStage("live");
-      if (start.utterance) await ask(start.utterance);
-    } catch (err) {
-      // Don't leave the camera on behind the error (a retry asks for it again).
-      engine.current?.close();
-      engine.current = null;
-      stopMedia();
-      const e = err as Error & { name?: string; status?: number };
-      // 402: the company ran out of interviews just now. Reloading shows the "can't start yet" page.
-      if (e.status === 402) { window.location.reload(); return; }
-      setError(e.name === "NotAllowedError" ? "Camera and microphone access is required. Allow access in your browser and try again." : e.message || "We couldn't start the interview.");
-      setStage("error");
-      setAiState("idle");
-    }
-  };
-
   const startMicMeter = (stream: MediaStream) => {
     meterCtx.current?.close().catch(() => {});
     const ctx = new AudioContext();
@@ -490,6 +453,144 @@ export function InterviewSession({ token, company, job, interviewerName, demoMod
     };
     tick();
   };
+
+  const closeAll = () => {
+    engine.current?.close();
+    engine.current = null;
+    stopMedia();
+    camera.current = null;
+  };
+
+  // ---- The introduction: an audio file played on the Ready screen. No camera or microphone is needed
+  // until Start. It plays by itself when the browser allows sound (the candidate clicked Continue on the
+  // previous step); after a refresh browsers require a click first, so it waits for Play.
+
+  /** Browser speech for demo mode (no OpenAI key). */
+  const speakWithBrowser = (text: string) => new Promise<void>((resolve, reject) => {
+    if (!("speechSynthesis" in window)) return reject(new Error("no speech"));
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.onend = () => resolve();
+    u.onerror = (e) => (e.error === "interrupted" || e.error === "canceled" ? resolve() : reject(new Error(e.error)));
+    window.speechSynthesis.speak(u);
+  });
+
+  const playIntro = async (by: "auto" | "click") => {
+    if (!introLines?.length || introRef.current === "playing") return;
+    const audio = introAudio.current;
+    try {
+      if (audio) {
+        audio.currentTime = 0;
+        setIntroState("playing");
+        await audio.play();
+      } else {
+        setIntroState("playing");
+        await speakWithBrowser(introLines.join(" "));
+        if ((introRef.current as IntroState) === "playing") setIntroState("done");
+      }
+      logEvent("intro_started", { by });
+    } catch (err) {
+      // Blocked until the candidate clicks (autoplay rules), or no sound available: the text stays on screen.
+      const blocked = (err as Error).name === "NotAllowedError" || (err as Error).message === "not-allowed";
+      setIntroState(blocked ? "needs_click" : "failed");
+      if (!blocked) logEvent("intro_failed", { message: (err as Error).message.slice(0, 200) });
+    }
+  };
+
+  const skipIntro = () => {
+    introAudio.current?.pause();
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    setIntroState("done");
+    logEvent("intro_skipped");
+  };
+
+  // Load the introduction audio as soon as the page opens, then play it when the browser allows.
+  useEffect(() => {
+    if (!introLines?.length) return;
+    let cancelled = false;
+    let url: string | null = null;
+    const nav = navigator as Navigator & { userActivation?: { hasBeenActive: boolean } };
+    const allowed = !nav.userActivation || nav.userActivation.hasBeenActive;
+    (async () => {
+      try {
+        const res = await fetch(`/api/public/interview/${token}/intro-audio`);
+        if (cancelled) return;
+        if (res.status === 200) {
+          url = URL.createObjectURL(await res.blob());
+          if (cancelled) return;
+          const audio = new Audio(url);
+          audio.onended = () => { if (introRef.current === "playing") { setIntroState("done"); logEvent("intro_finished"); } };
+          introAudio.current = audio;
+        } else if (res.status !== 204) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+        // The candidate may have started (or skipped) while it was loading.
+        if (introRef.current !== "loading") return;
+        if (allowed) await playIntro("auto");
+        else setIntroState("needs_click");
+      } catch (err) {
+        if (cancelled || introRef.current !== "loading") return;
+        // The words are on screen; the candidate can read them and start.
+        setIntroState("failed");
+        logEvent("intro_failed", { message: (err as Error).message.slice(0, 200) });
+      }
+    })();
+    return () => {
+      cancelled = true;
+      introAudio.current?.pause();
+      introAudio.current = null;
+      if (url) URL.revokeObjectURL(url);
+      if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const begin = async () => {
+    if (introRef.current === "playing") skipIntro();
+    setIntroState("done");
+    setStage("starting");
+    setAiState("connecting");
+    setError(null);
+    try {
+      const media = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 854 }, height: { ideal: 480 }, frameRate: { ideal: 24 } },
+        audio: AUDIO,
+      });
+      camera.current = media;
+      if (unmounted.current) return closeAll(); // left the page while the camera was starting
+      watchMic(media);
+      if (video.current) video.current.srcObject = media;
+      startMicMeter(media);
+
+      const start = await post<Payload>(`/api/public/interview/${token}/start`, {}, { retries: 3 });
+      if (start.finished) { closeAll(); return router.replace(`/interview/${token}/completed`); }
+      clockBase.current = { startedAt: new Date(start.started_at!).getTime(), skew: start.server_now - nowMs() };
+      setProgress(start.progress);
+      logEvent(start.resumed ? "session_resumed_client" : "session_started_client", { engine: demoMode ? "browser" : "openai" });
+
+      recorder.current = new InterviewRecorder(token, setUpload, { clock, onEvent: logEvent });
+      await recorder.current.start(media).catch(() => {
+        setUpload({ state: "failed", pending: 0, uploaded: 0 });
+        logEvent("recording_start_failed");
+      });
+
+      const e = await createEngine();
+      await e.connect();
+      engine.current = e;
+      setStage("live");
+      if (start.utterance) await ask(start.utterance);
+    } catch (err) {
+      // Don't leave the camera on behind the error (a retry asks for it again).
+      closeAll();
+      const e = err as Error & { name?: string; status?: number };
+      // 402: the company ran out of interviews just now. Reloading shows the "can't start yet" page.
+      if (e.status === 402) { window.location.reload(); return; }
+      setError(e.name === "NotAllowedError" ? "Camera and microphone access is required. Allow access in your browser and try again." : e.message || "We couldn't start the interview.");
+      setStage("error");
+      setAiState("idle");
+    }
+  };
+
 
   // The microphone was unplugged or disconnected (e.g. earphones pulled out, a
   // headset's battery died): carry on with the next available microphone for
@@ -544,20 +645,73 @@ export function InterviewSession({ token, company, job, interviewerName, demoMod
   const totalMs = (progress?.total_minutes ?? 0) * 60_000;
   const listening = ai === "listening";
 
-  if (stage === "intro" || stage === "error") {
+  if (stage === "error") {
     return (
       <div className="mx-auto flex min-h-screen max-w-lg flex-col items-center justify-center px-6 text-center" style={brandStyle(brand.color)}>
         {brand.logoUrl && <BrandMark brand={brand} height={40} className="mb-6" />}
         <p className="text-sm font-medium text-muted-foreground">{company} · {job}</p>
-        <h1 className="mt-3 text-2xl font-semibold tracking-tight">{stage === "error" ? "The interview was interrupted" : `Ready when you are, ${candidateName}`}</h1>
-        <p className="mt-3 text-muted-foreground">
-          {stage === "error" ? error : `${interviewerName} will greet you and ask the first question. Speak naturally; pause or select “Done answering” when you finish each answer.`}
-        </p>
-        {demoMode && stage !== "error" && <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300">Demo mode: the interviewer uses your browser&apos;s voice and you type answers.</p>}
-        <Button size="lg" className="mt-8 h-11 px-8" onClick={begin}>{stage === "error" ? "Try again" : "Start interview"}</Button>
+        <h1 className="mt-3 text-2xl font-semibold tracking-tight">The interview was interrupted</h1>
+        <p className="mt-3 text-muted-foreground">{error}</p>
+        <Button size="lg" className="mt-8 h-11 px-8" onClick={begin}>Try again</Button>
       </div>
     );
   }
+
+  if (stage === "intro") {
+    const loading = intro === "loading";
+    const speaking = intro === "playing";
+    const needsClick = intro === "needs_click";
+    return (
+      <div className="mx-auto flex min-h-screen max-w-xl flex-col items-center justify-center px-6 py-10 text-center" style={brandStyle(brand.color)}>
+        {brand.logoUrl && <BrandMark brand={brand} height={40} className="mb-6" />}
+        <p className="text-sm font-medium text-muted-foreground">{company} · {job}</p>
+        <h1 className="mt-3 text-2xl font-semibold tracking-tight">Ready when you are, {candidateName}</h1>
+
+        {introLines?.length ? (
+          <section aria-labelledby="intro-h" className="mt-6 w-full rounded-2xl border bg-card p-5 text-left shadow-sm">
+            <div className="flex items-center gap-3">
+              <span className={cn("flex size-11 shrink-0 items-center justify-center rounded-full", speaking ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary")}>
+                <Radio className={cn("size-5", speaking && "animate-pulse")} aria-hidden />
+              </span>
+              <div className="min-w-0">
+                <h2 id="intro-h" className="font-semibold">Introduction from {interviewerName}</h2>
+                <p aria-live="polite" className={cn("mt-0.5 flex items-center gap-1.5 text-sm", speaking ? "text-primary" : "text-muted-foreground")}>
+                  {speaking ? `${interviewerName} is speaking…`
+                    : loading ? <><Loader2 className="size-4 animate-spin" aria-hidden /> Getting the introduction ready…</>
+                    : needsClick ? "Select Play to hear it, or read it below."
+                    : intro === "failed" ? "Please read the introduction below."
+                    : "Read it again or listen once more before you start."}
+                </p>
+              </div>
+            </div>
+            <ul className="mt-4 space-y-2 border-t pt-4 text-sm leading-relaxed">
+              {introLines.map((l) => (
+                <li key={l} className="flex gap-2.5">
+                  <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
+                  <span>{l}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : (
+          <p className="mt-3 text-muted-foreground">Welcome back. {interviewerName} will continue where you left off.</p>
+        )}
+
+        {demoMode && <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300">Demo mode: the interviewer uses your browser&apos;s voice and you type answers.</p>}
+
+        <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
+          {needsClick && <Button size="lg" variant="outline" className="h-11 px-6" onClick={() => void playIntro("click")}><Play /> Play introduction</Button>}
+          {speaking && <Button size="lg" variant="outline" className="h-11 px-6" onClick={skipIntro}><SkipForward /> Skip</Button>}
+          {intro === "done" && introLines?.length ? (
+            <Button size="lg" variant="ghost" className="h-11" onClick={() => void playIntro("click")}><RotateCcw /> Play again</Button>
+          ) : null}
+          <Button size="lg" className="h-11 px-8" onClick={begin}>Start interview</Button>
+        </div>
+        <p className="mt-3 text-xs text-muted-foreground">Your camera and microphone turn on when you start.</p>
+      </div>
+    );
+  }
+
 
   return (
     <div className="flex min-h-screen flex-col bg-zinc-950 text-zinc-100" style={brandStyle(brand.color)}>
@@ -574,7 +728,7 @@ export function InterviewSession({ token, company, job, interviewerName, demoMod
         </div>
         {progress && (
           <div className="hidden min-w-48 flex-col items-center sm:flex" aria-label="Progress">
-            <p className="text-xs text-zinc-400">Part {progress.section_index + 1} of {progress.section_count} · <span className="text-zinc-200">{progress.section_name}</span></p>
+            <p className="text-xs text-zinc-300">Part {progress.section_index + 1} of {progress.section_count}</p>
             <div className="mt-1.5 flex gap-1">{Array.from({ length: progress.section_count }).map((_, i) => <span key={i} className={cn("h-1 w-6 rounded-full", i < progress.section_index ? "bg-indigo-400" : i === progress.section_index ? "bg-indigo-300" : "bg-white/15")} />)}</div>
           </div>
         )}

@@ -138,7 +138,50 @@ export const FinalReportSchema = z.object({
   missing_evidence: z.array(z.string()),
   fact_vs_interpretation_note: z.string(),
 });
-export type FinalReport = z.infer<typeof FinalReportSchema>;
+export type FinalReport = z.infer<typeof FinalReportSchema> & Partial<Pick<FinalReportV2, "overall" | "requirements" | "resume_check">>;
+
+// ---- Report v2: every answer judged against its question, the job and the resume.
+
+/** How one answer measured up to the question that was asked. */
+export const QuestionResultSchema = z.object({
+  question_ref: z.string(),
+  answered: z.enum(["yes", "partly", "no"]),
+  relevance: z.enum(["high", "medium", "low", "off_topic"]),
+  depth: z.enum(["strong", "solid", "basic", "none"]),
+  shown: z.array(z.string()),
+  missing: z.array(z.string()),
+  note: z.string(),
+  evidence_refs: z.array(z.string()),
+});
+export type QuestionResult = z.infer<typeof QuestionResultSchema> & { question_id?: string | null; question_text?: string; is_followup?: boolean };
+
+export const SectionEvaluationV2Schema = SectionEvaluationSchema.extend({ questions: z.array(QuestionResultSchema) });
+/** A stored section evaluation; older ones have no per-question results. */
+export type StoredSectionEvaluation = SectionEvaluation & { questions?: QuestionResult[] };
+
+export const RequirementCoverageEnum = z.enum(["demonstrated", "partial", "not_demonstrated", "not_covered"]);
+export type RequirementCoverage = z.infer<typeof RequirementCoverageEnum>;
+export const ResumeCheckStatusEnum = z.enum(["supported", "partly", "not_discussed", "contradicted"]);
+export type ResumeCheckStatus = z.infer<typeof ResumeCheckStatusEnum>;
+
+export const FinalReportV2Schema = FinalReportSchema.extend({
+  /** How strong the evidence is overall against the job's must-haves (not a hiring decision). */
+  overall: z.object({ assessment: AssessmentEnum, reason: z.string() }),
+  requirements: z.array(z.object({
+    requirement: z.string(),
+    importance: z.enum(["must", "nice"]),
+    status: RequirementCoverageEnum,
+    note: z.string(),
+    evidence_refs: z.array(z.string()),
+  })),
+  resume_check: z.array(z.object({
+    claim: z.string(),
+    status: ResumeCheckStatusEnum,
+    note: z.string(),
+    evidence_refs: z.array(z.string()),
+  })),
+});
+export type FinalReportV2 = z.infer<typeof FinalReportV2Schema>;
 
 export const assessmentScore: Record<Assessment, number> = {
   insufficient_evidence: 1,

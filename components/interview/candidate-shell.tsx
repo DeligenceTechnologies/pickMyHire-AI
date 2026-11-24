@@ -24,7 +24,7 @@ export function CandidateShell({ brand, job, children, step }: { brand?: Brand; 
           )}
         </div>
       </header>
-      <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-10">{children}</main>
+      <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-8 sm:py-10 [@media(max-height:820px)]:py-6">{children}</main>
       <footer className="flex flex-col items-center gap-2 py-6 text-center text-xs text-muted-foreground">
         <span>Your responses are reviewed by the hiring team.</span>
       </footer>

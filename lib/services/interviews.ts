@@ -8,7 +8,7 @@ import { companyBrand, emailTemplates, failedRecipients, replyToUser, sendEmail 
 import { buildInterviewPlan } from "@/lib/interview/plan";
 import { generateToken, hashToken } from "@/lib/security/tokens";
 import type { StoredPlan, InterviewStatus } from "@/types/interview";
-import { JobRequirementsSchema, type JobRequirements, type SectionEvaluation, type SimpleReport } from "@/lib/validation/ai-schemas";
+import { JobRequirementsSchema, type JobRequirements, type StoredSectionEvaluation, type SimpleReport } from "@/lib/validation/ai-schemas";
 import { readSettings } from "./org-settings";
 import { assertCanInvite, COUNTED_STATUSES } from "./quota";
 import { isOpen, MAX_ROUNDS } from "./rounds";
@@ -367,7 +367,7 @@ export async function getInterviewDetail(orgId: string, interviewId: string) {
       left join interview_templates t on t.id = i.template_id left join users du on du.id = i.decided_by
       where i.id = ${interviewId} and i.organization_id = ${orgId}`;
     if (!iv) return null;
-    const sections = await tx<{ id: string; sort_order: number; name: string; objective: string; status: string; start_ms: number | null; end_ms: number | null; evaluation_status: string | null; evaluation: (SectionEvaluation & { source?: string }) | null; config: { scoring_enabled: boolean; evaluation_criteria: string[]; duration_minutes: number } }[]>`
+    const sections = await tx<{ id: string; sort_order: number; name: string; objective: string; status: string; start_ms: number | null; end_ms: number | null; evaluation_status: string | null; evaluation: (StoredSectionEvaluation & { source?: string }) | null; config: { scoring_enabled: boolean; evaluation_criteria: string[]; duration_minutes: number } }[]>`
       select id, sort_order, name, objective, status, start_ms, end_ms, evaluation_status, evaluation, config from interview_sections
       where interview_id = ${interviewId} order by sort_order`;
     const evaluations = await tx<{ id: string; section_id: string; assessment: string; score: number | null; summary: string; strengths: string[]; concerns: string[] }[]>`

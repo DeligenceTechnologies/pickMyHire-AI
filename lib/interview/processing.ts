@@ -5,26 +5,27 @@ import "server-only";
 import { json, withOrg } from "@/lib/database/db";
 import { audit, notify } from "@/lib/audit";
 import { evaluateSection, EVALUATOR_VERSION, type EvalSegment } from "@/lib/ai/section-evaluator";
-import { generateReport, REPORT_VERSION } from "@/lib/ai/report-generator";
+import { loadReportContext, requirementLines } from "./report-context";
+import { answerQuality, generateReport, REPORT_VERSION, type AnswerQuality } from "@/lib/ai/report-generator";
 import { log } from "@/lib/logger";
-import { assessmentScore, type Assessment, type FinalReport, type SectionEvaluation } from "@/lib/validation/ai-schemas";
+import { assessmentScore, type Assessment, type FinalReport, type StoredSectionEvaluation } from "@/lib/validation/ai-schemas";
 import { runInBackground } from "@/lib/background";
 import { finalizeAllParts } from "./recording";
 import { sendCandidateFollowup } from "./candidate-followup";
 import { buildSimpleReportQuietly } from "./simple-report";
 
-type SegmentRow = { id: string; section_id: string | null; speaker: string; text: string; start_time_ms: number; end_time_ms: number };
+type SegmentRow = { id: string; section_id: string | null; question_id: string | null; speaker: string; text: string; start_time_ms: number; end_time_ms: number };
 
 async function loadSegments(orgId: string, interviewId: string) {
   const rows = await withOrg(orgId, (tx) => tx<SegmentRow[]>`
-    select id, section_id, speaker::text, text, start_time_ms, end_time_ms from transcript_segments
+    select id, section_id, question_id, speaker::text, text, start_time_ms, end_time_ms from transcript_segments
     where interview_id = ${interviewId} order by start_time_ms, sequence_number`);
   // Stable interview-wide refs (S1, S2, ...) shared by evaluations and the report.
   return rows.map((r, i) => ({ ...r, ref: `S${i + 1}` }));
 }
 
 function toEvalSegments(rows: (SegmentRow & { ref: string })[]): EvalSegment[] {
-  return rows.map((r) => ({ ref: r.ref, speaker: r.speaker, text: r.text, start: r.start_time_ms, end: r.end_time_ms }));
+  return rows.map((r) => ({ ref: r.ref, speaker: r.speaker, text: r.text, start: r.start_time_ms, end: r.end_time_ms, question_id: r.question_id }));
 }
 
 export async function evaluateInterviewSection(orgId: string, interviewId: string, sectionId: string) {
@@ -36,15 +37,23 @@ export async function evaluateInterviewSection(orgId: string, interviewId: strin
   await withOrg(orgId, (tx) => tx`update interview_sections set evaluation_status = 'processing' where id = ${sectionId}`);
 
   const all = await loadSegments(orgId, interviewId);
-  const segments = all.filter((s) => s.section_id === sectionId);
+  const context = await loadReportContext(orgId, interviewId);
+  const questions = context.questions.filter((q) => q.section_id === sectionId);
+  const asked = new Set(questions.map((q) => q.id));
+  // The section's lines, plus any answer line saved without a section but tied to one of its questions.
+  const segments = all.filter((s) => s.section_id === sectionId || (s.question_id && asked.has(s.question_id)));
   try {
     const { evaluation, source } = await evaluateSection({
       orgId,
       jobTitle: ctx.job_title,
+      jobSummary: context.job.requirements?.summary ?? null,
+      requirements: requirementLines(context.job),
+      resume: context.resume,
       sectionName: ctx.name,
       objective: ctx.objective,
       criteria: ctx.config.evaluation_criteria ?? [],
       segments: toEvalSegments(segments),
+      questions,
     });
     const byRef = new Map(all.map((s) => [s.ref, s]));
     const score = ctx.config.scoring_enabled ? assessmentScore[evaluation.assessment] : null;
@@ -89,6 +98,8 @@ export type StoredReport = {
     summary: string | null;
   }[];
   refs: Record<string, { segment_id: string; start_ms: number; end_ms: number }>;
+  /** How the answers went, counted from the per-question results (reports made before these existed don't have it). */
+  answer_quality?: AnswerQuality;
 };
 
 export async function generateInterviewReport(orgId: string, interviewId: string) {
@@ -97,7 +108,7 @@ export async function generateInterviewReport(orgId: string, interviewId: string
       on conflict (interview_id) do update set status = 'processing', error = null, attempts = interview_reports.attempts + 1`;
     const [iv] = await tx<{ job_title: string; parsed_requirements: unknown; interview_plan: unknown }[]>`
       select j.title as job_title, j.parsed_requirements, i.interview_plan from interviews i join jobs j on j.id = i.job_id where i.id = ${interviewId}`;
-    const sections = await tx<{ id: string; name: string; objective: string; status: string; evaluation: (SectionEvaluation & { source?: string }) | null }[]>`
+    const sections = await tx<{ id: string; name: string; objective: string; status: string; evaluation: (StoredSectionEvaluation & { source?: string }) | null }[]>`
       select id, name, objective, status, evaluation from interview_sections where interview_id = ${interviewId} order by sort_order`;
     const evals = await tx<{ section_id: string; assessment: Assessment; score: number | null }[]>`
       select section_id, assessment, score from section_evaluations where interview_id = ${interviewId}`;
@@ -105,20 +116,26 @@ export async function generateInterviewReport(orgId: string, interviewId: string
   });
   const all = await loadSegments(orgId, interviewId);
 
+  const context = await loadReportContext(orgId, interviewId);
   const evaluated = data.sections.filter((s) => s.evaluation);
+  const reportSections = evaluated.map((s) => ({
+    name: s.name,
+    objective: s.objective,
+    assessment: s.evaluation!.assessment,
+    summary: s.evaluation!.summary,
+    strengths: s.evaluation!.strengths,
+    concerns: s.evaluation!.concerns,
+    evidence: s.evaluation!.evidence,
+    questions: s.evaluation!.questions ?? [],
+  }));
   const { report, source } = await generateReport({
     orgId,
     jobTitle: data.iv.job_title,
-    requirements: data.iv.parsed_requirements,
-    sections: evaluated.map((s) => ({
-      name: s.name,
-      objective: s.objective,
-      assessment: s.evaluation!.assessment,
-      summary: s.evaluation!.summary,
-      strengths: s.evaluation!.strengths,
-      concerns: s.evaluation!.concerns,
-      evidence: s.evaluation!.evidence,
-    })),
+    jobSummary: context.job.requirements?.summary ?? null,
+    requirements: requirementLines(context.job),
+    resume: context.resume,
+    sections: reportSections,
+    lines: new Map(all.filter((s) => s.speaker === "candidate").map((s) => [s.ref, { start: s.start_time_ms, end: s.end_time_ms, text: s.text }])),
   });
 
   const refs: StoredReport["refs"] = {};
@@ -134,6 +151,7 @@ export async function generateInterviewReport(orgId: string, interviewId: string
     generated_by: source,
     prompt_version: source === "openai" ? REPORT_VERSION : "demo-heuristic",
     final: report,
+    answer_quality: reportSections.some((s) => s.questions.length) ? answerQuality(reportSections) : undefined,
     sections: data.sections.map((s) => {
       const ev = data.evals.find((e) => e.section_id === s.id);
       return { section_id: s.id, name: s.name, objective: s.objective, status: s.status, assessment: ev?.assessment ?? null, score: ev?.score ?? null, summary: s.evaluation?.summary ?? null };
@@ -170,11 +188,15 @@ export async function processInterview(orgId: string, interviewId: string) {
   });
   await withOrg(orgId, (tx) => tx`update interviews set status = 'processing', processing_error = null where id = ${interviewId} and status in ('completed','failed','report_ready')`);
   await finalizeAllParts(orgId, interviewId);
-  const sections = await withOrg(orgId, (tx) => tx<{ id: string; evaluation_status: string | null }[]>`
-    select id, evaluation_status from interview_sections where interview_id = ${interviewId} and status = 'completed' order by sort_order`);
+  const sections = await withOrg(orgId, (tx) => tx<{ id: string; evaluation_status: string | null; prompt_version: string | null }[]>`
+    select s.id, s.evaluation_status, e.prompt_version from interview_sections s
+    left join section_evaluations e on e.section_id = s.id
+    where s.interview_id = ${interviewId} and s.status = 'completed' order by s.sort_order`);
   let failures = 0;
   for (const s of sections) {
-    if (s.evaluation_status === "completed") continue;
+    // Done already, unless it was evaluated the older way (no per-question results): "Regenerate report" redoes those.
+    const outdated = s.prompt_version !== null && s.prompt_version !== EVALUATOR_VERSION && s.prompt_version !== "demo-heuristic";
+    if (s.evaluation_status === "completed" && !outdated) continue;
     try {
       await evaluateInterviewSection(orgId, interviewId, s.id);
     } catch {

@@ -22,6 +22,7 @@ import { FaceVerificationCard, type FaceVerification } from "./face-verification
 import { OutcomeAlert, OutcomeCard, useOutcome } from "@/components/interviews/outcome-card";
 import type { OutcomeInput } from "@/lib/interview/outcome";
 import { InterviewTimeline } from "./interview-timeline";
+import { AnswerQualityStrip, coverageLine, OverallLine, QuestionResults, RequirementCoverageTable, ResumeCheckList } from "./report-insights";
 import { VideoPlayer, type RecordingPart, type VideoPlayerHandle } from "./video-player";
 
 export type ViewerTab = "overview" | "report" | "recording" | "questions" | "evaluation";
@@ -185,7 +186,7 @@ export function InterviewViewer({ detail, initialTab, showScores, canViewRecordi
             {tab === "overview" && <Overview detail={detail} report={report} showScores={showScores} jump={jump} onOpenReport={() => switchTab("report")} canViewCandidates={canViewCandidates} canSendFeedback={canSendFeedback} feedback={feedback} face={face} canViewPhotos={canViewRecording} outcomeInput={outcome} />}
             {tab === "report" && <ReportView detail={detail} report={report} showScores={showScores} jump={jump} />}
             {tab === "questions" && <QuestionsView detail={detail} jump={jump} />}
-            {tab === "evaluation" && <EvaluationView detail={detail} showScores={showScores} jump={jump} />}
+            {tab === "evaluation" && <EvaluationView detail={detail} showScores={showScores} jump={jump} refs={report?.refs ?? null} />}
           </div>
           <div>{media(true)}</div>
         </div>
@@ -225,6 +226,10 @@ function Overview({ detail, report, showScores, jump, onOpenReport, canViewCandi
       {report ? (
         <Card title={<span className="flex items-center gap-2"><Sparkles className="size-4 text-primary" /> Summary</span>} action={<Button size="sm" variant="ghost" onClick={onOpenReport}>Full report</Button>}>
           <p className="text-sm leading-relaxed">{report.final.summary}</p>
+          {report.final.overall && <div className="mt-3"><OverallLine overall={report.final.overall} /></div>}
+          {coverageLine(report.final.requirements) && (
+            <button type="button" onClick={onOpenReport} className="mt-2 text-left text-sm font-medium text-primary hover:underline">{coverageLine(report.final.requirements)} · see the requirements</button>
+          )}
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">Strengths</p>
@@ -516,9 +521,21 @@ function DetailedReport({ detail, report, showScores, jump }: { detail: Detail; 
           <div><p className="text-xs text-muted-foreground">Duration · Sections</p><p className="font-medium">{formatDuration(detail.duration_seconds)} · {detail.sections.filter((s) => s.status === "completed").length}/{detail.sections.length}</p></div>
         </div>
         <p className="text-sm leading-relaxed">{report.final.summary}</p>
+        {report.final.overall && <div className="mt-3"><OverallLine overall={report.final.overall} /></div>}
+        {report.answer_quality && <div className="mt-4"><AnswerQualityStrip q={report.answer_quality} /></div>}
         <p className="mt-3 text-xs text-muted-foreground">{report.final.fact_vs_interpretation_note}</p>
         <div className="mt-4"><Disclaimer source={report.generated_by} /></div>
       </Card>
+      {report.final.requirements?.length ? (
+        <Card title="Job requirements" action={<span className="text-xs text-muted-foreground">{coverageLine(report.final.requirements)}</span>}>
+          <RequirementCoverageTable items={report.final.requirements} refs={report.refs} jump={jump} />
+        </Card>
+      ) : null}
+      {report.final.resume_check?.length ? (
+        <Card title="Resume check" action={<span className="text-xs text-muted-foreground">What the answers said about the resume</span>}>
+          <ResumeCheckList items={report.final.resume_check} refs={report.refs} jump={jump} />
+        </Card>
+      ) : null}
       <div className="grid gap-6 md:grid-cols-2">
         <Card title="Strengths">
           {report.final.strengths.length ? (
@@ -559,12 +576,13 @@ function DetailedReport({ detail, report, showScores, jump }: { detail: Detail; 
           </ul>
         ) : <p className="text-sm text-muted-foreground">No key evidence recorded.</p>}
       </Card>
-      <EvaluationView detail={detail} showScores={showScores} jump={jump} />
+      <EvaluationView detail={detail} showScores={showScores} jump={jump} refs={report.refs} />
     </>
   );
 }
 
-function EvaluationView({ detail, showScores, jump }: { detail: Detail; showScores: boolean; jump: (ms: number, id?: string | null) => void }) {
+function EvaluationView({ detail, showScores, jump, refs }: { detail: Detail; showScores: boolean; jump: (ms: number, id?: string | null) => void; refs: StoredReport["refs"] | null }) {
+  const askedAt = new Map(detail.questions.map((q) => [q.id, q.asked_at_ms]));
   return (
     <>
       {detail.sections.map((s) => {
@@ -598,6 +616,7 @@ function EvaluationView({ detail, showScores, jump }: { detail: Detail; showScor
                     </table>
                   </div>
                 )}
+                <QuestionResults results={full?.questions} askedAt={askedAt} refs={refs} jump={jump} />
                 {evidence.length > 0 && (
                   <div>
                     <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Evidence</p>

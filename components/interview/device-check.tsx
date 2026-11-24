@@ -90,6 +90,12 @@ export function DeviceCheck({ token, planReady, faceVerification }: { token: str
 
   useEffect(() => { if (video.current && stream) video.current.srcObject = stream; }, [stream]);
 
+  // Make the interviewer's spoken introduction while the candidate checks their setup, so it plays
+  // straight away on the next screen (the browser keeps the downloaded copy).
+  useEffect(() => {
+    if (planReady) void fetch(`/api/public/interview/${token}/intro-audio`).catch(() => {});
+  }, [token, planReady]);
+
   // Identity check: take the reference photo once exactly one face is clearly in view.
   // Starts after the test recording, so loading the face model can't slow that test down.
   const recTested = recTest !== "pending";

@@ -1,23 +1,59 @@
 import "server-only";
 import { aiIsLive } from "@/lib/env";
-import { FinalReportSchema, type Assessment, type FinalReport, type SectionEvaluation } from "@/lib/validation/ai-schemas";
-import * as prompt from "@/prompts/report-generator/v1";
+import { FinalReportV2Schema, type Assessment, type FinalReport, type QuestionResult, type SectionEvaluation } from "@/lib/validation/ai-schemas";
+import * as prompt from "@/prompts/report-generator/v2";
 import { AI_CONFIG } from "./config";
 import { mockReport } from "./mock";
 import { runStructured } from "./openai-client";
 
 export const REPORT_VERSION = prompt.version;
 
+export type ReportSection = {
+  name: string; objective: string; assessment: Assessment; summary: string; strengths: string[]; concerns: string[];
+  evidence: SectionEvaluation["evidence"]; questions: QuestionResult[];
+};
+
+/** How the answers went overall, counted from the per-question results (not by the AI). */
+export type AnswerQuality = { total: number; answered: number; partly: number; not_answered: number; off_topic: number; strong: number };
+
+export function answerQuality(sections: { questions: QuestionResult[] }[]): AnswerQuality {
+  const qs = sections.flatMap((s) => s.questions);
+  return {
+    total: qs.length,
+    answered: qs.filter((q) => q.answered === "yes").length,
+    partly: qs.filter((q) => q.answered === "partly").length,
+    not_answered: qs.filter((q) => q.answered === "no").length,
+    off_topic: qs.filter((q) => q.relevance === "off_topic").length,
+    strong: qs.filter((q) => q.depth === "strong").length,
+  };
+}
+
 export async function generateReport(input: {
   orgId: string;
   jobTitle: string;
-  requirements: unknown;
-  sections: { name: string; objective: string; assessment: Assessment; summary: string; strengths: string[]; concerns: string[]; evidence: SectionEvaluation["evidence"] }[];
+  jobSummary: string | null;
+  requirements: { must: string[]; nice: string[] };
+  resume: string | null;
+  sections: ReportSection[];
+  /** Candidate transcript lines by ref, so evidence cited by per-question results can be quoted. */
+  lines: Map<string, { start: number; end: number; text: string }>;
 }): Promise<{ report: FinalReport; source: "openai" | "mock" }> {
   if (!aiIsLive()) return { report: mockReport(input.sections), source: "mock" };
-  const evidenceIndex = input.sections
-    .flatMap((s) => s.evidence.map((e) => `${e.segment_ref ?? "-"} [${e.timestamp_start_ms}-${e.timestamp_end_ms}] (${s.name}) ${e.quote_or_paraphrase}`))
-    .join("\n");
+  const quality = answerQuality(input.sections);
+  const cited = new Set<string>();
+  const index: string[] = [];
+  for (const s of input.sections) {
+    for (const e of s.evidence) {
+      if (e.segment_ref) cited.add(e.segment_ref);
+      index.push(`${e.segment_ref ?? "-"} [${e.timestamp_start_ms}-${e.timestamp_end_ms}] (${s.name}) ${e.quote_or_paraphrase}`);
+    }
+    for (const q of s.questions) for (const ref of q.evidence_refs) {
+      const l = input.lines.get(ref);
+      if (!l || cited.has(ref)) continue;
+      cited.add(ref);
+      index.push(`${ref} [${l.start}-${l.end}] (${s.name}, ${q.question_ref}) ${l.text.length > 220 ? `${l.text.slice(0, 217)}…` : l.text}`);
+    }
+  }
   const report = await runStructured({
     orgId: input.orgId,
     feature: "report_generator",
@@ -26,11 +62,17 @@ export async function generateReport(input: {
     system: prompt.system,
     user: prompt.buildUser({
       jobTitle: input.jobTitle,
+      jobSummary: input.jobSummary,
       requirements: input.requirements,
-      sections: input.sections.map(({ evidence: _e, ...rest }) => rest),
-      evidenceIndex,
+      resume: input.resume,
+      answerQuality: `${quality.total} questions: ${quality.answered} fully answered, ${quality.partly} partly, ${quality.not_answered} not answered; ${quality.off_topic} off topic; ${quality.strong} with strong, first-hand detail.`,
+      sections: input.sections.map(({ evidence: _e, questions, ...rest }) => ({
+        ...rest,
+        questions: questions.map(({ question_id: _id, is_followup, evidence_refs, ...q }) => ({ ...q, follow_up: !!is_followup, refs: evidence_refs })),
+      })),
+      evidenceIndex: index.join("\n"),
     }),
-    schema: FinalReportSchema,
+    schema: FinalReportV2Schema,
     schemaName: "final_report",
   });
   return { report, source: "openai" };

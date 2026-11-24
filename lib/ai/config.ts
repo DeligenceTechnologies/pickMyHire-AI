@@ -22,6 +22,8 @@ export const AI_CONFIG = {
   realtime: process.env.OPENAI_MODEL_REALTIME || "gpt-realtime-2.1",
   transcription: process.env.OPENAI_MODEL_TRANSCRIBE || "gpt-live-transcribe",
   voice: process.env.OPENAI_REALTIME_VOICE || "marin",
+  /** Text-to-speech for the pre-interview introduction (same voice as the live interviewer). */
+  tts: process.env.OPENAI_MODEL_TTS || "gpt-4o-mini-tts",
   /** Question-plan generation: large structured output, so keep reasoning light. */
   plannerReasoningEffort: "low" as const,
   /** Default per-request timeout for background text calls (plans, evaluations, reports, screening). */
