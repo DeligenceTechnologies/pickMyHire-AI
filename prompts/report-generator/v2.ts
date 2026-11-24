@@ -16,14 +16,15 @@ What to produce:
   if long). status:
   * demonstrated: specific, first-hand evidence in an answer.
   * partial: touched on, but general, thin or only part of it.
-  * not_demonstrated: discussed, but the answers were weak, vague or incorrect on it.
+  * not_demonstrated: discussed, but the answers were weak, vague or incorrect on it. An answer marked accuracy "incorrect"
+    never counts as demonstrated.
   * not_covered: it never came up in the interview.
   note: one short sentence. evidence_refs: segment refs (e.g. "S12") of the supporting answers.
 - resume_check: up to 6 of the most important resume claims relevant to this job (experience, key skills, roles, achievements).
   status: supported (answers back it up with specifics), partly, not_discussed, contradicted (only when an answer clearly conflicts:
   explain both sides). If no resume was provided, return an empty list.
 - strengths: job-relevant, each backed by evidence_refs.
-- areas_to_explore: gaps, thin or partial answers, off-topic or unanswered questions, and resume points to verify, phrased neutrally
+- areas_to_explore: wrong answers (say what was wrong), gaps, thin or partial answers, off-topic or unanswered questions, and resume points to verify, phrased neutrally
   for a follow-up human interview ("Limited evidence of leading a team; answers described team work in general").
 - key_evidence: 3-8 most informative moments, with segment refs and timestamps copied exactly from the evidence index.
 - missing_evidence: requirements that were not covered at all.

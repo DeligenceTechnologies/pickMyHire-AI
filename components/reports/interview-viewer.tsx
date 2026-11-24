@@ -22,7 +22,7 @@ import { FaceVerificationCard, type FaceVerification } from "./face-verification
 import { OutcomeAlert, OutcomeCard, useOutcome } from "@/components/interviews/outcome-card";
 import type { OutcomeInput } from "@/lib/interview/outcome";
 import { InterviewTimeline } from "./interview-timeline";
-import { AnswerQualityStrip, coverageLine, OverallLine, QuestionResults, RequirementCoverageTable, ResumeCheckList } from "./report-insights";
+import { AnswerQualityStrip, AnswerVerdict, coverageLine, OverallLine, QuestionResults, RequirementCoverageTable, ResumeCheckList } from "./report-insights";
 import { VideoPlayer, type RecordingPart, type VideoPlayerHandle } from "./video-player";
 
 export type ViewerTab = "overview" | "report" | "recording" | "questions" | "evaluation";
@@ -639,12 +639,18 @@ function EvaluationView({ detail, showScores, jump, refs }: { detail: Detail; sh
   );
 }
 
+/** The quick check made live, during the interview, in plain words. It only picks follow-ups; it doesn't say if an answer was right. */
+const LIVE_RELEVANCE: Record<string, string> = { high: "On topic", medium: "Mostly on topic", low: "Loosely on topic", off_topic: "Off topic" };
+const LIVE_COMPLETENESS: Record<string, string> = { complete: "Complete", partial: "Partly complete", minimal: "Very brief", no_answer: "No answer" };
+
 function QuestionsView({ detail, jump }: { detail: Detail; jump: (ms: number, id?: string | null) => void }) {
   return (
     <>
       {detail.sections.map((s) => {
         const qs = detail.questions.filter((q) => q.section_id === s.id);
         if (!qs.length) return null;
+        // After the interview each answer is judged in full (including whether it was right); show that when it exists.
+        const verdicts = new Map((s.evaluation?.questions ?? []).filter((r) => r.question_id).map((r) => [r.question_id!, r]));
         return (
           <Card key={s.id} title={s.name}>
             <ol className="space-y-4">
@@ -658,11 +664,12 @@ function QuestionsView({ detail, jump }: { detail: Detail; jump: (ms: number, id
                       {q.asked_at_ms != null && <WatchButton ms={q.asked_at_ms} onClick={() => jump(q.asked_at_ms!)} label="" />}
                     </div>
                     {q.answer_text ? <p className="rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground">{q.answer_text}</p> : <p className="text-xs text-muted-foreground">No answer recorded.</p>}
-                    {a && (
-                      <div className="flex flex-wrap gap-2 text-xs">
-                        <span className="rounded bg-muted px-1.5 py-0.5">Relevance: {a.relevance}</span>
-                        <span className="rounded bg-muted px-1.5 py-0.5">Completeness: {a.completeness}</span>
-                        {a.missing_evidence.length > 0 && <span className="rounded bg-muted px-1.5 py-0.5">Gaps: {a.missing_evidence.join(", ")}</span>}
+                    {verdicts.has(q.id) ? <AnswerVerdict r={verdicts.get(q.id)!} /> : a && (
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <span className="text-muted-foreground">Quick check during the interview:</span>
+                        <span className="rounded bg-muted px-1.5 py-0.5">{LIVE_RELEVANCE[a.relevance] ?? a.relevance}</span>
+                        <span className="rounded bg-muted px-1.5 py-0.5">{LIVE_COMPLETENESS[a.completeness] ?? a.completeness}</span>
+                        {a.missing_evidence.length > 0 && <span className="rounded bg-muted px-1.5 py-0.5">Missing: {a.missing_evidence.join(", ")}</span>}
                       </div>
                     )}
                     {q.is_followup && d && <p className="text-xs text-muted-foreground">Why this follow-up: {d.reason}</p>}

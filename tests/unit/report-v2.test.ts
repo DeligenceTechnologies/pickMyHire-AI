@@ -47,23 +47,30 @@ describe("report v2: each answer judged against its question, the job and the re
     runStructured.mockResolvedValueOnce({
       assessment: "adequate", summary: "s", strengths: [], concerns: [], criteria: [], evidence: [],
       questions: [
-        { question_ref: "Q2", answered: "yes", relevance: "high", depth: "basic", shown: ["team size"], missing: [], note: "n", evidence_refs: ["S3"] },
-        { question_ref: "Q9", answered: "no", relevance: "off_topic", depth: "none", shown: [], missing: [], note: "x", evidence_refs: [] },
+        { question_ref: "Q2", answered: "yes", relevance: "high", depth: "basic", accuracy: "not_applicable", accuracy_note: "", shown: ["team size"], missing: [], note: "n", evidence_refs: ["S3"] },
+        { question_ref: "Q9", answered: "no", relevance: "off_topic", depth: "none", accuracy: "unclear", accuracy_note: "", shown: [], missing: [], note: "x", evidence_refs: [] },
       ],
     });
     const { evaluation, source } = await evaluateSection(input);
     expect(source).toBe("openai");
     expect(evaluation.questions).toEqual([expect.objectContaining({ question_ref: "Q2", question_id: "q-2", question_text: "How big was the team?", is_followup: true })]);
     const sent = runStructured.mock.calls[0][0] as { user: string; promptVersion: string };
-    expect(sent.promptVersion).toBe("section-evaluator@v2");
+    expect(sent.promptVersion).toBe("section-evaluator@v2.1");
     expect(sent.user).toContain("Engineering Manager");
   });
 
   it("counts how the answers went, without the AI", () => {
-    const r = (answered: "yes" | "partly" | "no", relevance: "high" | "off_topic", depth: "strong" | "basic") =>
-      ({ question_ref: "Q", answered, relevance, depth, shown: [], missing: [], note: "", evidence_refs: [] });
-    expect(answerQuality([{ questions: [r("yes", "high", "strong"), r("partly", "high", "basic")] }, { questions: [r("no", "off_topic", "basic")] }]))
-      .toEqual({ total: 3, answered: 1, partly: 1, not_answered: 1, off_topic: 1, strong: 1 });
+    const r = (answered: "yes" | "partly" | "no", relevance: "high" | "off_topic", depth: "strong" | "basic", accuracy: "correct" | "incorrect" = "correct") =>
+      ({ question_ref: "Q", answered, relevance, depth, accuracy, accuracy_note: "", shown: [], missing: [], note: "", evidence_refs: [] });
+    expect(answerQuality([{ questions: [r("yes", "high", "strong"), r("partly", "high", "basic", "incorrect")] }, { questions: [r("no", "off_topic", "basic")] }]))
+      .toEqual({ total: 3, answered: 1, partly: 1, not_answered: 1, off_topic: 1, strong: 1, incorrect: 1 });
+  });
+
+  it("checks each answer for being right, separately from being on topic", () => {
+    // The feedback: a wrong but on-topic answer was shown as "Relevance: high".
+    expect(evaluatorPrompt.system).toMatch(/It says nothing about whether the answer is right/);
+    expect(evaluatorPrompt.system).toMatch(/if accuracy is "incorrect", depth is at most "basic"/);
+    expect(evaluatorPrompt.system).toMatch(/likely transcription error \(use "unclear"\)/);
   });
 
   it("lists the job's must-haves (required skills, minimum experience, responsibilities) and nice-to-haves once each", () => {

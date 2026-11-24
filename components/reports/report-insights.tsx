@@ -3,7 +3,7 @@
 import { CheckCircle2, CircleDashed, MinusCircle, PlayCircle, XCircle, type LucideIcon } from "lucide-react";
 import { AssessmentBadge } from "@/components/common/status-badge";
 import { formatClock } from "@/lib/format";
-import type { FinalReportV2, QuestionResult, RequirementCoverage, ResumeCheckStatus } from "@/lib/validation/ai-schemas";
+import type { AnswerAccuracy, FinalReportV2, QuestionResult, RequirementCoverage, ResumeCheckStatus } from "@/lib/validation/ai-schemas";
 import type { AnswerQuality } from "@/lib/ai/report-generator";
 import { cn } from "@/lib/utils";
 
@@ -26,7 +26,15 @@ const RESUME: Record<ResumeCheckStatus, { label: string; icon: LucideIcon; cls: 
   contradicted: { label: "Doesn't match", icon: XCircle, cls: COVERAGE.not_demonstrated.cls },
 };
 const ANSWERED: Record<QuestionResult["answered"], string> = { yes: "Answered", partly: "Partly answered", no: "Not answered" };
-const RELEVANCE: Record<QuestionResult["relevance"], string> = { high: "On point", medium: "Mostly relevant", low: "Loosely relevant", off_topic: "Off topic" };
+const RELEVANCE: Record<QuestionResult["relevance"], string> = { high: "On topic", medium: "Mostly on topic", low: "Loosely on topic", off_topic: "Off topic" };
+/** "Not a fact question" shows no pill: there was nothing to be right or wrong about. */
+const ACCURACY: Record<AnswerAccuracy, { label: string; cls: string } | null> = {
+  correct: { label: "Correct", cls: COVERAGE.demonstrated.cls },
+  mostly_correct: { label: "Mostly correct", cls: COVERAGE.partial.cls },
+  incorrect: { label: "Wrong", cls: COVERAGE.not_demonstrated.cls },
+  unclear: { label: "Can't tell if correct", cls: COVERAGE.not_covered.cls },
+  not_applicable: null,
+};
 const DEPTH: Record<QuestionResult["depth"], string> = { strong: "Specific, first-hand", solid: "Some specifics", basic: "General", none: "No real content" };
 
 function Pill({ cls, icon: Icon, children }: { cls: string; icon?: LucideIcon; children: React.ReactNode }) {
@@ -79,12 +87,13 @@ export function AnswerQualityStrip({ q }: { q: AnswerQuality | undefined }) {
     ["Partly", q.partly, "text-amber-700 dark:text-amber-300"],
     ["Not answered", q.not_answered, q.not_answered ? "text-red-700 dark:text-red-300" : ""],
     ["Off topic", q.off_topic, q.off_topic ? "text-red-700 dark:text-red-300" : ""],
+    ...(q.incorrect != null ? [["Wrong", q.incorrect, q.incorrect ? "text-red-700 dark:text-red-300" : ""] as [string, number, string]] : []),
     ["Specific, first-hand", q.strong, "text-primary"],
   ];
   return (
     <div>
       <p className="mb-1.5 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Answers ({q.total} questions)</p>
-      <dl className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+      <dl className={cn("grid grid-cols-2 gap-2", items.length > 5 ? "sm:grid-cols-6" : "sm:grid-cols-5")}>
         {items.map(([k, v, cls]) => (
           <div key={k} className="rounded-lg border px-3 py-2">
             <dt className="text-xs text-muted-foreground">{k}</dt>
@@ -147,6 +156,32 @@ export function ResumeCheckList({ items, refs, jump }: { items: FinalReportV2["r
   );
 }
 
+/** How one answer measured up after the interview: answered, right or wrong, on topic, depth, and what it showed or lacked. */
+export function AnswerVerdict({ r }: { r: QuestionResult }) {
+  const acc = r.accuracy ? ACCURACY[r.accuracy] : null;
+  const weak = r.answered === "no" || r.relevance === "off_topic" || r.accuracy === "incorrect";
+  return (
+    <>
+      <div className="mt-1.5 flex flex-wrap gap-1.5">
+        <Pill cls={r.answered === "yes" ? COVERAGE.demonstrated.cls : r.answered === "partly" ? COVERAGE.partial.cls : COVERAGE.not_demonstrated.cls}>{ANSWERED[r.answered]}</Pill>
+        {acc && <Pill cls={acc.cls}>{acc.label}</Pill>}
+        <Pill cls={r.relevance === "high" ? COVERAGE.demonstrated.cls : r.relevance === "off_topic" ? COVERAGE.not_demonstrated.cls : COVERAGE.not_covered.cls}>{RELEVANCE[r.relevance]}</Pill>
+        <Pill cls={r.depth === "strong" ? COVERAGE.demonstrated.cls : r.depth === "none" ? COVERAGE.not_demonstrated.cls : COVERAGE.not_covered.cls}>{DEPTH[r.depth]}</Pill>
+      </div>
+      <p className={cn("mt-1.5 text-sm", weak ? "text-red-700 dark:text-red-300" : "text-muted-foreground")}>{r.note}</p>
+      {r.accuracy_note && (r.accuracy === "incorrect" || r.accuracy === "mostly_correct") && (
+        <p className="mt-1 text-xs"><span className={cn("font-medium", r.accuracy === "incorrect" ? "text-red-700 dark:text-red-300" : "text-amber-700 dark:text-amber-300")}>What was wrong: </span>{r.accuracy_note}</p>
+      )}
+      {(r.shown.length > 0 || r.missing.length > 0) && (
+        <div className="mt-1.5 grid gap-1 text-xs sm:grid-cols-2">
+          {r.shown.length > 0 && <p><span className="font-medium text-emerald-700 dark:text-emerald-300">Showed: </span>{r.shown.join("; ")}</p>}
+          {r.missing.length > 0 && <p><span className="font-medium text-amber-700 dark:text-amber-300">Missing: </span>{r.missing.join("; ")}</p>}
+        </div>
+      )}
+    </>
+  );
+}
+
 /** Each answer against its question: answered, relevance, depth, what it showed and what was missing. */
 export function QuestionResults({ results, askedAt, refs, jump }: {
   results: QuestionResult[] | undefined; askedAt: Map<string, number | null>; refs: Refs | null; jump: Jump;
@@ -158,7 +193,6 @@ export function QuestionResults({ results, askedAt, refs, jump }: {
       <ol className="space-y-2.5">
         {results.map((r, i) => {
           const at = r.question_id ? askedAt.get(r.question_id) ?? null : null;
-          const weak = r.answered === "no" || r.relevance === "off_topic";
           return (
             <li key={i} className={cn("rounded-lg border p-3", r.is_followup && "ml-5 border-dashed")}>
               <div className="flex items-start justify-between gap-2">
@@ -172,18 +206,7 @@ export function QuestionResults({ results, askedAt, refs, jump }: {
                   </button>
                 )}
               </div>
-              <div className="mt-1.5 flex flex-wrap gap-1.5">
-                <Pill cls={r.answered === "yes" ? COVERAGE.demonstrated.cls : r.answered === "partly" ? COVERAGE.partial.cls : COVERAGE.not_demonstrated.cls}>{ANSWERED[r.answered]}</Pill>
-                <Pill cls={r.relevance === "high" ? COVERAGE.demonstrated.cls : r.relevance === "off_topic" ? COVERAGE.not_demonstrated.cls : COVERAGE.not_covered.cls}>{RELEVANCE[r.relevance]}</Pill>
-                <Pill cls={r.depth === "strong" ? COVERAGE.demonstrated.cls : r.depth === "none" ? COVERAGE.not_demonstrated.cls : COVERAGE.not_covered.cls}>{DEPTH[r.depth]}</Pill>
-              </div>
-              <p className={cn("mt-1.5 text-sm", weak ? "text-red-700 dark:text-red-300" : "text-muted-foreground")}>{r.note}</p>
-              {(r.shown.length > 0 || r.missing.length > 0) && (
-                <div className="mt-1.5 grid gap-1 text-xs sm:grid-cols-2">
-                  {r.shown.length > 0 && <p><span className="font-medium text-emerald-700 dark:text-emerald-300">Showed: </span>{r.shown.join("; ")}</p>}
-                  {r.missing.length > 0 && <p><span className="font-medium text-amber-700 dark:text-amber-300">Missing: </span>{r.missing.join("; ")}</p>}
-                </div>
-              )}
+              <AnswerVerdict r={r} />
               {refs && <div className="mt-1"><EvidenceLinks ids={r.evidence_refs} refs={refs} jump={jump} /></div>}
             </li>
           );

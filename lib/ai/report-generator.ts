@@ -14,7 +14,8 @@ export type ReportSection = {
 };
 
 /** How the answers went overall, counted from the per-question results (not by the AI). */
-export type AnswerQuality = { total: number; answered: number; partly: number; not_answered: number; off_topic: number; strong: number };
+/** `incorrect` is missing on reports made before answers were checked for being right. */
+export type AnswerQuality = { total: number; answered: number; partly: number; not_answered: number; off_topic: number; strong: number; incorrect?: number };
 
 export function answerQuality(sections: { questions: QuestionResult[] }[]): AnswerQuality {
   const qs = sections.flatMap((s) => s.questions);
@@ -25,6 +26,7 @@ export function answerQuality(sections: { questions: QuestionResult[] }[]): Answ
     not_answered: qs.filter((q) => q.answered === "no").length,
     off_topic: qs.filter((q) => q.relevance === "off_topic").length,
     strong: qs.filter((q) => q.depth === "strong").length,
+    incorrect: qs.filter((q) => q.accuracy === "incorrect").length,
   };
 }
 
@@ -65,7 +67,7 @@ export async function generateReport(input: {
       jobSummary: input.jobSummary,
       requirements: input.requirements,
       resume: input.resume,
-      answerQuality: `${quality.total} questions: ${quality.answered} fully answered, ${quality.partly} partly, ${quality.not_answered} not answered; ${quality.off_topic} off topic; ${quality.strong} with strong, first-hand detail.`,
+      answerQuality: `${quality.total} questions: ${quality.answered} fully answered, ${quality.partly} partly, ${quality.not_answered} not answered; ${quality.off_topic} off topic; ${quality.incorrect} wrong; ${quality.strong} with strong, first-hand detail.`,
       sections: input.sections.map(({ evidence: _e, questions, ...rest }) => ({
         ...rest,
         questions: questions.map(({ question_id: _id, is_followup, evidence_refs, ...q }) => ({ ...q, follow_up: !!is_followup, refs: evidence_refs })),

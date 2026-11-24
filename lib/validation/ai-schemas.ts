@@ -143,11 +143,18 @@ export type FinalReport = z.infer<typeof FinalReportSchema> & Partial<Pick<Final
 // ---- Report v2: every answer judged against its question, the job and the resume.
 
 /** How one answer measured up to the question that was asked. */
+export const AnswerAccuracyEnum = z.enum(["correct", "mostly_correct", "incorrect", "unclear", "not_applicable"]);
+export type AnswerAccuracy = z.infer<typeof AnswerAccuracyEnum>;
+
 export const QuestionResultSchema = z.object({
   question_ref: z.string(),
   answered: z.enum(["yes", "partly", "no"]),
   relevance: z.enum(["high", "medium", "low", "off_topic"]),
   depth: z.enum(["strong", "solid", "basic", "none"]),
+  /** Is what they said factually / technically right? Relevance only says it was on topic. */
+  accuracy: AnswerAccuracyEnum,
+  /** What was wrong and what is right, when not fully correct; "" otherwise. */
+  accuracy_note: z.string(),
   shown: z.array(z.string()),
   missing: z.array(z.string()),
   note: z.string(),
