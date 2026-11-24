@@ -26,7 +26,8 @@ import { getCandidatePipelines } from "@/lib/services/pipeline";
 import { jobListNav } from "@/lib/services/job-candidates";
 import { ApplicationNav } from "@/components/applications/application-nav";
 import { summariesForPipelines } from "@/lib/services/candidate-summary";
-import { getHrPanel } from "@/lib/services/candidate-notes";
+import { getHrPanel, visibleHrPanel } from "@/lib/services/candidate-notes";
+import { candidateJobsInScope } from "@/lib/auth/job-scope";
 import { HrPanel } from "@/components/candidates/hr-panel";
 import { AnswersCard } from "@/components/applications/answers-card";
 import { answersForCandidate } from "@/lib/services/application-answers";
@@ -37,28 +38,40 @@ export default async function CandidatePage(props: PageProps<"/candidates/[candi
   if (!isUuid(candidateId)) notFound();
   const c = await getCandidate(auth.orgId, candidateId);
   if (!c) notFound();
+  // Interviewers see a candidate only through their own jobs, and only those jobs' parts of the profile.
+  const scope = await candidateJobsInScope(auth, candidateId);
+  if (scope && !scope.length) notFound();
+  const inScope = (jobId: string) => !scope || scope.includes(jobId);
+  const salary = can(auth.role, "candidate:salary");
   const canSchedule = can(auth.role, "interview:write");
-  const [jobs, pipelines, members, hr, answers] = await Promise.all([
+  const [jobs, allPipelines, members, hrAll, allAnswers] = await Promise.all([
     canSchedule ? listJobs(auth.orgId, { status: "active" }) : Promise.resolve([]),
     getCandidatePipelines(auth.orgId, candidateId),
     canSchedule ? listPanelCandidates(auth.orgId) : Promise.resolve([]),
     getHrPanel(auth.orgId, candidateId),
-    answersForCandidate(auth.orgId, candidateId),
+    // Application answers hold pay and notice period: salary details.
+    salary ? answersForCandidate(auth.orgId, candidateId) : Promise.resolve([]),
   ]);
+  const pipelines = allPipelines.filter((p) => inScope(p.job_id));
+  const answers = allAnswers.filter((a) => inScope(a.job_id));
+  const hr = visibleHrPanel(hrAll, salary, scope);
+  const interviews = c.interviews.filter((i) => inScope(i.job_id));
   const summaryRows = await summariesForPipelines(auth.orgId, candidateId, pipelines);
   const summaries = Object.fromEntries([...summaryRows].map(([jobId, r]) => [jobId, { status: r.status, summary: r.summary, source: "source" in r ? r.source : null }]));
   const parsing = c.parse_status === "pending" || c.parse_status === "processing";
   const canWrite = can(auth.role, "candidate:write");
   // Opened from a job's candidate list: Previous / Next through that list, and Back to it.
   const sp = await props.searchParams;
-  const fromJob = typeof sp.job === "string" && isUuid(sp.job) ? sp.job : null;
+  const fromJob = typeof sp.job === "string" && isUuid(sp.job) && inScope(sp.job) ? sp.job : null;
   const nav = fromJob ? await jobListNav(auth.orgId, fromJob, sp, candidateId) : null;
   const fromJobTitle = nav ? pipelines.find((p) => p.job_id === fromJob)?.job_title ?? (await getJob(auth.orgId, fromJob!))?.title ?? "Job" : null;
   return (
     <>
       <AutoRefresh active={parsing || [...summaryRows.values()].some((r) => r.status === "processing")} />
       <PageHeader
-        back={nav ? { href: nav.listHref, label: fromJobTitle! } : { href: "/candidates", label: "Candidates" }}
+        back={nav ? { href: nav.listHref, label: fromJobTitle! }
+          : scope ? { href: `/jobs/${scope[0]}`, label: pipelines.find((p) => p.job_id === scope[0])?.job_title ?? "Job" }
+          : { href: "/candidates", label: "Candidates" }}
         title={c.name}
         meta={<>
           <span className="inline-flex items-center gap-1"><Mail className="size-3.5" />{c.email}</span>
@@ -88,7 +101,8 @@ export default async function CandidatePage(props: PageProps<"/candidates/[candi
         </div>
       )}
       {answers.length > 0 && <div className="mb-6"><AnswersCard candidateId={c.id} items={answers} canEdit={canWrite} showJob /></div>}
-      <div className="mb-6"><HrPanel candidateId={c.id} data={hr} currentUserId={auth.userId} canEdit={canWrite} /></div>
+      <div className="mb-6"><HrPanel candidateId={c.id} data={hr} currentUserId={auth.userId} canEdit={canWrite && salary} canNote={can(auth.role, "note:write")} showDetails={salary}
+        jobId={scope ? fromJob ?? scope[0] : undefined} jobTitle={scope ? pipelines.find((p) => p.job_id === (fromJob ?? scope[0]))?.job_title : undefined} /></div>
       <div className="grid gap-6 lg:grid-cols-3">
         <section className="rounded-xl border bg-card p-5 lg:col-span-2">
           <div className="mb-4 flex items-center justify-between">
@@ -116,9 +130,9 @@ export default async function CandidatePage(props: PageProps<"/candidates/[candi
           </section>
           <section className="rounded-xl border bg-card">
             <h2 className="border-b px-5 py-4 font-semibold">Interviews</h2>
-            {c.interviews.length === 0 ? <p className="px-5 py-6 text-sm text-muted-foreground">Not invited to any interviews yet.</p> : (
+            {interviews.length === 0 ? <p className="px-5 py-6 text-sm text-muted-foreground">Not invited to any interviews yet.</p> : (
               <ul className="divide-y">
-                {c.interviews.map((i) => (
+                {interviews.map((i) => (
                   <li key={i.id}>
                     <Link href={i.kind === "human" ? `/interviews/human/${i.id}` : `/interviews/${i.id}`} className="flex items-center justify-between gap-3 px-5 py-3 hover:bg-muted/40">
                       <div className="min-w-0">

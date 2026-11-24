@@ -9,6 +9,7 @@ import { runInBackground } from "@/lib/background";
 import type { JobRequirements } from "@/lib/validation/ai-schemas";
 import { MAX_ROUNDS, RoundInputSchema, saveRounds } from "./rounds";
 import { ApplicationFormSchema, DEFAULT_FORM, HiringLimitsSchema, MAX_LPA, NO_LIMITS, type ApplicationForm, type HiringLimits } from "@/lib/application-form";
+import { addToJobTeam, setJobTeam } from "./job-team";
 
 const list = z.array(z.string().trim().min(1).max(80)).max(40);
 
@@ -31,6 +32,8 @@ export const JobInputSchema = z.object({
   application_form: ApplicationFormSchema.default(DEFAULT_FORM),
   /** Internal limits for the fit check: never shown to candidates. */
   hiring_limits: HiringLimitsSchema.default(NO_LIMITS),
+  /** The hiring team (user ids). Left out on an edit: the team stays as it is. */
+  team: z.array(z.string().uuid()).max(100).optional(),
 }).refine((j) => j.experience_min == null || j.experience_max == null || j.experience_min <= j.experience_max, {
   message: "Minimum experience cannot exceed maximum",
   path: ["experience_min"],
@@ -66,7 +69,8 @@ export type JobRow = {
   updated_at: Date;
 };
 
-export async function listJobs(orgId: string, opts: { q?: string; status?: string } = {}) {
+/** `jobIds`: only these jobs (an Interviewer's jobs); null or left out for all. */
+export async function listJobs(orgId: string, opts: { q?: string; status?: string; jobIds?: string[] | null } = {}) {
   const q = opts.q?.trim() ? `%${opts.q.trim()}%` : null;
   return withOrg(orgId, (tx) => tx<(JobRow & { template_name: string | null; interview_count: number; completed_count: number; in_progress_count: number })[]>`
     select j.*, t.name as template_name,
@@ -76,6 +80,7 @@ export async function listJobs(orgId: string, opts: { q?: string; status?: strin
     from jobs j left join interview_templates t on t.id = j.interview_template_id
     where j.organization_id = ${orgId}
       ${opts.status ? tx`and j.status = ${opts.status}` : tx``}
+      ${opts.jobIds ? tx`and j.id = any(${opts.jobIds})` : tx``}
       ${q ? tx`and (j.title ilike ${q} or j.location ilike ${q} or j.required_skills::text ilike ${q})` : tx``}
     order by case j.status when 'active' then 0 when 'draft' then 1 when 'paused' then 2 else 3 end, j.updated_at desc`);
 }
@@ -99,6 +104,8 @@ export async function createJob(orgId: string, userId: string, input: JobInput) 
         ${json(input.application_form)}, ${json(input.hiring_limits)})
       returning id`;
     await saveRounds(tx, orgId, row.id, input.rounds);
+    // The creator is always on the new job's team, so its emails reach them.
+    await addToJobTeam(tx, orgId, row.id, [userId, ...(input.team ?? [])], userId);
     await audit(tx, { orgId, userId, action: "job.created", entityType: "job", entityId: row.id });
     return row.id;
   });
@@ -119,6 +126,7 @@ export async function updateJob(orgId: string, userId: string, jobId: string, in
         application_form = ${json(input.application_form)}, hiring_limits = ${json(input.hiring_limits)}
       where id = ${jobId} and organization_id = ${orgId}`;
     await saveRounds(tx, orgId, jobId, input.rounds);
+    if (input.team) await setJobTeam(tx, orgId, jobId, input.team, userId);
     await audit(tx, { orgId, userId, action: "job.updated", entityType: "job", entityId: jobId });
     return prev.description !== input.description
       || JSON.stringify(prev.required_skills) !== JSON.stringify(input.required_skills)

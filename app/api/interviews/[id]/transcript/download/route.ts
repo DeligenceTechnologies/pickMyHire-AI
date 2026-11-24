@@ -1,6 +1,7 @@
 import { ApiError, route, uuidParam } from "@/lib/api";
 import { audit } from "@/lib/audit";
 import { requireApiAuth } from "@/lib/auth/session";
+import { assertInterviewAccess } from "@/lib/auth/job-scope";
 import { withOrg } from "@/lib/database/db";
 import { formatClock } from "@/lib/format";
 import { getInterviewDetail, getTranscript } from "@/lib/services/interviews";
@@ -8,6 +9,7 @@ import { getInterviewDetail, getTranscript } from "@/lib/services/interviews";
 /** The transcript as a plain-text file: "[mm:ss] Speaker: text", times from the start of the interview. */
 export const GET = route<{ id: string }>(async (_req, { id }) => {
   const auth = await requireApiAuth("interview:view");
+  await assertInterviewAccess(auth, uuidParam(id));
   const interviewId = uuidParam(id);
   const detail = await getInterviewDetail(auth.orgId, interviewId);
   if (!detail) throw new ApiError(404, "Interview not found");

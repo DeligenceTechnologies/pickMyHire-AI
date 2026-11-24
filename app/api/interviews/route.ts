@@ -5,11 +5,13 @@ import { runInBackground } from "@/lib/background";
 import { getMatch, matchCandidate } from "@/lib/services/candidate-match";
 import { createInterview, listInterviews } from "@/lib/services/interviews";
 import { RoundChoiceSchema } from "@/lib/validation/rounds";
+import { jobScope } from "@/lib/auth/job-scope";
 
 export const GET = route(async (req) => {
   const auth = await requireApiAuth("interview:view");
   const sp = req.nextUrl.searchParams;
   return listInterviews(auth.orgId, {
+    jobIds: await jobScope(auth),
     q: sp.get("q") ?? undefined,
     status: sp.get("status") ?? undefined,
     jobId: sp.get("jobId") ?? undefined,

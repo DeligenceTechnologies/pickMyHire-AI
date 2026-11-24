@@ -38,6 +38,7 @@ import { REENTRY_WINDOW_MS } from "./outcome";
 import { MAX_REPEATS, type RequestKind } from "./repeat";
 import { introLines } from "./intro";
 import { rephraseQuestion } from "@/lib/ai/question-rephrase";
+import { jobEmailRecipients } from "@/lib/services/job-team";
 
 export const CONSENT_VERSION = "2026-09-v1";
 /** Consent text that also covers the identity (face) check. */
@@ -643,8 +644,9 @@ export async function completeInterview(token: string, input: { reason: "finishe
     await notify(tx, { orgId: ctx.orgId, type: "interview.completed", payload: { interview_id: ctx.id, candidate: ctx.candidateName, job: ctx.jobTitle, reason: input.reason } });
     const [org] = await tx<{ settings: unknown }[]>`select settings from organizations where id = ${ctx.orgId}`;
     if (!readSettings(org?.settings).notify_on_completion) return [];
-    return tx<{ email: string }[]>`select u.email from organization_members m join users u on u.id = m.user_id
-      where m.organization_id = ${ctx.orgId} and m.role in ('owner','admin','recruiter')`;
+    // Only the job's hiring team (Owners, Admins, Recruiters on it) gets the email.
+    const [{ job_id }] = await tx<{ job_id: string }[]>`select job_id from interviews where id = ${ctx.id}`;
+    return jobEmailRecipients(tx, ctx.orgId, job_id);
   });
   if (recruiters === null) return { status: "completed" as const };
   log.info("interview.completed", { interviewId: ctx.id, reason: input.reason });

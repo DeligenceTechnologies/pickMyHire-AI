@@ -68,6 +68,8 @@ export async function listInterviews(orgId: string, opts: {
   sort?: "recent" | "waiting";
   /** Also count each tab (with the other filters applied). */
   counts?: boolean;
+  /** Only these jobs (an Interviewer's jobs); null or left out for all. */
+  jobIds?: string[] | null;
 } = {}) {
   const q = opts.q?.trim() ? `%${opts.q.trim()}%` : null;
   const page = Math.max(1, opts.page ?? 1);
@@ -79,6 +81,7 @@ export async function listInterviews(orgId: string, opts: {
     // Everything but the tab, so each tab can be counted with the same filters.
     const base = tx`i.organization_id = ${orgId}
       ${opts.jobId ? tx`and i.job_id = ${opts.jobId}` : tx``}
+      ${opts.jobIds ? tx`and i.job_id = any(${opts.jobIds})` : tx``}
       ${opts.from ? tx`and i.created_at >= ${opts.from}::date` : tx``}
       ${opts.to ? tx`and i.created_at < (${opts.to}::date + 1)` : tx``}
       ${opts.days ? tx`and ${last(tx)} >= now() - make_interval(days => ${opts.days})` : tx``}

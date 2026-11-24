@@ -123,13 +123,16 @@ export async function getUsage(orgId: string) {
 
 const CANDIDATE_NOTIFICATIONS = ["application.received"];
 
-export async function listNotifications(orgId: string, userId: string, opts: { includeCandidateData: boolean }) {
+/** `jobIds` (an Interviewer's jobs): company-wide notifications only for those jobs; their own ones always. */
+export async function listNotifications(orgId: string, userId: string, opts: { includeCandidateData: boolean; jobIds?: string[] | null }) {
   return withOrg(orgId, (tx) => tx<{ id: string; type: string; payload: Record<string, string>; read_at: Date | null; created_at: Date }[]>`
     select n.id, n.type, n.payload, s.read_at, n.created_at
     from notifications n
     left join notification_states s on s.notification_id = n.id and s.user_id = ${userId}
     where n.organization_id = ${orgId} and (n.user_id is null or n.user_id = ${userId}) and s.dismissed_at is null
       ${opts.includeCandidateData ? tx`` : tx`and n.type <> all(${CANDIDATE_NOTIFICATIONS})`}
+      ${opts.jobIds ? tx`and (n.user_id = ${userId} or n.payload->>'job_id' = any(${opts.jobIds})
+        or exists (select 1 from interviews i where i.id::text = n.payload->>'interview_id' and i.job_id = any(${opts.jobIds})))` : tx``}
     order by n.created_at desc limit 20`);
 }
 

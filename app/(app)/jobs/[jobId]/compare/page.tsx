@@ -6,6 +6,7 @@ import { requireAuth } from "@/lib/auth/session";
 import { isUuid } from "@/lib/ids";
 import { getJob } from "@/lib/services/jobs";
 import { getComparison, getSettings } from "@/lib/services/workspace";
+import { requireJobAccess } from "@/lib/auth/job-scope";
 
 export const metadata = { title: "Compare candidates" };
 
@@ -14,6 +15,7 @@ export default async function ComparePage(props: PageProps<"/jobs/[jobId]/compar
   const { jobId } = await props.params;
   if (!isUuid(jobId)) notFound();
   const job = await getJob(auth.orgId, jobId);
+  await requireJobAccess(auth, jobId);
   if (!job) notFound();
   const sp = await props.searchParams;
   const [data, { settings }] = await Promise.all([getComparison(auth.orgId, jobId, typeof sp.round === "string" ? sp.round : null), getSettings(auth.orgId)]);

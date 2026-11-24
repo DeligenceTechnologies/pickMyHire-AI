@@ -3,6 +3,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { PageHeader } from "@/components/common/page-header";
 import { can } from "@/lib/auth/permissions";
 import { requireAuth } from "@/lib/auth/session";
+import { jobScope } from "@/lib/auth/job-scope";
 import { getDashboardData, listDashboardJobs, PERIODS, periodOf } from "@/lib/services/dashboard";
 import { getQuotaStatus } from "@/lib/services/quota";
 import { getPricingFor } from "@/lib/services/pricing";
@@ -17,13 +18,14 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
   const auth = await requireAuth();
   const sp = await props.searchParams;
   const period = periodOf(sp.period);
-  const jobOptions = await listDashboardJobs(auth.orgId);
+  const jobIds = await jobScope(auth);
+  const jobOptions = await listDashboardJobs(auth.orgId, jobIds);
   const jobId = typeof sp.job === "string" && jobOptions.some((j) => j.id === sp.job) ? sp.job : null;
   const mine = !jobId && sp.jobs === "mine";
   const candidateData = can(auth.role, "candidate:view");
   const showUsage = can(auth.role, "usage:view");
   const [data, quota, human, pricing] = await Promise.all([
-    getDashboardData(auth.orgId, { userId: auth.userId, mine, jobId, days: period.days, candidateData }),
+    getDashboardData(auth.orgId, { userId: auth.userId, mine, jobId, days: period.days, candidateData, jobIds }),
     getQuotaStatus(auth.orgId),
     listMyHumanInterviews(auth.orgId, auth),
     showUsage ? getPricingFor(auth.orgId) : null,

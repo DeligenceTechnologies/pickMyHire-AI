@@ -9,6 +9,7 @@ import { env } from "@/lib/env";
 import { checkLocation, DECISION_LABEL, DECISIONS, formatInZone, LOCATION_LABEL, LOCATION_TYPES, MAX_CRITERIA, type Decision, type HumanStatus, type LocationType } from "@/lib/hiring";
 import { buildIcs } from "@/lib/ics";
 import { ensurePipeline } from "./pipeline";
+import { addToJobTeam } from "./job-team";
 
 // Human interviews: scheduled with a meeting link (Zoom, Meet, Teams…), a
 // phone number or an address, run by team members who each fill a scorecard.
@@ -206,6 +207,8 @@ export async function scheduleHumanInterview(orgId: string, userId: string, inpu
       await notify(tx, { orgId, userId: uid, type: "human_interview.assigned", payload: { human_interview_id: row.id, candidate: cand.name, job: job.title, round: round.name, at: input.scheduledAt, tz: input.timezone } });
     }
     await ensurePipeline(tx, orgId, job.id, cand.id);
+    // Panel members join the job's hiring team, so they can see the candidate and the job's interviews.
+    await addToJobTeam(tx, orgId, job.id, input.interviewerIds, userId);
     await audit(tx, { orgId, userId, action: "human_interview.scheduled", entityType: "human_interview", entityId: row.id, metadata: { job_id: job.id, candidate_id: cand.id, round: round.name, at: input.scheduledAt } });
     return row.id;
   });
@@ -234,6 +237,7 @@ export async function rescheduleHumanInterview(orgId: string, userId: string, id
     await tx`update human_interviews set scheduled_at = ${input.scheduledAt}, duration_minutes = ${input.durationMinutes}, timezone = ${input.timezone},
       location_type = ${input.locationType}, location = ${location}, message = ${input.message || null}, sequence = sequence + 1 where id = ${id}`;
     const before = new Set(h.panel.map((p) => p.user_id));
+    await addToJobTeam(tx, orgId, h.job_id, input.interviewerIds, userId);
     await tx`delete from human_interview_panel where human_interview_id = ${id} and user_id <> all(${input.interviewerIds})`;
     for (const uid of new Set(input.interviewerIds)) {
       await tx`insert into human_interview_panel (human_interview_id, user_id, organization_id) values (${id}, ${uid}, ${orgId}) on conflict do nothing`;

@@ -22,6 +22,9 @@ import { JobCandidates } from "@/components/jobs/job-candidates";
 import { JobStats } from "@/components/jobs/job-stats";
 import { listJobCandidates } from "@/lib/services/job-candidates";
 import type { Fit } from "@/lib/application-form";
+import { requireJobAccess } from "@/lib/auth/job-scope";
+import { listJobTeam } from "@/lib/services/job-team";
+import { HiringTeamCard } from "@/components/jobs/hiring-team-card";
 
 export default async function JobPage(props: PageProps<"/jobs/[jobId]">) {
   const auth = await requireAuth();
@@ -29,14 +32,17 @@ export default async function JobPage(props: PageProps<"/jobs/[jobId]">) {
   if (!isUuid(jobId)) notFound();
   const job = await getJob(auth.orgId, jobId);
   if (!job) notFound();
+  await requireJobAccess(auth, jobId);
   const canSeeCandidates = can(auth.role, "candidate:view");
-  const [interviews, completedCount, rounds, people] = await Promise.all([
+  const [interviews, completedCount, rounds, people, team] = await Promise.all([
     canSeeCandidates ? Promise.resolve({ rows: [], total: 0 }) : listInterviews(auth.orgId, { jobId }),
     countCompletedInterviews(auth.orgId, jobId),
     listRounds(auth.orgId, jobId),
     canSeeCandidates ? listJobCandidates(auth.orgId, jobId) : Promise.resolve(null),
+    listJobTeam(auth.orgId, jobId),
   ]);
-  const fits = canSeeCandidates ? await fitForJob(auth.orgId, jobId) : new Map<string, Fit>();
+  // The fit check compares pay with the budget, so only people who see salary details get it.
+  const fits = canSeeCandidates && can(auth.role, "candidate:salary") ? await fitForJob(auth.orgId, jobId) : new Map<string, Fit>();
   const screening = !!people?.rows.some((r) => r.match_status === "pending" || r.match_status === "processing");
   const req = job.parsed_requirements;
   const parsing = job.parse_status === "pending" || job.parse_status === "processing";
@@ -89,6 +95,7 @@ export default async function JobPage(props: PageProps<"/jobs/[jobId]">) {
           </details>
         </div>
         <div className="min-w-0 space-y-6">
+          <HiringTeamCard jobId={job.id} team={team} canEdit={can(auth.role, "job:write")} />
           {canSeeCandidates && <ApplyLinkCard jobId={job.id} enabled={job.apply_enabled} url={job.apply_slug ? applyUrl(job.apply_slug) : null} jobActive={job.status === "active"} canEdit={can(auth.role, "job:write")} />}
           {/* Folded like the job description: hidden until opened. */}
           <details className="group rounded-xl border bg-card">

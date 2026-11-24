@@ -13,7 +13,8 @@ import { isUuid } from "@/lib/ids";
 import { getApplication } from "@/lib/services/applications";
 import { jobListNav } from "@/lib/services/job-candidates";
 import { ApplicationNav } from "@/components/applications/application-nav";
-import { getHrPanel } from "@/lib/services/candidate-notes";
+import { getHrPanel, visibleHrPanel } from "@/lib/services/candidate-notes";
+import { requireJobAccess } from "@/lib/auth/job-scope";
 import { HrPanel } from "@/components/candidates/hr-panel";
 import { AnswersCard } from "@/components/applications/answers-card";
 import { answersForCandidate } from "@/lib/services/application-answers";
@@ -34,11 +35,15 @@ export default async function ApplicationPage(props: PageProps<"/jobs/[jobId]/ap
   if (!isUuid(jobId) || !isUuid(applicationId)) notFound();
   const a = await getApplication(auth.orgId, applicationId);
   if (!a || a.job_id !== jobId) notFound();
-  const [hr, answers, nav] = await Promise.all([
-    getHrPanel(auth.orgId, a.candidate_id), answersForCandidate(auth.orgId, a.candidate_id),
+  await requireJobAccess(auth, jobId);
+  // Pay, notice period and the fit check against the budget are salary details.
+  const salary = can(auth.role, "candidate:salary");
+  const [hrAll, answers, nav] = await Promise.all([
+    getHrPanel(auth.orgId, a.candidate_id), salary ? answersForCandidate(auth.orgId, a.candidate_id) : Promise.resolve([]),
     // Previous / Next walk the same filtered, sorted list the job page shows.
     jobListNav(auth.orgId, jobId, await props.searchParams, a.candidate_id),
   ]);
+  const hr = visibleHrPanel(hrAll, salary, can(auth.role, "job:all") ? null : [jobId]);
   const listHref = nav?.listHref ?? `/jobs/${jobId}`;
   const s = a.screening;
   const busy = a.screening_status === "pending" || a.screening_status === "processing";
@@ -138,7 +143,8 @@ export default async function ApplicationPage(props: PageProps<"/jobs/[jobId]/ap
               <p className="whitespace-pre-wrap text-sm text-muted-foreground">{a.cover_note}</p>
             </section>
           )}
-          <HrPanel candidateId={a.candidate_id} data={hr} currentUserId={auth.userId} canEdit={can(auth.role, "candidate:write")} jobId={a.job_id} jobTitle={a.job_title} />
+          <HrPanel candidateId={a.candidate_id} data={hr} currentUserId={auth.userId} canEdit={can(auth.role, "candidate:write") && salary} canNote={can(auth.role, "note:write")}
+            showDetails={salary} jobId={a.job_id} jobTitle={a.job_title} />
         </div>
       </div>
     </>

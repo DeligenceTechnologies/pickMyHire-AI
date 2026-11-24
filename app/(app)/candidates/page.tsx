@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { redirect } from "next/navigation";
 import { Archive, LayoutGrid, List, Loader2, Users } from "lucide-react";
 import { PageHeader } from "@/components/common/page-header";
 import { CandidatePager } from "@/components/candidates/candidate-pager";
@@ -22,6 +23,8 @@ const one = (v: string | string[] | undefined) => (typeof v === "string" ? v : u
 
 export default async function CandidatesPage(props: PageProps<"/candidates">) {
   const auth = await requireAuth("candidate:view");
+  // Interviewers see candidates only through the jobs they're on.
+  if (!can(auth.role, "job:all")) redirect("/jobs");
   const sp = await props.searchParams;
   const q = one(sp.q);
   const jobId = one(sp.job) && /^[0-9a-f-]{36}$/i.test(one(sp.job)!) ? one(sp.job) : undefined;

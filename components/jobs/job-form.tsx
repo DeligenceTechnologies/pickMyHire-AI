@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { TagInput } from "@/components/common/tag-input";
 import { api, ClientApiError } from "@/lib/client/api";
 import { newRoundKey, type RoundValue, RoundsEditor } from "./rounds-editor";
+import { HiringTeamPicker, type TeamOption } from "./hiring-team-picker";
 import { ApplicationQuestionsEditor, HiringLimitsEditor } from "./application-questions-editor";
 import { DEFAULT_FORM, NO_LIMITS, type ApplicationForm, type HiringLimits } from "@/lib/application-form";
 
@@ -30,13 +31,15 @@ export type JobFormValue = {
   face_verification: boolean;
   application_form: ApplicationForm;
   hiring_limits: HiringLimits;
+  /** The hiring team (user ids). */
+  team: string[];
 };
 
 const selectClass = "h-9 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
-function Section({ title, description, children, required }: { title: string; description: string; children: React.ReactNode; required?: boolean }) {
+function Section({ title, description, children, required, id }: { title: string; description: string; children: React.ReactNode; required?: boolean; id?: string }) {
   return (
-    <section className="grid gap-6 border-b py-8 first:pt-0 last:border-0 md:grid-cols-3">
+    <section id={id} className="grid scroll-mt-24 gap-6 border-b py-8 first:pt-0 last:border-0 md:grid-cols-3">
       <div>
         <h2 className="font-semibold">{title}{required && <span aria-hidden="true" className="ml-0.5 text-destructive">*</span>}</h2>
         <p className="mt-1 text-sm text-muted-foreground">{description}</p>
@@ -46,13 +49,16 @@ function Section({ title, description, children, required }: { title: string; de
   );
 }
 
-export function JobForm({ initial, jobId, templates }: { initial?: JobFormValue; jobId?: string; templates: { id: string; name: string; total_minutes: number; is_default: boolean }[] }) {
+export function JobForm({ initial, jobId, templates, teamOptions, currentUserId }: {
+  initial?: JobFormValue; jobId?: string; templates: { id: string; name: string; total_minutes: number; is_default: boolean }[];
+  teamOptions: TeamOption[]; currentUserId: string;
+}) {
   const router = useRouter();
   const [v, setV] = useState<JobFormValue>(initial ?? {
     title: "", description: "", location: "", employment_type: "full_time", experience_min: null, experience_max: null,
     required_skills: [], preferred_skills: [], responsibilities: [],
     rounds: [{ key: newRoundKey(), name: "Screening", kind: "ai", template_id: templates.find((t) => t.is_default)?.id ?? templates[0]?.id ?? "", criteria: [], guide: "" }], status: "active", face_verification: true,
-    application_form: DEFAULT_FORM, hiring_limits: NO_LIMITS,
+    application_form: DEFAULT_FORM, hiring_limits: NO_LIMITS, team: [currentUserId],
   });
   const [respText, setRespText] = useState((initial?.responsibilities ?? []).join("\n"));
   const [busy, setBusy] = useState(false);
@@ -144,6 +150,9 @@ export function JobForm({ initial, jobId, templates }: { initial?: JobFormValue;
             <option value="draft">Draft</option><option value="active">Active</option><option value="paused">Paused</option><option value="closed">Closed</option>
           </select>
         </div>
+      </Section>
+      <Section id="hiring-team" title="Hiring team" description="Recruiters and admins on the team get this job's emails, such as when an interview is completed. Interviewers on the team can see this job's candidates, interviews and reports, and add notes. Panel members of a live round join on their own.">
+        <HiringTeamPicker value={v.team} onChange={(t) => set("team", t)} options={teamOptions} currentUserId={currentUserId} />
       </Section>
       <Section title="Application questions" description="Asked on the apply page, and filled in by your team when you invite someone directly. Answers go into the candidate's HR details.">
         <ApplicationQuestionsEditor value={v.application_form} onChange={(f) => set("application_form", f)}

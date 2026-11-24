@@ -1,11 +1,12 @@
 import { route } from "@/lib/api";
 import { can } from "@/lib/auth/permissions";
 import { requireApiAuth } from "@/lib/auth/session";
+import { jobScope } from "@/lib/auth/job-scope";
 import { dismissNotifications, listNotifications, markNotificationsRead } from "@/lib/services/workspace";
 
 export const GET = route(async () => {
   const auth = await requireApiAuth();
-  return { notifications: await listNotifications(auth.orgId, auth.userId, { includeCandidateData: can(auth.role, "candidate:view") }) };
+  return { notifications: await listNotifications(auth.orgId, auth.userId, { includeCandidateData: can(auth.role, "candidate:view"), jobIds: await jobScope(auth) }) };
 });
 
 /** Mark all as read (for the current person). */

@@ -2,11 +2,19 @@ import { ApiError, route } from "@/lib/api";
 import { requireApiAuth } from "@/lib/auth/session";
 import { CandidateInputSchema, createCandidateWithResume, listCandidates } from "@/lib/services/candidates";
 import { RESUME_MAX_BYTES } from "@/lib/services/document-text";
+import { assertJobAccess } from "@/lib/auth/job-scope";
+import { can } from "@/lib/auth/permissions";
 
 export const GET = route(async (req) => {
   const auth = await requireApiAuth("candidate:view");
   const sp = req.nextUrl.searchParams;
-  return listCandidates(auth.orgId, { q: sp.get("q") ?? undefined, jobId: sp.get("jobId") ?? undefined, page: Number(sp.get("page") ?? 1) });
+  const jobId = sp.get("jobId") ?? undefined;
+  // Interviewers list candidates one of their jobs at a time.
+  if (!can(auth.role, "job:all")) {
+    if (!jobId || !/^[0-9a-f-]{36}$/i.test(jobId)) throw new ApiError(400, "Choose one of your jobs.");
+    await assertJobAccess(auth, jobId);
+  }
+  return listCandidates(auth.orgId, { q: sp.get("q") ?? undefined, jobId, page: Number(sp.get("page") ?? 1) });
 });
 
 /** Add a candidate: name, email, optional phone, their resume (required) and optionally the job they're for, as a form upload. */

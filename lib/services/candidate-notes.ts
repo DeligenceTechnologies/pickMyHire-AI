@@ -42,6 +42,17 @@ export async function getHrPanel(orgId: string, candidateId: string): Promise<Hr
   });
 }
 
+/**
+ * What a team member may see of the panel: salary details only with salary access, and (for an
+ * Interviewer, `jobs` = their jobs this candidate is in) only notes on those jobs or on no job.
+ */
+export function visibleHrPanel(panel: HrPanel, salary: boolean, jobs: string[] | null): HrPanel {
+  return {
+    details: salary ? panel.details : null,
+    notes: jobs ? panel.notes.filter((n) => !n.job_id || jobs.includes(n.job_id)) : panel.notes,
+  };
+}
+
 async function assertCandidate(tx: Parameters<Parameters<typeof withOrg>[1]>[0], orgId: string, candidateId: string) {
   const [c] = await tx`select 1 from candidates where id = ${candidateId} and organization_id = ${orgId}`;
   if (!c) throw new ApiError(404, "Candidate not found");

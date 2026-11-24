@@ -10,6 +10,7 @@ import { can } from "@/lib/auth/permissions";
 import { requireAuth } from "@/lib/auth/session";
 import { employmentTypeLabel, timeAgo } from "@/lib/format";
 import { listJobs } from "@/lib/services/jobs";
+import { jobScope } from "@/lib/auth/job-scope";
 
 export const metadata = { title: "Jobs" };
 
@@ -18,7 +19,7 @@ export default async function JobsPage(props: PageProps<"/jobs">) {
   const sp = await props.searchParams;
   const q = typeof sp.q === "string" ? sp.q : undefined;
   const status = typeof sp.status === "string" ? sp.status : undefined;
-  const jobs = await listJobs(auth.orgId, { q, status });
+  const jobs = await listJobs(auth.orgId, { q, status, jobIds: await jobScope(auth) });
   const canWrite = can(auth.role, "job:write");
   return (
     <>

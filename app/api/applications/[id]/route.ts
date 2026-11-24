@@ -2,11 +2,13 @@ import { z } from "zod";
 import { ApiError, body, route, uuidParam } from "@/lib/api";
 import { requireApiAuth } from "@/lib/auth/session";
 import { getApplication, setApplicationStatus } from "@/lib/services/applications";
+import { assertJobAccess } from "@/lib/auth/job-scope";
 
 export const GET = route<{ id: string }>(async (_req, { id }) => {
   const auth = await requireApiAuth("candidate:view");
   const a = await getApplication(auth.orgId, uuidParam(id));
   if (!a) throw new ApiError(404, "Application not found");
+  await assertJobAccess(auth, a.job_id);
   return a;
 });
 

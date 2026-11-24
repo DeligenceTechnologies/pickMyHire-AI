@@ -1,11 +1,13 @@
 import { ApiError, route, uuidParam } from "@/lib/api";
 import { requireApiAuth } from "@/lib/auth/session";
+import { assertInterviewAccess } from "@/lib/auth/job-scope";
 import { runInBackground } from "@/lib/background";
 import { withOrg } from "@/lib/database/db";
 import { processInterview } from "@/lib/interview/processing";
 
 export const GET = route<{ id: string }>(async (_req, { id }) => {
   const auth = await requireApiAuth("report:view");
+  await assertInterviewAccess(auth, uuidParam(id));
   const [row] = await withOrg(auth.orgId, (tx) => tx`
     select r.status, r.summary, r.report_json, r.error, r.generated_at, i.status as interview_status, i.processing_error
     from interviews i left join interview_reports r on r.interview_id = i.id

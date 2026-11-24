@@ -35,8 +35,15 @@ function shown(d: HrDetails, key: keyof HrDetails) {
  * application page and the candidate page; a note added from an application is
  * tagged with that job.
  */
-export function HrPanel({ candidateId, data, currentUserId, canEdit, jobId, jobTitle }: {
-  candidateId: string; data: HrPanelData; currentUserId: string; canEdit: boolean; jobId?: string; jobTitle?: string;
+export function HrPanel({ candidateId, data, currentUserId, canEdit, canNote = canEdit, showDetails = true, jobId, jobTitle }: {
+  candidateId: string; data: HrPanelData; currentUserId: string;
+  /** Edit the HR (salary) details. */
+  canEdit: boolean;
+  /** Add notes and change one's own (Interviewers can, on their jobs). */
+  canNote?: boolean;
+  /** HR details are salary details: hidden from Interviewers. */
+  showDetails?: boolean;
+  jobId?: string; jobTitle?: string;
 }) {
   const { run, pending } = useAction();
   const [editing, setEditing] = useState(false);
@@ -52,11 +59,11 @@ export function HrPanel({ candidateId, data, currentUserId, canEdit, jobId, jobT
   return (
     <section className="@container rounded-xl border bg-card" aria-labelledby="hr-title">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b px-5 py-3.5">
-        <h2 id="hr-title" className="flex items-center gap-2 font-semibold"><NotebookPen className="size-4 text-primary" /> HR details and notes</h2>
-        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Lock className="size-3" /> Owner, Admin and Recruiter only</span>
+        <h2 id="hr-title" className="flex items-center gap-2 font-semibold"><NotebookPen className="size-4 text-primary" /> {showDetails ? "HR details and notes" : "Team notes"}</h2>
+        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Lock className="size-3" /> {showDetails ? "Your hiring team only; salary details: Owner, Admin and Recruiter" : "Your hiring team only"}</span>
       </div>
 
-      <div className="space-y-4 border-b p-5">
+      {showDetails && <div className="space-y-4 border-b p-5">
         {editing ? (
           <form className="space-y-3" onSubmit={async (e) => {
             e.preventDefault();
@@ -105,18 +112,18 @@ export function HrPanel({ candidateId, data, currentUserId, canEdit, jobId, jobT
             </div>
           </>
         )}
-      </div>
+      </div>}
 
       <div className="space-y-4 p-5">
         <h3 className="text-sm font-semibold">Notes</h3>
-        {canEdit && (
+        {canNote && (
           <form className="space-y-2" onSubmit={async (e) => {
             e.preventDefault();
             const ok = await run("note", `${base}/notes`, { body: { body: note, job_id: jobId ?? null }, success: "Note added" });
             if (ok) setNote("");
           }}>
             <Label htmlFor="hr-note" className="sr-only">Add a note</Label>
-            <Textarea id="hr-note" rows={3} maxLength={4000} placeholder="Add a note, e.g. HR call done: negotiable on CTC, can join in 30 days." value={note} onChange={(e) => setNote(e.target.value)} />
+            <Textarea id="hr-note" rows={3} maxLength={4000} placeholder={showDetails ? "Add a note, e.g. HR call done: negotiable on CTC, can join in 30 days." : "Add a note, e.g. Strong on SQL; check system design in the next round."} value={note} onChange={(e) => setNote(e.target.value)} />
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-xs text-muted-foreground">{jobTitle ? `Tagged with ${jobTitle}` : ""}</p>
               <Button type="submit" size="sm" disabled={!!pending || !note.trim()}>{pending === "note" && <Loader2 className="animate-spin" />}Add note</Button>
@@ -126,7 +133,7 @@ export function HrPanel({ candidateId, data, currentUserId, canEdit, jobId, jobT
         {data.notes.length === 0 ? <p className="text-sm text-muted-foreground">No notes yet.</p> : (
           <ul className="divide-y">
             {data.notes.map((n) => {
-              const mine = canEdit && n.author_id === currentUserId;
+              const mine = canNote && n.author_id === currentUserId;
               return (
                 <li key={n.id} className="py-3 first:pt-0 last:pb-0">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">

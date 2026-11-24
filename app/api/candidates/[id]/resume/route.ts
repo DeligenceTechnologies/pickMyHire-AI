@@ -3,6 +3,7 @@ import { ApiError, route, uuidParam } from "@/lib/api";
 import { requireApiAuth } from "@/lib/auth/session";
 import { resumeDownloadUrl, uploadResume } from "@/lib/services/candidates";
 import { RESUME_MAX_BYTES } from "@/lib/services/document-text";
+import { assertCandidateAccess } from "@/lib/auth/job-scope";
 
 export const POST = route<{ id: string }>(async (req, { id }) => {
   const auth = await requireApiAuth("candidate:write");
@@ -17,6 +18,7 @@ export const POST = route<{ id: string }>(async (req, { id }) => {
 
 export const GET = route<{ id: string }>(async (req, { id }) => {
   const auth = await requireApiAuth("candidate:view");
+  await assertCandidateAccess(auth, uuidParam(id));
   const url = await resumeDownloadUrl(auth.orgId, uuidParam(id));
   return NextResponse.redirect(new URL(url, req.nextUrl.origin));
 });

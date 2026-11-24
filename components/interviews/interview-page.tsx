@@ -8,6 +8,7 @@ import { roundLabel } from "@/components/interviews/interview-table";
 import { InterviewViewer, type ViewerTab } from "@/components/reports/interview-viewer";
 import { can } from "@/lib/auth/permissions";
 import { requireAuth } from "@/lib/auth/session";
+import { requireJobAccess } from "@/lib/auth/job-scope";
 import { formatDate, formatDuration } from "@/lib/format";
 import { isUuid } from "@/lib/ids";
 import { getInterviewDetail } from "@/lib/services/interviews";
@@ -29,6 +30,7 @@ export async function InterviewPage({ params, tab }: { params: Promise<{ intervi
   await closeIfAbandoned(auth.orgId, interviewId).catch((err) => log.warn("interview.close_abandoned_failed", { interviewId, err }));
   const [detail, { settings }, feedback, face, outcome] = await Promise.all([getInterviewDetail(auth.orgId, interviewId), getSettings(auth.orgId), listInterviewFeedback(auth.orgId, interviewId), getFaceVerification(auth.orgId, interviewId), tab === "overview" ? getOutcomeInput(auth.orgId, interviewId) : null]);
   if (!detail) notFound();
+  await requireJobAccess(auth, detail.job_id);
   recoverIfStale(auth.orgId, detail);
   const live = ["in_progress", "completing", "processing"].includes(detail.status)
     || (detail.status === "completed" && !detail.processing_error)

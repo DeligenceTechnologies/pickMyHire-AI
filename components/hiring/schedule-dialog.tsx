@@ -179,7 +179,7 @@ export function ScheduleDialog({ mode, members, emailLive, trigger }: { mode: Mo
                     </label>
                   ))}
                 </div>
-                <p className="text-xs text-muted-foreground">View-only members can&apos;t be interviewers. Add people in Settings → Team.</p>
+                <p className="text-xs text-muted-foreground">Interviewers you choose join this job&apos;s hiring team, so they can see its candidates and interviews. View-only members can&apos;t be interviewers.</p>
               </fieldset>
               <div className="space-y-1.5"><Label htmlFor="hi-message">Message to the candidate <span className="font-normal text-muted-foreground">(optional)</span></Label>
                 <Textarea id="hi-message" rows={2} maxLength={2000} value={v.message} onChange={(e) => set({ message: e.target.value })} placeholder="e.g. Please have your portfolio ready to share." />

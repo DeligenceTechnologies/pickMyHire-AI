@@ -6,7 +6,8 @@ import { saveAnswers } from "@/lib/services/application-answers";
 
 /** The candidate's answers to a job's questions, if any. */
 export const GET = route<{ id: string; jobId: string }>(async (_req, { id, jobId }) => {
-  const auth = await requireApiAuth("candidate:view");
+  // Answers include pay and notice period: salary details.
+  const auth = await requireApiAuth("candidate:salary");
   const [row] = await withOrg(auth.orgId, (tx) => tx<{ answers: unknown }[]>`
     select answers from candidate_job_answers where candidate_id = ${uuidParam(id)} and job_id = ${uuidParam(jobId)} and organization_id = ${auth.orgId}`);
   return { answers: row?.answers ?? null };

@@ -15,7 +15,8 @@ import { getQuotaStatus } from "@/lib/services/quota";
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const auth = await requireAuth();
   const live = aiIsLive();
-  const hiddenNav = can(auth.role, "candidate:view") ? [] : ["/candidates"];
+  // Interviewers reach candidates through their jobs, so the company-wide Candidates list stays hidden.
+  const hiddenNav = can(auth.role, "candidate:view") && can(auth.role, "job:all") ? [] : ["/candidates"];
   const quota = await getQuotaStatus(auth.orgId);
   return (
     <div className="flex min-h-screen">

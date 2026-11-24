@@ -73,14 +73,16 @@ function healthOf(j: Omit<DashboardJob, "health" | "why">, hasRounds: boolean, n
  * `mine`: only jobs this user created. `candidateData`: roles without candidate access get interview
  * numbers only (no candidate counts, names from applications, or decisions).
  */
-export async function getDashboardData(orgId: string, opts: { userId: string; mine: boolean; jobId?: string | null; days: number; candidateData: boolean }): Promise<Dashboard> {
+export async function getDashboardData(orgId: string, opts: { userId: string; mine: boolean; jobId?: string | null; days: number; candidateData: boolean; jobIds?: string[] | null }): Promise<Dashboard> {
   const now = Date.now();
   const since = new Date(now - opts.days * DAY);
   const before = new Date(now - 2 * opts.days * DAY);
   const stale = new Date(now - STALE_DAYS * DAY);
   return withOrg(orgId, async (tx) => {
     // One job, the user's own jobs, or all jobs.
-    const mine = opts.jobId ? tx`and j.id = ${opts.jobId}` : opts.mine ? tx`and j.created_by = ${opts.userId}` : tx``;
+    // An Interviewer sees only the jobs they're on (jobIds).
+    const only = opts.jobIds ? tx`and j.id = any(${opts.jobIds})` : tx``;
+    const mine = tx`${opts.jobId ? tx`and j.id = ${opts.jobId}` : opts.mine ? tx`and j.created_by = ${opts.userId}` : tx``} ${only}`;
     const jobs = await tx<{ id: string; title: string; owner: string | null; created_at: Date; has_rounds: boolean }[]>`
       select j.id, j.title, u.name as owner, j.created_at,
         exists (select 1 from job_rounds r where r.job_id = j.id) as has_rounds
@@ -150,8 +152,9 @@ export async function getDashboardData(orgId: string, opts: { userId: string; mi
     }
 
     // How far candidates invited in the period got (one row per person and job).
-    const jobScope = opts.jobId ? tx`and i.job_id = ${opts.jobId}`
-      : opts.mine ? tx`and i.job_id in (select id from jobs where organization_id = ${orgId} and created_by = ${opts.userId})` : tx``;
+    const jobScope = tx`${opts.jobId ? tx`and i.job_id = ${opts.jobId}`
+      : opts.mine ? tx`and i.job_id in (select id from jobs where organization_id = ${orgId} and created_by = ${opts.userId})` : tx``}
+      ${opts.jobIds ? tx`and i.job_id = any(${opts.jobIds})` : tx``}`;
     const [funnel] = await tx<Dashboard["funnel"][]>`
       with c as (
         select i.candidate_id, i.job_id,
@@ -245,7 +248,7 @@ export async function getDashboardData(orgId: string, opts: { userId: string; mi
 }
 
 /** The dashboard's job picker: every active job, by name. */
-export async function listDashboardJobs(orgId: string) {
+export async function listDashboardJobs(orgId: string, jobIds: string[] | null = null) {
   return withOrg(orgId, (tx) => tx<{ id: string; title: string }[]>`
-    select id, title from jobs where organization_id = ${orgId} and status = 'active' order by lower(title)`);
+    select id, title from jobs where organization_id = ${orgId} and status = 'active' ${jobIds ? tx`and id = any(${jobIds})` : tx``} order by lower(title)`);
 }

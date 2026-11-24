@@ -18,9 +18,21 @@ describe("permissions", () => {
     expect(can("interviewer", "recording:view")).toBe(true);
     expect(can("interviewer", "interview:write")).toBe(false);
   });
-  it("limits candidate data to hiring roles", () => {
-    for (const r of ["owner", "admin", "recruiter"] as const) expect(can(r, "candidate:view")).toBe(true);
-    for (const r of ["interviewer", "viewer"] as const) expect(can(r, "candidate:view")).toBe(false);
+  it("limits candidate data to hiring roles, and Interviewers to their own jobs without salary details", () => {
+    for (const r of ["owner", "admin", "recruiter"] as const) {
+      expect(can(r, "candidate:view")).toBe(true);
+      expect(can(r, "candidate:salary")).toBe(true);
+      expect(can(r, "job:all")).toBe(true);
+    }
+    expect(can("viewer", "candidate:view")).toBe(false);
+    expect(can("viewer", "job:all")).toBe(true);
+    // Interviewers see candidates and add notes, but only on the jobs whose hiring team they're on.
+    expect(can("interviewer", "candidate:view")).toBe(true);
+    expect(can("interviewer", "note:write")).toBe(true);
+    expect(can("interviewer", "job:all")).toBe(false);
+    expect(can("interviewer", "candidate:salary")).toBe(false);
+    expect(can("interviewer", "candidate:write")).toBe(false);
+    expect(can("interviewer", "decision:write")).toBe(false);
   });
   it("limits usage to owners and admins", () => {
     expect(can("owner", "usage:view")).toBe(true);

@@ -14,6 +14,7 @@ import { HUMAN_TABS, listHumanInterviews } from "@/lib/services/human-interviews
 import { INTERVIEW_TABS, listInterviews } from "@/lib/services/interviews";
 import { listJobs } from "@/lib/services/jobs";
 import { cn } from "@/lib/utils";
+import { jobScope } from "@/lib/auth/job-scope";
 
 export const metadata = { title: "Interviews" };
 
@@ -46,11 +47,12 @@ export default async function InterviewsPage(props: PageProps<"/interviews">) {
   // "completed" (all finished) is kept for older links.
   const status = str("status");
   const q = str("q");
-  const opts = { q, status, jobId, page, size, days: days ? Number(days) : undefined, sort, counts: true };
+  const jobIds = await jobScope(auth);
+  const opts = { q, status, jobId, page, size, days: days ? Number(days) : undefined, sort, counts: true, jobIds };
   const [ai, people, jobs] = await Promise.all([
     human ? null : listInterviews(auth.orgId, opts),
     human ? listHumanInterviews(auth.orgId, auth, opts) : null,
-    listJobs(auth.orgId),
+    listJobs(auth.orgId, { jobIds }),
   ]);
   const counts = (human ? people!.counts : ai!.counts)!;
   const tabs: { id: string; label: string; hint: string; n: number }[] = [
