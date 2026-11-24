@@ -90,56 +90,56 @@ export function JobForm({ initial, jobId, templates }: { initial?: JobFormValue;
       <p className="-mt-2 mb-6 text-xs text-muted-foreground">Fields marked <span className="text-destructive">*</span> are required.</p>
       <Section title="Basics" description="How the role appears to your team and in candidate invitations.">
         <div className="space-y-1.5">
-          <Label htmlFor="title" required>Job title</Label>
+          <Label htmlFor="title" required info="Candidates see this in their invite and on the interview page.">Job title</Label>
           <Input id="title" value={v.title} onChange={(e) => set("title", e.target.value)} placeholder="Senior Full Stack Engineer" aria-invalid={!!errors.title} />
           {errors.title && <p className="text-xs text-destructive">{errors.title}</p>}
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label htmlFor="location">Location</Label>
+            <Label htmlFor="location" info="Shown on the apply page.">Location</Label>
             <Input id="location" value={v.location ?? ""} onChange={(e) => set("location", e.target.value)} placeholder="Remote · US" />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="type">Employment type</Label>
+            <Label htmlFor="type" info="Shown on the apply page.">Employment type</Label>
             <select id="type" className={selectClass} value={v.employment_type ?? ""} onChange={(e) => set("employment_type", e.target.value || null)}>
               <option value="full_time">Full-time</option><option value="part_time">Part-time</option><option value="contract">Contract</option>
               <option value="internship">Internship</option><option value="temporary">Temporary</option>
             </select>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="emin">Minimum experience (years)</Label>
-            <Input id="emin" type="number" min={0} max={50} value={v.experience_min ?? ""} onChange={(e) => set("experience_min", num(e.target.value))} aria-invalid={!!errors.experience_min} />
+            <Label htmlFor="emin" info="Checked against the resume and in the report.">Minimum experience (years)</Label>
+            <Input id="emin" type="number" min={0} max={50} value={v.experience_min ?? ""} onChange={(e) => set("experience_min", num(e.target.value))} placeholder="e.g. 3" aria-invalid={!!errors.experience_min} />
             {errors.experience_min && <p className="text-xs text-destructive">{errors.experience_min}</p>}
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="emax">Maximum experience (years)</Label>
-            <Input id="emax" type="number" min={0} max={50} value={v.experience_max ?? ""} onChange={(e) => set("experience_max", num(e.target.value))} />
+            <Input id="emax" type="number" min={0} max={50} value={v.experience_max ?? ""} onChange={(e) => set("experience_max", num(e.target.value))} placeholder="No limit" />
           </div>
         </div>
       </Section>
-      <Section title="Description & requirements" description="AI parses the description into structured requirements used to personalize every interview.">
+      <Section title="Description & requirements" description="The AI reads this to find what the role needs, then uses it to shape every interview and report.">
         <div className="space-y-1.5">
-          <Label htmlFor="desc">Job description</Label>
-          <Textarea id="desc" rows={10} value={v.description} onChange={(e) => set("description", e.target.value)} placeholder="Paste the full job description…" />
+          <Label htmlFor="desc" info="The AI also picks up skills from it that you don’t list below.">Job description</Label>
+          <Textarea id="desc" rows={10} value={v.description} onChange={(e) => set("description", e.target.value)} placeholder="Paste the whole job post here. The more detail, the better the questions." />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="req">Required skills</Label>
-          <TagInput id="req" value={v.required_skills} onChange={(t) => set("required_skills", t)} placeholder="Type a skill and press Enter" />
+          <Label htmlFor="req" info="Must-haves. The report checks each one.">Required skills</Label>
+          <TagInput id="req" value={v.required_skills} onChange={(t) => set("required_skills", t)} placeholder="Must-haves, e.g. React. Press Enter after each one" />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="pref">Preferred skills</Label>
-          <TagInput id="pref" value={v.preferred_skills} onChange={(t) => set("preferred_skills", t)} placeholder="Nice-to-have skills" />
+          <Label htmlFor="pref" info="Nice to have. The report lists them apart from the must-haves.">Preferred skills</Label>
+          <TagInput id="pref" value={v.preferred_skills} onChange={(t) => set("preferred_skills", t)} placeholder="Nice to have, e.g. GraphQL. Press Enter after each one" />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="resp">Key responsibilities <span className="font-normal text-muted-foreground">(one per line, optional)</span></Label>
-          <Textarea id="resp" rows={4} value={respText} onChange={(e) => setRespText(e.target.value)} />
+          <Label htmlFor="resp" info="The AI asks about these, and the report checks them like must-haves.">Key responsibilities <span className="font-normal text-muted-foreground">(one per line, optional)</span></Label>
+          <Textarea id="resp" rows={4} value={respText} onChange={(e) => setRespText(e.target.value)} placeholder={"The main things this person will do, one per line. For example:\nLead the payments team\nOwn the release process"} />
         </div>
       </Section>
       <Section title="Interview rounds" required description="The interviews candidates go through for this job, in order. An AI round uses a template (sections, timing, questions and follow-ups); a human round is scheduled with your team, who rate the candidate on a scorecard.">
         <RoundsEditor value={v.rounds} onChange={(r) => set("rounds", r)} templates={templates}
           error={Object.entries(errors).find(([k]) => k.startsWith("rounds"))?.[1]} />
         <div className="space-y-1.5">
-          <Label htmlFor="status" required>Status</Label>
+          <Label htmlFor="status" required info="Only Active jobs take applications from the apply link. You can invite people to any job that isn’t Closed.">Status</Label>
           <select id="status" className={selectClass} value={v.status} onChange={(e) => set("status", e.target.value as JobFormValue["status"])}>
             <option value="draft">Draft</option><option value="active">Active</option><option value="paused">Paused</option><option value="closed">Closed</option>
           </select>

@@ -37,7 +37,7 @@ export function ApplicationQuestionsEditor({ value, onChange, error }: { value: 
           </select>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="af-unit">Pay is entered as</Label>
+          <Label htmlFor="af-unit" info="Monthly or yearly. Pay answers and the budget below both use this.">Pay is entered as</Label>
           <select id="af-unit" className={selectClass} value={value.pay_unit} onChange={(e) => onChange({ ...value, pay_unit: e.target.value as ApplicationForm["pay_unit"] })}>
             {PAY_UNITS.map((u) => <option key={u} value={u}>{PAY_UNIT_LABEL[u]}</option>)}
           </select>
@@ -84,7 +84,7 @@ export function ApplicationQuestionsEditor({ value, onChange, error }: { value: 
                 </div>
                 {(q.type === "yes_no" || q.type === "single_choice") && (
                   <div className="space-y-1.5">
-                    <Label htmlFor={`cq-exp-${q.id}`}>Expected answer <span className="font-normal text-muted-foreground">(optional)</span></Label>
+                    <Label htmlFor={`cq-exp-${q.id}`} info="If someone answers differently, we flag it for you to check. Nobody is rejected for it.">Expected answer <span className="font-normal text-muted-foreground">(optional)</span></Label>
                     <select id={`cq-exp-${q.id}`} className={selectClass} value={q.expected ?? ""} onChange={(e) => setCustom(i, { expected: e.target.value || null })}>
                       <option value="">Any answer</option>
                       {(q.type === "yes_no" ? [["yes", "Yes"], ["no", "No"]] : q.options.map((o) => [o, o])).map(([v, l]) => <option key={v} value={v}>{l}</option>)}

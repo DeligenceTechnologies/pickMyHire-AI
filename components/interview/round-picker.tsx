@@ -126,7 +126,7 @@ export function RoundPicker({ jobId, candidateId, candidateName, onChange }: {
           </label>
           {saveAsRound && (
             <div className="space-y-1.5">
-              <Label htmlFor="rp-name">Round name</Label>
+              <Label htmlFor="rp-name" info="Your team sees this. Leave it empty to use the template name.">Round name</Label>
               <Input id="rp-name" value={roundName} maxLength={80} placeholder={data.templates.find((t) => t.id === templateId)?.name ?? "e.g. Technical"} onChange={(e) => setRoundName(e.target.value)} />
             </div>
           )}

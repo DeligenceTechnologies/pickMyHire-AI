@@ -40,10 +40,10 @@ const blank = (): SectionDraft => ({
   duration_minutes: 5, min_questions: 1, max_questions: 3, max_followups: 2, evaluation_criteria: [], scoring_enabled: true, enabled: true,
 });
 
-function NumberField({ id, label, value, min, max, onChange }: { id: string; label: string; value: number; min: number; max: number; onChange: (n: number) => void }) {
+function NumberField({ id, label, help, value, min, max, onChange }: { id: string; label: string; help: string; value: number; min: number; max: number; onChange: (n: number) => void }) {
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={id} className="text-xs">{label}</Label>
+      <Label htmlFor={id} className="text-xs" info={help}>{label}</Label>
       <Input id={id} type="number" min={min} max={max} value={value} onChange={(e) => onChange(Math.max(min, Math.min(max, Number(e.target.value) || min)))} className="tabular" />
     </div>
   );
@@ -71,24 +71,32 @@ function SectionEditor({ s, index, count, onChange, onMove, onRemove }: {
       </div>
       {open && (
         <div className="grid gap-4 border-t px-4 py-4 md:grid-cols-2">
-          <div className="space-y-1.5"><Label htmlFor={`n-${s.key}`} required>Section name</Label><Input id={`n-${s.key}`} value={s.name} onChange={(e) => onChange({ name: e.target.value })} /></div>
-          <div className="space-y-1.5"><Label htmlFor={`o-${s.key}`}>Objective</Label><Input id={`o-${s.key}`} value={s.objective} onChange={(e) => onChange({ objective: e.target.value })} placeholder="Validate hands-on ownership and technical depth" /></div>
-          <div className="grid grid-cols-2 gap-3 md:col-span-2 md:grid-cols-4">
-            <NumberField id={`d-${s.key}`} label="Duration (min)" value={s.duration_minutes} min={1} max={60} onChange={(n) => onChange({ duration_minutes: n })} />
-            <NumberField id={`mi-${s.key}`} label="Min questions" value={s.min_questions} min={0} max={10} onChange={(n) => onChange({ min_questions: n })} />
-            <NumberField id={`ma-${s.key}`} label="Max questions" value={s.max_questions} min={1} max={12} onChange={(n) => onChange({ max_questions: n })} />
-            <NumberField id={`f-${s.key}`} label="Follow-ups / question" value={s.max_followups} min={0} max={5} onChange={(n) => onChange({ max_followups: n })} />
+          <div className="space-y-1.5">
+            <Label htmlFor={`n-${s.key}`} required info={<>Shown in your report. Candidates don&apos;t hear it, only &ldquo;Part 2 of 4&rdquo;.</>}>Section name</Label>
+            <Input id={`n-${s.key}`} value={s.name} onChange={(e) => onChange({ name: e.target.value })} />
           </div>
-          <div className="space-y-1.5 md:col-span-2"><Label htmlFor={`c-${s.key}`}>Evaluation criteria</Label><TagInput id={`c-${s.key}`} value={s.evaluation_criteria} onChange={(v) => onChange({ evaluation_criteria: v })} placeholder="e.g. Ownership, Technical depth" /></div>
+          <div className="space-y-1.5">
+            <Label htmlFor={`o-${s.key}`} info="The AI writes this part’s questions around it.">Objective</Label>
+            <Input id={`o-${s.key}`} value={s.objective} onChange={(e) => onChange({ objective: e.target.value })} placeholder="What this part should find out, e.g. hands-on ownership" />
+          </div>
+          <div className="grid grid-cols-2 gap-3 md:col-span-2 md:grid-cols-4">
+            <NumberField id={`d-${s.key}`} label="Duration (min)" help="Time for this part. When it's up, the AI moves on after the current answer." value={s.duration_minutes} min={1} max={60} onChange={(n) => onChange({ duration_minutes: n })} />
+            <NumberField id={`mi-${s.key}`} label="Min questions" help="Always asked, even if this part runs over time." value={s.min_questions} min={0} max={10} onChange={(n) => onChange({ min_questions: n })} />
+            <NumberField id={`ma-${s.key}`} label="Max questions" help="The most main questions this part can have. Follow-ups don't count." value={s.max_questions} min={1} max={12} onChange={(n) => onChange({ max_questions: n })} />
+            <NumberField id={`f-${s.key}`} label="Follow-ups / question" help="How many times the AI can dig deeper into one answer. 0 means none. It stops near the end of the time." value={s.max_followups} min={0} max={5} onChange={(n) => onChange({ max_followups: n })} />
+          </div>
+          <div className="space-y-1.5 md:col-span-2"><Label htmlFor={`c-${s.key}`} info="Used to write the questions and to judge the answers. 2–4 is best.">Evaluation criteria</Label><TagInput id={`c-${s.key}`} value={s.evaluation_criteria} onChange={(v) => onChange({ evaluation_criteria: v })} placeholder="What a good answer shows, e.g. Ownership. Press Enter after each one" /></div>
           <div className="space-y-1.5 md:col-span-2">
-            <Label htmlFor={`i-${s.key}`}>Interviewer instructions <span className="font-normal text-muted-foreground">(optional)</span></Label>
-            <Textarea id={`i-${s.key}`} rows={s.instructions.length > 300 ? 6 : 2} value={s.instructions} onChange={(e) => onChange({ instructions: e.target.value })} placeholder="Probe personal contribution versus team contribution." aria-invalid={s.instructions.length > SECTION_TEXT_LIMITS.instructions} />
+            <Label htmlFor={`i-${s.key}`} info="Candidates never see this. The AI uses it when it writes this part’s questions.">Interviewer instructions <span className="font-normal text-muted-foreground">(optional)</span></Label>
+            <Textarea id={`i-${s.key}`} rows={s.instructions.length > 300 ? 6 : 3} value={s.instructions} onChange={(e) => onChange({ instructions: e.target.value })} placeholder={"What the AI should focus on or avoid. For example:\nAsk what they did themselves, not the team.\nDon't ask about salary."} aria-invalid={s.instructions.length > SECTION_TEXT_LIMITS.instructions} />
             <p className={cn("text-right text-xs tabular", s.instructions.length > SECTION_TEXT_LIMITS.instructions ? "font-medium text-destructive" : "text-muted-foreground")}>
               {s.instructions.length > SECTION_TEXT_LIMITS.instructions && "Too long, please shorten. "}{s.instructions.length.toLocaleString("en-US")}/{SECTION_TEXT_LIMITS.instructions.toLocaleString("en-US")}
             </p>
           </div>
-          <label className="flex items-center gap-2 text-sm md:col-span-2">
-            <Switch checked={s.scoring_enabled} onCheckedChange={(c) => onChange({ scoring_enabled: !!c })} /> Show a 1–5 assessment score for this section (always backed by evidence)
+          <label className="flex items-start gap-2 text-sm md:col-span-2">
+            <Switch checked={s.scoring_enabled} onCheckedChange={(c) => onChange({ scoring_enabled: !!c })} className="mt-0.5" />
+            <span>Show a 1–5 score for this section (always backed by evidence)
+              <span className="block text-xs text-muted-foreground">Turn off for parts like Introduction, where a score doesn&apos;t make sense.</span></span>
           </label>
         </div>
       )}
@@ -174,8 +182,14 @@ export function TemplateEditor({ templateId, initial, canWrite, rule }: { templa
   return (
     <div className="space-y-6">
       <div className="grid gap-4 rounded-xl border bg-card p-5 md:grid-cols-3">
-        <div className="space-y-1.5"><Label htmlFor="t-name" required>Template name</Label><Input id="t-name" value={name} onChange={(e) => setName(e.target.value)} disabled={!canWrite} /></div>
-        <div className="space-y-1.5 md:col-span-2"><Label htmlFor="t-desc">Description</Label><Input id="t-desc" value={description} onChange={(e) => setDescription(e.target.value)} disabled={!canWrite} /></div>
+        <div className="space-y-1.5">
+          <Label htmlFor="t-name" required info="Only your team sees this.">Template name</Label>
+          <Input id="t-name" value={name} onChange={(e) => setName(e.target.value)} disabled={!canWrite} placeholder="e.g. Backend – Senior" />
+        </div>
+        <div className="space-y-1.5 md:col-span-2">
+          <Label htmlFor="t-desc">Description</Label>
+          <Input id="t-desc" placeholder="When to use it, e.g. Senior backend roles" value={description} onChange={(e) => setDescription(e.target.value)} disabled={!canWrite} />
+        </div>
       </div>
       <div className="flex items-center justify-between">
         <h2 className="flex flex-wrap items-center gap-x-2 gap-y-1 font-semibold">Sections <span className="text-sm font-normal text-muted-foreground">{sections.filter((s) => s.enabled).length} enabled · {total} min total</span>
@@ -187,7 +201,7 @@ export function TemplateEditor({ templateId, initial, canWrite, rule }: { templa
         </h2>
         {canWrite && <Button variant="outline" onClick={() => setSections((p) => [...p, blank()])}><Plus /> Add section</Button>}
       </div>
-      <p className="-mt-3 text-sm text-muted-foreground">Click a section to edit it. Questions are generated per candidate from these settings; the interview engine enforces timing and follow-up limits.</p>
+      <p className="-mt-3 text-sm text-muted-foreground">Click a section to edit it, or turn it off to skip it. The AI writes new questions for each candidate from these settings and keeps to the times and limits you set.</p>
       <div className="space-y-2">
         {sections.map((s, i) => (
           <SectionEditor key={s.key} s={s} index={i} count={sections.length} onChange={(p) => update(i, p)} onMove={(d) => move(i, d)} onRemove={() => setSections((p) => p.filter((_, j) => j !== i))} />

@@ -2,6 +2,7 @@
 
 import { ArrowDown, ArrowUp, Bot, Plus, Trash2, UserRound } from "lucide-react";
 import { TagInput } from "@/components/common/tag-input";
+import { InfoTip } from "@/components/common/info-tip";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -62,12 +63,12 @@ export function RoundsEditor({ value, onChange, templates, error }: { value: Rou
             {r.kind === "human" && (
               <div className="grid gap-2 border-t pt-2 sm:pl-8">
                 <div className="space-y-1">
-                  <p className="text-xs font-medium">Skills to rate (1–5)<span aria-hidden="true" className="ml-0.5 text-destructive">*</span></p>
+                  <p className="flex items-center gap-1 text-xs font-medium">Skills to rate (1–5)<span aria-hidden="true" className="text-destructive">*</span><InfoTip>Your interviewer rates each one from 1 to 5 after the call.</InfoTip></p>
                   <TagInput id={`round-${r.key}-criteria`} value={r.criteria} onChange={(c) => update(i, { criteria: c.slice(0, 12) })} placeholder="Add a skill and press Enter" />
                 </div>
                 <div className="space-y-1">
                   <p className="text-xs font-medium">Interviewer guide <span className="font-normal text-muted-foreground">(optional)</span></p>
-                  <Textarea aria-label={`Round ${i + 1} interviewer guide`} rows={2} maxLength={4000} value={r.guide} onChange={(e) => update(i, { guide: e.target.value })} placeholder="Questions to cover and what good looks like" />
+                  <Textarea aria-label={`Round ${i + 1} interviewer guide`} rows={2} maxLength={4000} value={r.guide} onChange={(e) => update(i, { guide: e.target.value })} placeholder="Questions to cover and what good looks like. Only your team sees this." />
                 </div>
               </div>
             )}

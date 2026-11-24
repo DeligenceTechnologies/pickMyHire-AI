@@ -225,7 +225,7 @@ export function InviteDialog({ jobId, candidateId, candidateName, jobs, triggerL
                         <div className="space-y-1.5"><Label htmlFor="inv-email" required>Email</Label><Input id="inv-email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
                         <div className="space-y-1.5"><Label htmlFor="inv-phone">Phone <span className="font-normal text-muted-foreground">(optional)</span></Label><Input id="inv-phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
                         <div className="space-y-1.5">
-                          <Label htmlFor="inv-file" required>Resume <span className="font-normal text-muted-foreground">(PDF, DOCX or TXT)</span></Label>
+                          <Label htmlFor="inv-file" required info="Used to make the questions personal and to check what they claim.">Resume <span className="font-normal text-muted-foreground">(PDF, DOCX or TXT)</span></Label>
                           <label htmlFor="inv-file" className="flex h-9 cursor-pointer items-center gap-2 truncate rounded-lg border border-dashed px-2.5 text-sm text-muted-foreground hover:bg-muted">
                             <Upload className="size-4 shrink-0" /> <span className="truncate">{file ? file.name : "Choose file"}</span>
                           </label>

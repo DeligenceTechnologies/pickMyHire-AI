@@ -28,9 +28,9 @@ export function OrgSettingsForm({ orgName, settings, canEdit, ai }: { orgName: s
           catch (e) { toast.error((e as Error).message); } finally { setBusy(false); }
         }}>{busy && <Loader2 className="animate-spin" />}Save changes</Button>}>
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5"><Label htmlFor="o-name" required>Company name</Label><Input id="o-name" value={name} disabled={!canEdit} onChange={(e) => setName(e.target.value)} /></div>
-          <div className="space-y-1.5"><Label htmlFor="o-int" required>AI interviewer name</Label><Input id="o-int" value={s.interviewer_name} disabled={!canEdit} onChange={(e) => setS({ ...s, interviewer_name: e.target.value })} /></div>
-          <div className="space-y-1.5"><Label htmlFor="o-exp" required>Invitation link validity (days)</Label><Input id="o-exp" type="number" min={1} max={90} value={s.invite_expiry_days} disabled={!canEdit} onChange={(e) => setS({ ...s, invite_expiry_days: Math.max(1, Math.min(90, Number(e.target.value) || 1)) })} /></div>
+          <div className="space-y-1.5"><Label htmlFor="o-name" required info="Shown to candidates in emails and on the interview pages.">Company name</Label><Input id="o-name" value={name} disabled={!canEdit} onChange={(e) => setName(e.target.value)} /></div>
+          <div className="space-y-1.5"><Label htmlFor="o-int" required info="The name the AI uses to introduce itself to candidates.">AI interviewer name</Label><Input id="o-int" value={s.interviewer_name} disabled={!canEdit} onChange={(e) => setS({ ...s, interviewer_name: e.target.value })} /></div>
+          <div className="space-y-1.5"><Label htmlFor="o-exp" required info="After this many days the interview link stops working. You can send a new one any time.">Invitation link validity (days)</Label><Input id="o-exp" type="number" min={1} max={90} value={s.invite_expiry_days} disabled={!canEdit} onChange={(e) => setS({ ...s, invite_expiry_days: Math.max(1, Math.min(90, Number(e.target.value) || 1)) })} /></div>
         </div>
         <div className="space-y-3 rounded-lg border p-4">
           <div>
