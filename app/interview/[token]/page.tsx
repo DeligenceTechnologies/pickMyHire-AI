@@ -4,6 +4,7 @@ import { Camera, Clock, Mic, ShieldCheck } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { CandidateError, CandidateOnHold, CandidateShell } from "@/components/interview/candidate-shell";
 import { candidateStep, loadPublicInterview } from "@/lib/interview/public-page";
+import { durationText } from "@/lib/interview/duration";
 
 export default async function WelcomePage(props: PageProps<"/interview/[token]">) {
   const { token } = await props.params;
@@ -22,9 +23,9 @@ export default async function WelcomePage(props: PageProps<"/interview/[token]">
       </p>
       <ul className="mt-5 grid gap-3 sm:grid-cols-2">
         {[
-          { icon: Clock, t: "About " + (data.total_minutes ? `${data.total_minutes} minutes` : "30–45 minutes"), d: data.section_names.length ? `In ${data.section_names.length} parts, one question at a time.` : "One question at a time, by voice." },
+          { icon: Clock, t: "Usually " + (durationText(data.total_minutes) ?? "30–45 minutes"), d: data.section_names.length ? `In ${data.section_names.length} parts, one question at a time.` : "One question at a time, by voice." },
           { icon: Camera, t: "Camera & microphone", d: "Use a computer with a working camera and microphone. Headphones help." },
-          { icon: Mic, t: "Speak naturally", d: "Take your time. Pause or select “Done answering” when you finish an answer." },
+          { icon: Mic, t: "Speak naturally", d: "Take your time. Pause or select “Done answering” when you finish. Don’t know an answer? Just say so." },
           { icon: ShieldCheck, t: "Recorded & reviewed by people", d: "Your interview is recorded and transcribed. The hiring team makes all decisions." },
         ].map(({ icon: Icon, t, d }) => (
           <li key={t} className="flex gap-3 rounded-xl border bg-card p-4">

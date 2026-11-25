@@ -55,15 +55,15 @@ describe("report v2: each answer judged against its question, the job and the re
     expect(source).toBe("openai");
     expect(evaluation.questions).toEqual([expect.objectContaining({ question_ref: "Q2", question_id: "q-2", question_text: "How big was the team?", is_followup: true })]);
     const sent = runStructured.mock.calls[0][0] as { user: string; promptVersion: string };
-    expect(sent.promptVersion).toBe("section-evaluator@v2.1");
+    expect(sent.promptVersion).toBe("section-evaluator@v2.2");
     expect(sent.user).toContain("Engineering Manager");
   });
 
   it("counts how the answers went, without the AI", () => {
-    const r = (answered: "yes" | "partly" | "no", relevance: "high" | "off_topic", depth: "strong" | "basic", accuracy: "correct" | "incorrect" = "correct") =>
+    const r = (answered: "yes" | "partly" | "no" | "skipped", relevance: "high" | "off_topic", depth: "strong" | "basic", accuracy: "correct" | "incorrect" = "correct") =>
       ({ question_ref: "Q", answered, relevance, depth, accuracy, accuracy_note: "", shown: [], missing: [], note: "", evidence_refs: [] });
-    expect(answerQuality([{ questions: [r("yes", "high", "strong"), r("partly", "high", "basic", "incorrect")] }, { questions: [r("no", "off_topic", "basic")] }]))
-      .toEqual({ total: 3, answered: 1, partly: 1, not_answered: 1, off_topic: 1, strong: 1, incorrect: 1 });
+    expect(answerQuality([{ questions: [r("yes", "high", "strong"), r("partly", "high", "basic", "incorrect")] }, { questions: [r("no", "off_topic", "basic"), r("skipped", "high", "basic")] }]))
+      .toEqual({ total: 4, answered: 1, partly: 1, not_answered: 1, off_topic: 1, strong: 1, incorrect: 1, skipped: 1 });
   });
 
   it("checks each answer for being right, separately from being on topic", () => {
@@ -71,6 +71,9 @@ describe("report v2: each answer judged against its question, the job and the re
     expect(evaluatorPrompt.system).toMatch(/It says nothing about whether the answer is right/);
     expect(evaluatorPrompt.system).toMatch(/if accuracy is "incorrect", depth is at most "basic"/);
     expect(evaluatorPrompt.system).toMatch(/likely transcription error \(use "unclear"\)/);
+    // An honest "I don't know" is skipped, never wrong.
+    expect(evaluatorPrompt.system).toMatch(/"skipped" \(they said honestly that they don't know/);
+    expect(evaluatorPrompt.system).toMatch(/never treated as a wrong answer/);
   });
 
   it("lists the job's must-haves (required skills, minimum experience, responsibilities) and nice-to-haves once each", () => {

@@ -74,7 +74,7 @@ describe("about the role in interview emails", () => {
     expect(aboutRole(null)).toBe("");
     const t = emailTemplates.invitation({ candidateName: "Riya", jobTitle: "Sr. SEO Executive", companyName: "Acme", minutes: 25, link: "https://pickmyhire.ai/interview/x", expiresAt: null });
     expect(t.text).not.toContain("About the role");
-    expect(t.text).toContain("• Approximate duration: 25 minutes");
+    expect(t.text).toContain("• Usual length: 20–30 minutes, depending on your answers");
   });
 
   it("puts it in the invitation and the reminder, with duties as a list in the HTML", () => {

@@ -148,7 +148,8 @@ export type AnswerAccuracy = z.infer<typeof AnswerAccuracyEnum>;
 
 export const QuestionResultSchema = z.object({
   question_ref: z.string(),
-  answered: z.enum(["yes", "partly", "no"]),
+  /** "skipped": the candidate honestly said they don't know or chose to skip (not counted as wrong). */
+  answered: z.enum(["yes", "partly", "no", "skipped"]),
   relevance: z.enum(["high", "medium", "low", "off_topic"]),
   depth: z.enum(["strong", "solid", "basic", "none"]),
   /** Is what they said factually / technically right? Relevance only says it was on topic. */

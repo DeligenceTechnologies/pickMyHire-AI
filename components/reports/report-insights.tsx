@@ -25,7 +25,7 @@ const RESUME: Record<ResumeCheckStatus, { label: string; icon: LucideIcon; cls: 
   not_discussed: { label: "Not discussed", icon: MinusCircle, cls: COVERAGE.not_covered.cls },
   contradicted: { label: "Doesn't match", icon: XCircle, cls: COVERAGE.not_demonstrated.cls },
 };
-const ANSWERED: Record<QuestionResult["answered"], string> = { yes: "Answered", partly: "Partly answered", no: "Not answered" };
+const ANSWERED: Record<QuestionResult["answered"], string> = { yes: "Answered", partly: "Partly answered", no: "Not answered", skipped: "Skipped (said they don't know)" };
 const RELEVANCE: Record<QuestionResult["relevance"], string> = { high: "On topic", medium: "Mostly on topic", low: "Loosely on topic", off_topic: "Off topic" };
 /** "Not a fact question" shows no pill: there was nothing to be right or wrong about. */
 const ACCURACY: Record<AnswerAccuracy, { label: string; cls: string } | null> = {
@@ -86,6 +86,7 @@ export function AnswerQualityStrip({ q }: { q: AnswerQuality | undefined }) {
     ["Answered fully", q.answered, "text-emerald-700 dark:text-emerald-300"],
     ["Partly", q.partly, "text-amber-700 dark:text-amber-300"],
     ["Not answered", q.not_answered, q.not_answered ? "text-red-700 dark:text-red-300" : ""],
+    ...(q.skipped ? [["Skipped", q.skipped, ""] as [string, number, string]] : []),
     ["Off topic", q.off_topic, q.off_topic ? "text-red-700 dark:text-red-300" : ""],
     ...(q.incorrect != null ? [["Wrong", q.incorrect, q.incorrect ? "text-red-700 dark:text-red-300" : ""] as [string, number, string]] : []),
     ["Specific, first-hand", q.strong, "text-primary"],
@@ -93,7 +94,7 @@ export function AnswerQualityStrip({ q }: { q: AnswerQuality | undefined }) {
   return (
     <div>
       <p className="mb-1.5 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Answers ({q.total} questions)</p>
-      <dl className={cn("grid grid-cols-2 gap-2", items.length > 5 ? "sm:grid-cols-6" : "sm:grid-cols-5")}>
+      <dl className={cn("grid grid-cols-2 gap-2", items.length > 6 ? "sm:grid-cols-4 lg:grid-cols-7" : items.length > 5 ? "sm:grid-cols-6" : "sm:grid-cols-5")}>
         {items.map(([k, v, cls]) => (
           <div key={k} className="rounded-lg border px-3 py-2">
             <dt className="text-xs text-muted-foreground">{k}</dt>
@@ -163,10 +164,10 @@ export function AnswerVerdict({ r }: { r: QuestionResult }) {
   return (
     <>
       <div className="mt-1.5 flex flex-wrap gap-1.5">
-        <Pill cls={r.answered === "yes" ? COVERAGE.demonstrated.cls : r.answered === "partly" ? COVERAGE.partial.cls : COVERAGE.not_demonstrated.cls}>{ANSWERED[r.answered]}</Pill>
+        <Pill cls={r.answered === "yes" ? COVERAGE.demonstrated.cls : r.answered === "partly" ? COVERAGE.partial.cls : r.answered === "skipped" ? COVERAGE.not_covered.cls : COVERAGE.not_demonstrated.cls}>{ANSWERED[r.answered]}</Pill>
         {acc && <Pill cls={acc.cls}>{acc.label}</Pill>}
-        <Pill cls={r.relevance === "high" ? COVERAGE.demonstrated.cls : r.relevance === "off_topic" ? COVERAGE.not_demonstrated.cls : COVERAGE.not_covered.cls}>{RELEVANCE[r.relevance]}</Pill>
-        <Pill cls={r.depth === "strong" ? COVERAGE.demonstrated.cls : r.depth === "none" ? COVERAGE.not_demonstrated.cls : COVERAGE.not_covered.cls}>{DEPTH[r.depth]}</Pill>
+        {r.answered !== "skipped" && <Pill cls={r.relevance === "high" ? COVERAGE.demonstrated.cls : r.relevance === "off_topic" ? COVERAGE.not_demonstrated.cls : COVERAGE.not_covered.cls}>{RELEVANCE[r.relevance]}</Pill>}
+        {r.answered !== "skipped" && <Pill cls={r.depth === "strong" ? COVERAGE.demonstrated.cls : r.depth === "none" ? COVERAGE.not_demonstrated.cls : COVERAGE.not_covered.cls}>{DEPTH[r.depth]}</Pill>}
       </div>
       <p className={cn("mt-1.5 text-sm", weak ? "text-red-700 dark:text-red-300" : "text-muted-foreground")}>{r.note}</p>
       {r.accuracy_note && (r.accuracy === "incorrect" || r.accuracy === "mostly_correct") && (

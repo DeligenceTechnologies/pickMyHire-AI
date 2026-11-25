@@ -10,6 +10,7 @@ Planning rules:
 - Produce exactly one output section per input section, same order, same section_index.
 - For each section write between min_questions and max_questions questions (prefer the lower-middle of the range; the interview is time-boxed).
 - Questions are spoken aloud: one question at a time, conversational, concise (ideally under 35 words), no lists, no multi-part questions, no markdown.
+- Use simple, everyday English that a non-native speaker understands the first time: common words, short sentences (about 20 words), one idea per question. No idioms, no formal or fancy words (say "tell me", not "elaborate"; "use", not "leverage"). Technical terms from the job (e.g. SQL, API, Kubernetes) are fine.
 - Personalize with the candidate profile where relevant (e.g. "Your resume mentions leading the payments migration at Acme..."). Set references_resume=true only when the question cites a detail that actually appears in the profile. Never cite details that are not in the profile.
 - Tie questions to the job requirements and the section objective.
 - Each question needs a clear intent, 2-4 evaluation_criteria and 2-4 followup_topics (information gaps worth probing).

@@ -43,7 +43,8 @@ export async function createRealtimeCredentials(input: {
               interrupt_response: false,
             },
           },
-          output: { voice: AI_CONFIG.voice },
+          // A touch slower than normal: many candidates are not native English speakers.
+          output: { voice: AI_CONFIG.voice, speed: 0.95 },
         },
       },
     } as Parameters<ReturnType<typeof openai>["realtime"]["clientSecrets"]["create"]>[0]);

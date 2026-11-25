@@ -5,6 +5,7 @@ import { log } from "@/lib/logger";
 import { logoUrl } from "@/lib/branding";
 import { renderEmailHtml, type EmailBrand, type EmailCta } from "./html";
 import type { JobRequirements } from "@/lib/validation/ai-schemas";
+import { durationText } from "@/lib/interview/duration";
 
 export type EmailAttachment = { filename: string; content: string; contentType: string };
 export type EmailMessage = {
@@ -186,7 +187,7 @@ export const emailTemplates = {
 
 ${input.companyName} has invited you to ${input.roundName ? `the ${input.roundName} round, an AI-assisted interview,` : "an AI-assisted interview"} for the ${input.jobTitle} role.
 ${role ? `\n${role}\n` : ""}
-• Approximate duration: ${input.minutes} minutes
+• Usual length: ${durationText(input.minutes) ?? `about ${input.minutes} minutes`}, depending on your answers
 • You'll need a computer with a camera and microphone, and a quiet place.
 • The interview is recorded and transcribed. You'll be asked for consent before it starts.
 ${input.expiresAt ? `• This link expires on ${input.expiresAt.toUTCString()}.\n` : ""}

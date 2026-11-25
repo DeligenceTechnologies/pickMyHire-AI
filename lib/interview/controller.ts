@@ -39,6 +39,7 @@ import { MAX_REPEATS, type RequestKind } from "./repeat";
 import { introLines } from "./intro";
 import { rephraseQuestion } from "@/lib/ai/question-rephrase";
 import { jobEmailRecipients } from "@/lib/services/job-team";
+import { isSkipReply, SKIP_LINE } from "./skip";
 
 export const CONSENT_VERSION = "2026-09-v1";
 /** Consent text that also covers the identity (face) check. */
@@ -455,7 +456,9 @@ export async function submitAnswer(token: string, input: {
   // didn't recognise (e.g. garbled by speech-to-text), so the AI still looks at it.
   const repeatsLeft = repeatsUsed(state, question.id) < MAX_REPEATS;
   const checkRequest = !!text && repeatsLeft && text.split(/\s+/).length <= 25;
-  const fastPath = (!allowed.follow_up && !checkRequest) || !text;
+  // "I don't know" / "skip": move on kindly with no follow-up on it, so nobody feels pushed to guess.
+  const skipped = isSkipReply(text);
+  const fastPath = skipped || (!allowed.follow_up && !checkRequest) || !text;
   let analysis: (AnswerAnalysis & { source: string }) | null = text ? null : { ...mockAnalyzeAnswer(""), source: "rule" };
   let decision: FollowupDecision | null = null;
   let aiMs = 0;
@@ -468,6 +471,9 @@ export async function submitAnswer(token: string, input: {
     analysis = turn.analysis;
     decision = turn.decision;
     aiMs = turn.ms;
+  }
+  if (skipped) {
+    decision = { action: allowed.fallback, reason: "candidate_skipped", missing_evidence: [], question: null, transition: allowed.fallback === "finish" ? "No problem." : SKIP_LINE };
   }
   // The candidate asked for the question again, or said nothing usable: ask the same
   // question again (simpler if they didn't understand) instead of moving on.

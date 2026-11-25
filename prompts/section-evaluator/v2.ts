@@ -1,7 +1,8 @@
 import { CORE_RULES, untrusted } from "../shared";
 
 // v2.1: each answer is also checked for being right (accuracy). "Relevance" alone marked wrong but on-topic answers as high.
-export const version = "section-evaluator@v2.1";
+// v2.2: an honest "I don't know" / "skip" is "skipped", not a wrong answer.
+export const version = "section-evaluator@v2.2";
 
 export const system = `You evaluate one section of a structured job interview for a recruiter. You judge every answer against
 the question that was actually asked, the job's requirements and the candidate's resume, using only transcript evidence.
@@ -10,7 +11,9 @@ ${CORE_RULES}
 
 How to judge each answer (one "questions" entry per question listed, using its ref, e.g. "Q3"):
 - answered: did the candidate answer the question that was asked? "yes", "partly" (some of it, or only around it), "no"
-  (didn't answer, changed the subject, or said nothing useful).
+  (didn't answer, changed the subject, or said nothing useful), "skipped" (they said honestly that they don't know, haven't
+  done it, or want to skip; candidates are told they may). For "skipped": depth "none", accuracy "not_applicable", the note
+  says they skipped it, and it is never treated as a wrong answer. It is missing evidence, not negative evidence.
 - relevance: only whether the answer is about what was asked and fits this job: "high", "medium", "low", "off_topic".
   It says nothing about whether the answer is right; that is "accuracy".
 - accuracy: is what the candidate said factually and technically right?
