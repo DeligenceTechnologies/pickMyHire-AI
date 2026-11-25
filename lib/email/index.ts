@@ -313,6 +313,8 @@ ${input.companyName} hiring team`,
   humanInterview(input: {
     kind: "invite" | "rescheduled" | "cancelled"; name: string; jobTitle: string; companyName: string; roundName: string;
     when: string; where: string; with: string; message: string | null; reason: string | null; link?: string; team?: boolean;
+    /** Panel emails: opens the interview page with the resume beside the scorecard (sign-in needed; no file attached). */
+    resumeLink?: string | null;
   }) {
     const what = input.team ? `${input.roundName} interview with ${input.with} (${input.jobTitle})` : `${input.roundName} interview for ${input.jobTitle} at ${input.companyName}`;
     const subject = input.kind === "cancelled" ? `Cancelled: ${what}` : input.kind === "rescheduled" ? `New time: ${what}` : input.team ? `You're interviewing: ${what}` : `Interview invitation: ${what}`;
@@ -321,7 +323,7 @@ ${input.companyName} hiring team`,
       : input.team ? `You're on the panel for the ${what}.` : `${input.companyName} would like to invite you to the ${input.roundName} interview for the ${input.jobTitle} role.`;
     const details = input.kind === "cancelled" ? "" : `\n\nWhen: ${input.when}\nWhere: ${input.where}\nWith: ${input.with}${input.message ? `\n\n${input.message}` : ""}`;
     const calendar = input.kind === "cancelled" ? "\n\nThe attached calendar update removes it from your calendar." : "\n\nOpen the attached invite (invite.ics) to add it to your calendar.";
-    const tail = input.team && input.link ? `\n\nInterview guide and scorecard: ${input.link}` : input.kind === "cancelled" ? "" : "\n\nIf this time doesn't work for you, please reply to let us know.";
+    const tail = input.team && input.link ? `\n\nInterview guide and scorecard: ${input.link}${input.resumeLink && input.kind !== "cancelled" ? `\nView resume: ${input.resumeLink}` : ""}` : input.kind === "cancelled" ? "" : "\n\nIf this time doesn't work for you, please reply to let us know.";
     const meeting = input.kind === "cancelled" ? null : /https?:\/\/\S+/.exec(input.where)?.[0];
     const cta = input.team && input.link ? { label: "Open interview guide", url: input.link } : meeting ? { label: "Join the meeting", url: meeting } : null;
     return { subject, text: `Hi ${input.name},\n\n${lead}${details}${calendar}${tail}\n\n${input.companyName}`, cta };

@@ -10,6 +10,7 @@ import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { useAction } from "@/lib/client/use-action";
 import { formatDate } from "@/lib/format";
 import type { HrDetails, HrPanel as HrPanelData } from "@/lib/services/candidate-notes";
+import { LocalTime } from "@/components/common/local-time";
 
 const selectClass = "h-9 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 const EMPTY: HrDetails = { current_ctc: null, expected_ctc: null, notice_period: null, joining_date: null, current_location: null, open_to_relocation: null, other_details: null };
@@ -107,7 +108,7 @@ export function HrPanel({ candidateId, data, currentUserId, canEdit, canNote = c
               </dl>
             ) : <p className="text-sm text-muted-foreground">No HR details yet: add CTC, notice period and joining date after the HR call.</p>}
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs text-muted-foreground">{data.details ? `Updated ${formatDate(data.details.updated_at, true)}${data.details.updated_by_name ? ` by ${data.details.updated_by_name}` : ""}` : ""}</p>
+              <p className="text-xs text-muted-foreground">{data.details && <>Updated <LocalTime date={data.details.updated_at} />{data.details.updated_by_name ? ` by ${data.details.updated_by_name}` : ""}</>}</p>
               {canEdit && <Button size="sm" variant="outline" onClick={() => { setForm({ ...EMPTY, ...(data.details ?? {}) }); setEditing(true); }}><Pencil /> {hasDetails ? "Edit details" : "Add details"}</Button>}
             </div>
           </>
@@ -138,7 +139,7 @@ export function HrPanel({ candidateId, data, currentUserId, canEdit, canNote = c
                 <li key={n.id} className="py-3 first:pt-0 last:pb-0">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
                     <span className="font-medium text-foreground">{n.author_name ?? "Former member"}</span>
-                    <span>{formatDate(n.created_at, true)}{n.updated_at.getTime() - n.created_at.getTime() > 1000 ? " · edited" : ""}</span>
+                    <span><LocalTime date={n.created_at} />{n.updated_at.getTime() - n.created_at.getTime() > 1000 ? " · edited" : ""}</span>
                     {n.job_title && <span className="rounded-md bg-muted px-1.5 py-0.5">{n.job_title}</span>}
                     {mine && editNote?.id !== n.id && (
                       <span className="ml-auto flex gap-1">

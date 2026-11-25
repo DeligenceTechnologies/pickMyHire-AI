@@ -1,7 +1,7 @@
 import { FormCard } from "@/components/settings/form-card";
 import { requireAuth } from "@/lib/auth/session";
-import { formatDate } from "@/lib/format";
 import { listAudit } from "@/lib/services/workspace";
+import { LocalTime } from "@/components/common/local-time";
 
 export const metadata = { title: "Audit log" };
 
@@ -18,7 +18,7 @@ export default async function AuditPage(props: PageProps<"/settings/audit">) {
           <tbody className="divide-y">
             {rows.map((r) => (
               <tr key={r.id}>
-                <td className="px-5 py-2 whitespace-nowrap text-muted-foreground">{formatDate(r.created_at, true)}</td>
+                <td className="px-5 py-2 whitespace-nowrap text-muted-foreground"><LocalTime date={r.created_at} /></td>
                 <td className="px-5 py-2">{r.user_name ?? <span className="capitalize text-muted-foreground">{r.actor_type}</span>}</td>
                 <td className="px-5 py-2 font-mono text-xs">{r.action}</td>
                 <td className="px-5 py-2 text-muted-foreground">{r.entity_type}{r.entity_type === "interview" && r.entity_id ? <a className="ml-1 text-primary hover:underline" href={`/interviews/${r.entity_id}`}>open</a> : null}</td>

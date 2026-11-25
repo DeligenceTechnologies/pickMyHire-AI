@@ -7,9 +7,9 @@ import { Conversation } from "@/components/support/conversation";
 import { AdminReplyBox } from "@/components/support/reply-box";
 import { Card, CardContent } from "@/components/ui/card";
 import { roleLabel, type Role } from "@/lib/auth/permissions";
-import { formatDate } from "@/lib/format";
 import { isUuid } from "@/lib/ids";
 import { getSupportTicket, SUPPORT_CATEGORY_LABEL } from "@/lib/services/support";
+import { LocalTime } from "@/components/common/local-time";
 
 export const metadata = { title: "Support request" };
 
@@ -27,7 +27,7 @@ export default async function AdminSupportTicketPage(props: PageProps<"/admin/su
         meta={<>
           <SupportStatusBadge status={ticket.status} />
           <span>{SUPPORT_CATEGORY_LABEL[ticket.category]}</span>
-          <span>Sent {formatDate(ticket.created_at, true)}</span>
+          <span>Sent <LocalTime date={ticket.created_at} /></span>
         </>}
       />
       <Card className="mb-6">

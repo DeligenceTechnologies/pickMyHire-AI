@@ -20,6 +20,7 @@ import { log } from "@/lib/logger";
 import { getFaceVerification } from "@/lib/interview/face";
 import { getOutcomeInput } from "@/lib/interview/outcome-data";
 import { DecisionControl } from "@/components/hiring/decision-control";
+import { LocalTime } from "@/components/common/local-time";
 
 /** Shared server page for /interviews/[id] and its tab sub-routes. */
 export async function InterviewPage({ params, tab }: { params: Promise<{ interviewId: string }>; tab: ViewerTab }) {
@@ -45,7 +46,7 @@ export async function InterviewPage({ params, tab }: { params: Promise<{ intervi
         meta={<>
           <Link href={`/jobs/${detail.job_id}`} className="hover:text-foreground">{detail.job_title}</Link>
           {roundLabel(detail) && <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-foreground">{roundLabel(detail)}</span>}
-          <span>{detail.started_at ? formatDate(detail.started_at, true) : `Created ${formatDate(detail.created_at)}`}</span>
+          <span>{detail.started_at ? <>Started <LocalTime date={detail.started_at} /></> : <>Created <LocalTime date={detail.created_at} withTime={false} /></>}</span>
           {detail.duration_seconds != null && <span>{formatDuration(detail.duration_seconds)}</span>}
         </>}
         actions={<InterviewActions id={detail.id} status={detail.status} canWrite={can(auth.role, "interview:write")} canDelete={can(auth.role, "data:delete")} canRegenerate={can(auth.role, "report:regenerate")} />}

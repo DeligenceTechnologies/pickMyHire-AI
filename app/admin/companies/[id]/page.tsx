@@ -17,6 +17,7 @@ import { getStripeCustomerId, listAllPurchases } from "@/lib/services/billing";
 import { paymentsTestMode } from "@/lib/stripe";
 import { localPaidNote, money } from "@/lib/pricing";
 import { purchaseRef } from "@/lib/purchase-ref";
+import { LocalTime } from "@/components/common/local-time";
 
 export const metadata = { title: "Company" };
 
@@ -42,7 +43,7 @@ export default async function CompanyPage(props: PageProps<"/admin/companies/[id
         title={<span className="flex flex-wrap items-center gap-3">{company.org.name} <CompanyStatusBadge status={company.org.status} />{company.org.plan === "trial" && <TrialBadge daysLeft={company.org.trial_days_left} />}</span>}
         meta={<>
           <span>Created {formatDate(company.org.created_at)}</span>
-          {company.org.suspended_at && <span>Suspended {formatDate(company.org.suspended_at, true)}</span>}
+          {company.org.suspended_at && <span>Suspended <LocalTime date={company.org.suspended_at} /></span>}
         </>}
         actions={<div className="flex flex-wrap gap-2"><SuspendButton id={id} name={company.org.name} status={company.org.status} />{company.org.status === "suspended" && <DeleteCompanyButton id={id} name={company.org.name} />}</div>}
       />

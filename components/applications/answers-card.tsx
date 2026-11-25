@@ -5,11 +5,11 @@ import { AlertTriangle, CheckCircle2, ClipboardList, Loader2, Pencil, XCircle } 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAction } from "@/lib/client/use-action";
-import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { describeAnswers, FIT_LABEL, validateAnswers, type Fit, type FitLevel } from "@/lib/application-form";
 import type { JobAnswers } from "@/lib/services/application-answers";
 import { pruneErrors, QuestionFields, valuesFromAnswers, type AnswerValues } from "./question-fields";
+import { LocalTime } from "@/components/common/local-time";
 
 const TONE: Record<Fit["level"], string> = {
   ok: "bg-emerald-50 text-emerald-800 ring-emerald-200 dark:bg-emerald-950 dark:text-emerald-200 dark:ring-emerald-900",
@@ -65,7 +65,7 @@ export function AnswersCard({ candidateId, items, canEdit, showJob }: { candidat
                   {rows.map((r) => <div key={r.label}><dt className="text-xs text-muted-foreground">{r.label}</dt><dd className="mt-0.5 whitespace-pre-wrap">{r.value}</dd></div>)}
                 </dl>
               ) : <p className="text-sm text-muted-foreground">No answers yet.</p>}
-              <p className="text-xs text-muted-foreground">{it.answered_by_name ? `Filled in by ${it.answered_by_name}` : "Answered by the candidate"} · {formatDate(it.updated_at, true)}</p>
+              <p className="text-xs text-muted-foreground">{it.answered_by_name ? `Filled in by ${it.answered_by_name}` : "Answered by the candidate"} · <LocalTime date={it.updated_at} /></p>
             </div>
           );
         })}

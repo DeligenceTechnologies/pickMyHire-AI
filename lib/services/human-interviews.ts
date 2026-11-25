@@ -58,6 +58,8 @@ export type ScorecardVersion = { ratings: { criterion: string; rating: number | 
 
 export type HumanInterview = {
   id: string; job_id: string; job_title: string; candidate_id: string; candidate_name: string; candidate_email: string; company_name: string;
+  /** The candidate has a resume (the panel email links to it). */
+  has_resume: boolean;
   round_id: string | null; round_name: string; attempt: number; status: HumanStatus; scheduled_at: Date; duration_minutes: number; timezone: string;
   location_type: LocationType; location: string | null; message: string | null; criteria: string[]; guide: string | null;
   sequence: number; history: HistoryItem[]; cancel_reason: string | null;
@@ -85,7 +87,8 @@ async function load(tx: Tx, orgId: string, id: string): Promise<HumanInterview |
     select h.id, h.job_id, j.title as job_title, h.candidate_id, c.name as candidate_name, c.email as candidate_email, o.name as company_name,
       h.round_id, h.round_name, h.attempt, h.status, h.scheduled_at, h.duration_minutes, h.timezone, h.location_type, h.location, h.message,
       h.criteria, h.guide, h.sequence, h.history, h.cancel_reason, h.decision, h.decision_note, h.decided_at, d.name as decided_by_name,
-      h.created_at, cb.name as created_by_name
+      h.created_at, cb.name as created_by_name,
+      exists (select 1 from candidate_documents cd where cd.candidate_id = h.candidate_id) as has_resume
     from human_interviews h
     join jobs j on j.id = h.job_id join candidates c on c.id = h.candidate_id join organizations o on o.id = h.organization_id
     left join users d on d.id = h.decided_by left join users cb on cb.id = h.created_by
@@ -155,7 +158,8 @@ async function emailEveryone(h: HumanInterview, kind: "invite" | "rescheduled" |
   const toCandidate = emailTemplates.humanInterview({ ...base, kind, name: h.candidate_name.split(" ")[0], message: h.message, with: h.panel.map((p) => p.name).join(", ") });
   const results = [await sendEmail({ to: h.candidate_email, ...toCandidate, orgId, replyTo, brand, attachments: ics("candidate") })];
   for (const p of h.panel) {
-    const t = emailTemplates.humanInterview({ ...base, kind, name: p.name.split(" ")[0], message: null, with: h.candidate_name, link: interviewLink(h.id), team: true });
+    const t = emailTemplates.humanInterview({ ...base, kind, name: p.name.split(" ")[0], message: null, with: h.candidate_name, link: interviewLink(h.id), team: true,
+      resumeLink: h.has_resume ? `${interviewLink(h.id)}?resume=1` : null });
     results.push(await sendEmail({ to: p.email, ...t, orgId, replyTo, brand, attachments: ics("team") }));
   }
   return failedRecipients(results);

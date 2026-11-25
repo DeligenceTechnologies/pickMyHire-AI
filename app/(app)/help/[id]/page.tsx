@@ -5,9 +5,9 @@ import { Conversation } from "@/components/support/conversation";
 import { CustomerReplyBox } from "@/components/support/reply-box";
 import { Card, CardContent } from "@/components/ui/card";
 import { requireAuth } from "@/lib/auth/session";
-import { formatDate } from "@/lib/format";
 import { isUuid } from "@/lib/ids";
 import { getMyTicket, SUPPORT_CATEGORY_LABEL } from "@/lib/services/support";
+import { LocalTime } from "@/components/common/local-time";
 
 export const metadata = { title: "Support request" };
 
@@ -26,7 +26,7 @@ export default async function SupportRequestPage(props: PageProps<"/help/[id]">)
         meta={<>
           <SupportStatusBadge status={ticket.status} />
           <span>{SUPPORT_CATEGORY_LABEL[ticket.category]}</span>
-          <span>Sent {formatDate(ticket.created_at, true)}{ticket.author ? ` by ${ticket.author}` : ""}</span>
+          <span>Sent <LocalTime date={ticket.created_at} />{ticket.author ? ` by ${ticket.author}` : ""}</span>
         </>}
       />
       {ticket.page_url && <p className="mb-4 truncate text-sm text-muted-foreground">Page: <span className="text-foreground">{ticket.page_url}</span></p>}

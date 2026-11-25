@@ -8,7 +8,6 @@ import { APPLICATION_STATUS, MatchBadge } from "@/components/applications/match-
 import { CandidateProfile } from "@/components/candidates/candidate-profile";
 import { can } from "@/lib/auth/permissions";
 import { requireAuth } from "@/lib/auth/session";
-import { formatDate } from "@/lib/format";
 import { isUuid } from "@/lib/ids";
 import { getApplication } from "@/lib/services/applications";
 import { jobListNav } from "@/lib/services/job-candidates";
@@ -19,6 +18,7 @@ import { HrPanel } from "@/components/candidates/hr-panel";
 import { AnswersCard } from "@/components/applications/answers-card";
 import { answersForCandidate } from "@/lib/services/application-answers";
 import { matchLevelLabel } from "@/lib/validation/ai-schemas";
+import { LocalTime } from "@/components/common/local-time";
 
 export const metadata = { title: "Application" };
 
@@ -55,7 +55,7 @@ export default async function ApplicationPage(props: PageProps<"/jobs/[jobId]/ap
         back={{ href: listHref, label: a.job_title }}
         title={<span className="flex flex-wrap items-center gap-3">{a.candidate_name} <MatchBadge level={a.match_level} screeningStatus={a.screening_status} className="text-sm" /></span>}
         meta={<>
-          <span>Applied {formatDate(a.created_at, true)}</span>
+          <span>Applied <LocalTime date={a.created_at} /></span>
           <span>{APPLICATION_STATUS[a.status]}{a.reviewer_name ? ` · by ${a.reviewer_name}` : ""}</span>
           {a.interview_status && <StatusBadge status={a.interview_status} />}
         </>}
@@ -135,7 +135,7 @@ export default async function ApplicationPage(props: PageProps<"/jobs/[jobId]/ap
             {a.linkedin_url && <a href={a.linkedin_url} target="_blank" rel="noreferrer noopener" className="flex items-center gap-2 text-primary hover:underline"><Link2 className="size-4" />LinkedIn profile</a>}
             {a.has_resume && <a href={`/api/candidates/${a.candidate_id}/resume`} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-primary hover:underline"><Download className="size-4" />Download resume</a>}
             <a href={`/candidates/${a.candidate_id}`} className="block text-xs text-muted-foreground hover:text-foreground">Open candidate profile →</a>
-            <p className="border-t pt-3 text-xs text-muted-foreground">Consent to AI screening given {formatDate(a.consent_timestamp, true)}</p>
+            <p className="border-t pt-3 text-xs text-muted-foreground">Consent to AI screening given <LocalTime date={a.consent_timestamp} /></p>
           </section>
           {a.cover_note && (
             <section className="rounded-xl border bg-card p-5">

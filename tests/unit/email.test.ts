@@ -118,3 +118,15 @@ describe("candidate feedback safety check", () => {
     }
   });
 });
+
+describe("panel interview email", () => {
+  const base = { kind: "invite" as const, name: "Sara", jobTitle: "Data Analyst", companyName: "Northwind", roundName: "Technical", when: "Mon 1 Dec, 10:00", where: "Video call: https://meet.example/x", with: "Noah Mehta", message: null, reason: null, team: true, link: "https://app.example/interviews/human/1" };
+  it("links the resume (opened next to the scorecard) without attaching it", () => {
+    const t = emailTemplates.humanInterview({ ...base, resumeLink: "https://app.example/interviews/human/1?resume=1" });
+    expect(t.text).toContain("View resume: https://app.example/interviews/human/1?resume=1");
+  });
+  it("leaves the link out without a resume, and on a cancellation", () => {
+    expect(emailTemplates.humanInterview({ ...base, resumeLink: null }).text).not.toContain("View resume");
+    expect(emailTemplates.humanInterview({ ...base, kind: "cancelled", resumeLink: "https://x/1?resume=1" }).text).not.toContain("View resume");
+  });
+});

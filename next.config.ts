@@ -19,6 +19,8 @@ const nextConfig: NextConfig = {
     return [
       { source: "/:path*", headers: securityHeaders },
       // Face model files (several MB) are fixed per release of the face library.
+      // The PDF resume is shown inside our own pages (next to the scorecard): framing by our own site only.
+      { source: "/api/candidates/:id/resume/view", headers: [{ key: "X-Frame-Options", value: "SAMEORIGIN" }, { key: "Content-Security-Policy", value: "frame-ancestors 'self'" }] },
       { source: "/models/face/:file*", headers: [{ key: "Cache-Control", value: "public, max-age=2592000" }] },
       // Candidate links carry a secret token: never leak it via Referer or cache it.
       { source: "/interview/:token*", headers: [{ key: "Referrer-Policy", value: "no-referrer" }, { key: "Cache-Control", value: "no-store" }] },

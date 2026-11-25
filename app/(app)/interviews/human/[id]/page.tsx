@@ -15,6 +15,11 @@ import { DECISION_LABEL, formatInZone, LOCATION_LABEL } from "@/lib/hiring";
 import { isUuid } from "@/lib/ids";
 import { formatDate } from "@/lib/format";
 import { getHumanInterview, inviteMessage, listPanelCandidates } from "@/lib/services/human-interviews";
+import { getCandidate } from "@/lib/services/candidates";
+import { candidateJobsInScope } from "@/lib/auth/job-scope";
+import { shortExperience } from "@/lib/resume/experience";
+import { ResumeButtons, ResumeSplit, type ResumeInfo } from "@/components/hiring/resume-split";
+import { LocalTime } from "@/components/common/local-time";
 
 export const metadata = { title: "Human interview" };
 
@@ -45,7 +50,7 @@ function ScorecardView({ s, showName = true }: { s: Scorecard; showName?: boolea
           <ol className="mt-2 space-y-2">
             {[...s.versions].reverse().map((v, i) => (
               <li key={i} className="rounded-md bg-muted/40 px-3 py-2">
-                <p className="text-xs text-muted-foreground">Replaced {formatDate(v.replaced_at, true)}{v.recommendation ? ` · recommended ${DECISION_LABEL[v.recommendation]}` : ""}</p>
+                <p className="text-xs text-muted-foreground">Replaced <LocalTime date={v.replaced_at} />{v.recommendation ? ` · recommended ${DECISION_LABEL[v.recommendation]}` : ""}</p>
                 <p className="mt-1 text-xs">{v.ratings.map((r) => `${r.criterion}: ${r.rating ?? "–"}/5`).join(" · ")}</p>
                 {v.notes && <p className="mt-1 whitespace-pre-wrap text-xs text-muted-foreground">{v.notes}</p>}
               </li>
@@ -85,6 +90,14 @@ export default async function HumanInterviewPage(props: PageProps<"/interviews/h
   const members = canManage ? await listPanelCandidates(auth.orgId) : [];
   const isLink = h.location_type === "video" && h.location && /^https?:\/\//i.test(h.location);
   const names = new Map([...h.panel, ...members].map((m) => [m.user_id, m.name]));
+  // The resume, for people who can see this candidate (Owners, Admins, Recruiters, the job's team).
+  const seesCandidate = can(auth.role, "candidate:view") && (await candidateJobsInScope(auth, h.candidate_id).then((j) => !j || j.length > 0));
+  const cand = seesCandidate ? await getCandidate(auth.orgId, h.candidate_id) : null;
+  const doc = cand?.documents[0];
+  const resume: ResumeInfo | null = cand && doc ? { candidateId: cand.id, name: cand.name, fileName: doc.file_name, isPdf: doc.mime_type === "application/pdf", text: doc.mime_type === "application/pdf" ? null : cand.resume_text } : null;
+  const skills = (cand?.parsed_profile as { skills?: string[] } | null)?.skills?.slice(0, 6) ?? [];
+  // Worked out from the resume dates (selected with the rest of the candidate row).
+  const exp = cand as unknown as { experience_months: number | null; experience_approximate: boolean } | null;
   return (
     <>
       <PageHeader
@@ -96,7 +109,8 @@ export default async function HumanInterviewPage(props: PageProps<"/interviews/h
           {h.attempt > 1 && <span>Attempt {h.attempt}</span>}
         </>}
       />
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <ResumeSplit resume={resume}>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] group-data-[resume=open]/resume:lg:grid-cols-1">
         <div className="min-w-0 space-y-6">
           <FormCard title="Interview details" description={h.status === "cancelled" ? `Cancelled${h.cancel_reason ? `: ${h.cancel_reason}` : ""}` : undefined}>
             <dl className="grid gap-3 text-sm sm:grid-cols-2">
@@ -135,6 +149,18 @@ export default async function HumanInterviewPage(props: PageProps<"/interviews/h
         </div>
 
         <div className="min-w-0 space-y-6">
+          {cand && (
+            <FormCard title="Candidate">
+              <div className="space-y-3 text-sm">
+                <div>
+                  <p className="font-medium">{cand.name}</p>
+                  {exp?.experience_months != null && <p className="text-xs text-muted-foreground">{exp.experience_approximate ? "About " : ""}{shortExperience(exp.experience_months)} experience</p>}
+                </div>
+                {skills.length > 0 && <div className="flex flex-wrap gap-1.5">{skills.map((k) => <span key={k} className="rounded-md bg-muted px-2 py-0.5 text-xs">{k}</span>)}</div>}
+                {resume ? <ResumeButtons resume={resume} /> : <p className="text-xs text-muted-foreground">No resume uploaded.</p>}
+              </div>
+            </FormCard>
+          )}
           <FormCard title="Decision" description="Your team's call for this round. Scorecards are recommendations, and they lock once you decide (clear the decision to unlock them).">
             <DecisionControl endpoint={`/api/human-interviews/${h.id}/decision`} decision={h.decision} note={h.decision_note} decidedBy={h.decided_by_name}
               decidedOn={h.decided_at ? formatDate(h.decided_at) : null} canEdit={canDecide && h.status !== "cancelled"} hint={hint}
@@ -161,6 +187,7 @@ export default async function HumanInterviewPage(props: PageProps<"/interviews/h
           </FormCard>
         </div>
       </div>
+      </ResumeSplit>
     </>
   );
 }

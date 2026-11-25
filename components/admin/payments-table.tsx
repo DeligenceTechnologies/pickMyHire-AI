@@ -9,9 +9,9 @@ import { PurchaseBadge } from "@/components/billing/purchase-moves";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { formatDate } from "@/lib/format";
 import { localPaidNote, money } from "@/lib/pricing";
 import type { AdminPayment } from "@/lib/services/billing";
+import { LocalTime } from "@/components/common/local-time";
 
 /**
  * Admin → Payments: every payment, click one for its details (documents, order, interviews, payment,
@@ -65,7 +65,7 @@ export function PaymentsTable({ rows, stripePayments, autoOpen }: { rows: AdminP
                     className="rounded font-mono text-[13px] font-semibold whitespace-nowrap outline-none group-hover:text-primary focus-visible:ring-2 focus-visible:ring-ring">
                     {p.reference}
                   </button>
-                  <p className="text-xs whitespace-nowrap text-muted-foreground">{formatDate(p.paid_at ?? p.created_at, true)}</p>
+                  <p className="text-xs whitespace-nowrap text-muted-foreground"><LocalTime date={p.paid_at ?? p.created_at} /></p>
                 </td>
                 <td className="px-4 py-3">
                   <p className="font-medium">{p.company}</p>
@@ -117,7 +117,7 @@ export function PaymentsTable({ rows, stripePayments, autoOpen }: { rows: AdminP
                   <span className="text-2xl font-semibold tracking-tight tabular">{money(open.total_cents)}</span>
                   <PurchaseBadge p={open} />
                 </div>
-                <p className="text-xs text-muted-foreground">{open.quantity} interviews · {formatDate(open.paid_at ?? open.created_at, true)}</p>
+                <p className="text-xs text-muted-foreground">{open.quantity} interviews · <LocalTime date={open.paid_at ?? open.created_at} /></p>
               </SheetHeader>
               <div className="space-y-5 px-5 py-5">
                 <section>

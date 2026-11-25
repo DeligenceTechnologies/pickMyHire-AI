@@ -1,9 +1,9 @@
 import { ScrollText } from "lucide-react";
 import { PageHeader } from "@/components/common/page-header";
 import { EmptyState } from "@/components/common/states";
-import { formatDate } from "@/lib/format";
 import { listPlatformAudit, PLATFORM_AUDIT_PAGE_SIZE } from "@/lib/services/admin";
 import Link from "next/link";
+import { LocalTime } from "@/components/common/local-time";
 
 export const metadata = { title: "Audit log" };
 
@@ -77,7 +77,7 @@ export default async function AdminAuditPage(props: PageProps<"/admin/audit">) {
             <tbody className="divide-y">
               {rows.map((r) => (
                 <tr key={r.id} className="align-top">
-                  <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">{formatDate(r.created_at, true)}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-muted-foreground"><LocalTime date={r.created_at} /></td>
                   <td className="px-4 py-3">{r.admin_name ?? BY[r.action] ?? "—"}<p className="text-xs text-muted-foreground">{r.admin_email ?? (r.action === "company.trial_started" ? String(r.details.email ?? "") : "")}</p></td>
                   <td className="px-4 py-3">
                     {r.target_type === "organization" && r.target_id && r.target_exists

@@ -24,6 +24,7 @@ import type { OutcomeInput } from "@/lib/interview/outcome";
 import { InterviewTimeline } from "./interview-timeline";
 import { AnswerQualityStrip, AnswerVerdict, coverageLine, OverallLine, QuestionResults, RequirementCoverageTable, ResumeCheckList } from "./report-insights";
 import { VideoPlayer, type RecordingPart, type VideoPlayerHandle } from "./video-player";
+import { LocalTime } from "@/components/common/local-time";
 
 export type ViewerTab = "overview" | "report" | "recording" | "questions" | "evaluation";
 const TABS: { id: ViewerTab; label: string; path: string }[] = [
@@ -270,9 +271,9 @@ function Overview({ detail, report, showScores, jump, onOpenReport, canViewCandi
             ["Candidate", canViewCandidates ? <Link key="c" href={`/candidates/${detail.candidate_id}`} className="text-primary hover:underline">{detail.candidate_name}</Link> : detail.candidate_name],
             ["Job", <Link key="j" href={`/jobs/${detail.job_id}`} className="text-primary hover:underline">{detail.job_title}</Link>],
             ["Template", detail.template_name ?? "—"],
-            ["Started", formatDate(detail.started_at, true)],
-            ["Completed", formatDate(detail.completed_at, true)],
-            ["Consent", detail.consent_given ? `Given ${formatDate(detail.consent_timestamp, true)} (v${detail.consent_version})` : "Not given"],
+            ["Started", <LocalTime key="s" date={detail.started_at} />],
+            ["Completed", <LocalTime key="c" date={detail.completed_at} />],
+            ["Consent", detail.consent_given ? <>Given <LocalTime date={detail.consent_timestamp} /> (v{detail.consent_version})</> : "Not given"],
             ["Recording", detail.recordings.length ? `${detail.recordings.filter((r) => r.status === "stored").length}/${detail.recordings.length} part(s) stored` : "None"],
             ["Plan", detail.interview_plan ? `${detail.interview_plan.generated_by === "mock" ? "Demo-mode" : "AI"} plan` : "—"],
           ].map(([k, v]) => <div key={String(k)}><dt className="text-xs text-muted-foreground">{k}</dt><dd className="mt-0.5">{v}</dd></div>)}
@@ -305,8 +306,8 @@ function CandidateEmailCard({ interviewId, sentAt, feedback, feedbackSentAt, dra
     <Card title={<span className="flex items-center gap-2"><Mail className="size-4 text-primary" /> Email sent to the candidate</span>}>
       <p className="text-sm text-muted-foreground">
         {feedbackSentAt
-          ? <>Sent {formatDate(sentAt, true)}: a confirmation that their interview was received. This AI feedback was reviewed and sent separately on {formatDate(feedbackSentAt, true)}.</>
-          : <>Sent {formatDate(sentAt, true)}: a confirmation that their interview was received{feedback ? ", with this AI feedback" : ", without AI feedback"}.</>}
+          ? <>Sent <LocalTime date={sentAt} />: a confirmation that their interview was received. This AI feedback was reviewed and sent separately on <LocalTime date={feedbackSentAt} />.</>
+          : <>Sent <LocalTime date={sentAt} />: a confirmation that their interview was received{feedback ? ", with this AI feedback" : ", without AI feedback"}.</>}
       </p>
       {feedback ? (
         <>
@@ -365,7 +366,7 @@ function CandidateFeedbackCard({ items }: { items: InterviewFeedbackRow[] }) {
                   {[1, 2, 3, 4, 5].map((n) => <Star key={n} className={cn("size-4", n <= (f.rating ?? 0) ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30")} />)}
                 </span>
               )}
-              <span className="ml-auto text-xs text-muted-foreground">{formatDate(f.created_at, true)}</span>
+              <span className="ml-auto text-xs text-muted-foreground"><LocalTime date={f.created_at} /></span>
             </div>
             {f.message ? <p className="mt-1.5 text-sm whitespace-pre-wrap">{f.message}</p> : f.kind === "feedback" ? <p className="mt-1 text-xs text-muted-foreground">No comment left.</p> : null}
           </li>
@@ -693,8 +694,8 @@ function NotStarted({ detail, tab }: { detail: Detail; tab: ViewerTab }) {
         <div className="space-y-3 text-sm">
           <div className="flex items-center justify-between"><span className="text-muted-foreground">Interview</span><StatusBadge status={detail.status} /></div>
           <div className="flex items-center justify-between"><span className="text-muted-foreground">Question plan</span><StatusBadge status={detail.plan_status} label={detail.plan_status === "completed" ? "Ready" : undefined} /></div>
-          <div className="flex items-center justify-between"><span className="text-muted-foreground">Invited</span><span>{formatDate(detail.invited_at, true)}</span></div>
-          <div className="flex items-center justify-between"><span className="text-muted-foreground">Link expires</span><span>{formatDate(detail.token_expires_at, true)}</span></div>
+          <div className="flex items-center justify-between"><span className="text-muted-foreground">Invited</span><span><LocalTime date={detail.invited_at} /></span></div>
+          <div className="flex items-center justify-between"><span className="text-muted-foreground">Link expires</span><span><LocalTime date={detail.token_expires_at} /></span></div>
           <div className="flex items-center justify-between"><span className="text-muted-foreground">Consent</span><span>{detail.consent_given ? "Given" : "Not yet"}</span></div>
           {detail.plan_error && <p className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">{detail.plan_error}</p>}
         </div>

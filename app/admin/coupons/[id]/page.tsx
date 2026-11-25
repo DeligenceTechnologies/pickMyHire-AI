@@ -10,6 +10,7 @@ import { describeReward, formatExpiry } from "@/lib/coupons";
 import { formatDate } from "@/lib/format";
 import { isUuid } from "@/lib/ids";
 import { couponStatus, getCoupon } from "@/lib/services/coupons";
+import { LocalTime } from "@/components/common/local-time";
 
 export const metadata = { title: "Coupon" };
 
@@ -60,7 +61,7 @@ export default async function CouponPage(props: PageProps<"/admin/coupons/[id]">
                     <td className="px-4 py-3">{r.organization_id ? <Link href={`/admin/companies/${r.organization_id}`} className="font-medium hover:text-primary">{r.company_name}</Link> : <span className="text-muted-foreground">{r.company_name} (deleted)</span>}</td>
                     <td className="px-4 py-3">{r.user_email ? <><p>{r.user_name}</p><p className="text-xs text-muted-foreground">{r.user_email}</p></> : <span className="text-muted-foreground">Deleted user</span>}</td>
                     <td className="px-4 py-3">{describeReward(r.interviews_added, r.trial_days_added)}</td>
-                    <td className="px-4 py-3 text-right text-muted-foreground">{formatDate(r.created_at, true)}</td>
+                    <td className="px-4 py-3 text-right text-muted-foreground"><LocalTime date={r.created_at} /></td>
                   </tr>
                 ))}
               </tbody>

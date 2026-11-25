@@ -9,11 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAction } from "@/lib/client/use-action";
-import { formatDate } from "@/lib/format";
 import { INQUIRY_TOPIC_LABEL, type InquiryTopic } from "@/lib/marketing";
 import { cn } from "@/lib/utils";
 import { LinkResult } from "./link-result";
 import { QuotaInput } from "./quota-input";
+import { LocalTime } from "@/components/common/local-time";
 
 type Status = "new" | "contacted" | "approved" | "rejected" | "closed";
 export type AccessRequest = {
@@ -64,7 +64,7 @@ function RequestCard({ r, defaultQuota }: { r: AccessRequest; defaultQuota: numb
             <span className="flex items-center gap-1"><Mail className="size-3.5" />{r.email}</span>
             {r.phone && <span className="flex items-center gap-1"><Phone className="size-3.5" />{r.phone}</span>}
             {r.team_size && <span className="flex items-center gap-1"><Users className="size-3.5" />{r.team_size} employees</span>}
-            <span>Received {formatDate(r.created_at, true)}</span>
+            <span>Received <LocalTime date={r.created_at} /></span>
           </div>
         </div>
         <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-medium", STATUS[r.status].cls)}>{STATUS[r.status].label}</span>
@@ -88,7 +88,7 @@ function RequestCard({ r, defaultQuota }: { r: AccessRequest; defaultQuota: numb
         {done && (
           <Button size="sm" variant="ghost" disabled={!!pending} onClick={() => run("st", `/api/admin/requests/${r.id}`, { method: "PATCH", body: { status: "new" }, success: "Moved back to new" })}>Move back to new</Button>
         )}
-        {r.reviewer && <span className="ml-auto text-xs text-muted-foreground">Last updated by {r.reviewer} · {formatDate(r.reviewed_at, true)}</span>}
+        {r.reviewer && <span className="ml-auto text-xs text-muted-foreground">Last updated by {r.reviewer} · <LocalTime date={r.reviewed_at} /></span>}
       </div>
 
       <Dialog open={approving} onOpenChange={(o) => { setApproving(o); if (!o && link) router.refresh(); }}>

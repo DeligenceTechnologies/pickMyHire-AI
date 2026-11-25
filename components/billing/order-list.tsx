@@ -11,6 +11,7 @@ import { formatDate } from "@/lib/format";
 import { localPaidNote, money } from "@/lib/pricing";
 import { purchaseRef } from "@/lib/purchase-ref";
 import { cn } from "@/lib/utils";
+import { LocalTime } from "@/components/common/local-time";
 
 /**
  * Purchase history as a list of orders: order ID, date, interviews, amount, status, and a ⋮ menu with the
@@ -85,7 +86,7 @@ export function OrderList({ rows, company }: { rows: Order[]; company: string })
                   <span className="text-2xl font-semibold tracking-tight tabular">{money(open.total_cents)}</span>
                   <PurchaseBadge p={open} />
                 </div>
-                <p className="text-xs text-muted-foreground">{open.quantity} interviews · {formatDate(open.paid_at ?? open.created_at, true)}</p>
+                <p className="text-xs text-muted-foreground">{open.quantity} interviews · <LocalTime date={open.paid_at ?? open.created_at} /></p>
               </SheetHeader>
               <div className="space-y-5 px-5 py-5">
                 {purchaseMoves(open).bought
