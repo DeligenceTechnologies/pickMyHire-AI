@@ -110,7 +110,7 @@ export default async function HumanInterviewPage(props: PageProps<"/interviews/h
         </>}
       />
       <ResumeSplit resume={resume}>
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] group-data-[resume=open]/resume:lg:grid-cols-1">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0 space-y-6">
           <FormCard title="Interview details" description={h.status === "cancelled" ? `Cancelled${h.cancel_reason ? `: ${h.cancel_reason}` : ""}` : undefined}>
             <dl className="grid gap-3 text-sm sm:grid-cols-2">

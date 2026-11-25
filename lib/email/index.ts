@@ -313,7 +313,7 @@ ${input.companyName} hiring team`,
   humanInterview(input: {
     kind: "invite" | "rescheduled" | "cancelled"; name: string; jobTitle: string; companyName: string; roundName: string;
     when: string; where: string; with: string; message: string | null; reason: string | null; link?: string; team?: boolean;
-    /** Panel emails: opens the interview page with the resume beside the scorecard (sign-in needed; no file attached). */
+    /** Panel emails: opens the interview page with the resume in a large view (sign-in needed; no file attached). */
     resumeLink?: string | null;
   }) {
     const what = input.team ? `${input.roundName} interview with ${input.with} (${input.jobTitle})` : `${input.roundName} interview for ${input.jobTitle} at ${input.companyName}`;
