@@ -28,16 +28,16 @@ export default async function CookiesPage() {
       <main className="mx-auto max-w-3xl px-5 py-14 sm:px-8">
         <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#0B5BD3]">Cookie policy</p>
         <h1 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">How we use cookies</h1>
-        <p className="mt-2 text-sm text-[#5A6A86]">Last updated 27 October 2026</p>
+        <p className="mt-2 text-sm text-[#5A6A86]">Last updated 26 November 2026</p>
 
         <div className="mt-8 space-y-6 text-[15px] leading-relaxed text-[#3D4D6A]">
           <p>Cookies are small files a website stores in your browser. PickMyHire.ai uses a few that are needed for the site to work, and, only if you agree, analytics cookies that help us understand how visitors use our public website.</p>
 
           <section className="space-y-2">
             <h2 className="text-lg font-semibold text-[#0F1F3A]">Analytics, only with your consent</h2>
-            <p>If you accept analytics cookies (<strong>Accept all</strong>, or switch on Analytics in <strong>Preferences</strong>), we use Google Analytics on our public pages (the home page, the demo page and job application pages) to count visits and see which pages are useful. If you click <strong>Reject all</strong>, or don&apos;t choose, Google Analytics isn&apos;t loaded at all.</p>
+            <p>If you accept analytics cookies (<strong>Accept all</strong>, or switch on Analytics in <strong>Preferences</strong>), we use Google Analytics and Google Tag Manager on our public pages (the home, pricing, demo and guide pages and job application pages) to count visits and see which pages and campaigns are useful. If you click <strong>Reject all</strong>, or don&apos;t choose, neither is loaded at all.</p>
             <ul className="list-disc space-y-1 pl-5">
-              <li>No advertising or remarketing, and Google signals are switched off.</li>
+              <li>Advertising cookies and ad personalization stay switched off, and Google signals are off.</li>
               <li>Never used on candidate interview pages, in the recruiter workspace, or on sign-in pages.</li>
               <li>Page addresses are trimmed before they&apos;re sent, so they never include private links or codes.</li>
               <li>Google provides this service for us. You can read <a href="https://policies.google.com/technologies/partner-sites" target="_blank" rel="noopener noreferrer" className="text-[#0B5BD3] hover:underline">how Google uses information from sites that use its services</a>.</li>

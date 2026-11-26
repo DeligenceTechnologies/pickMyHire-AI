@@ -46,7 +46,7 @@ export default async function PrivacyPage() {
       <li>Usage and security logs, such as sign-ins and important actions (an audit log).</li>
       <li>Messages you send us, such as support requests or demo bookings.</li>
     </ul> },
-    { id: "visitors", title: "Data about website visitors", body: <p>On our public pages we use essential cookies, and Google Analytics only if you accept analytics cookies. Analytics never runs on interview pages or inside the workspace. See our <Link href="/cookies">cookie policy</Link>.</p> },
+    { id: "visitors", title: "Data about website visitors", body: <p>On our public pages we use essential cookies, and Google Analytics and Google Tag Manager only if you accept analytics cookies. They never run on interview pages or inside the workspace. See our <Link href="/cookies">cookie policy</Link>.</p> },
     { id: "use", title: "How we use data", body: <ul>
       <li>To run interviews: speak questions, transcribe answers, choose follow-up questions and create reports for the hiring team.</li>
       <li>To provide the workspace: jobs, candidates, scheduling of human rounds, notifications and emails.</li>

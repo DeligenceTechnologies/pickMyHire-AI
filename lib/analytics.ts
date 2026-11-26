@@ -3,6 +3,8 @@
 // the recruiter app, admin, or sign-in pages.
 
 export const GA_ID = "G-85EEW34HLJ";
+/** Google Tag Manager container (managed by marketing). Loads under the same rules as Analytics. */
+export const GTM_ID = "GTM-525JF5RT";
 /** First-party cookie that remembers the visitor's choice (strictly necessary). */
 export const CONSENT_COOKIE = "pmh_consent";
 export const CONSENT_MAX_AGE = 60 * 60 * 24 * 180; // ask again after 6 months
@@ -17,7 +19,7 @@ export type Consent = "granted" | "denied";
 
 /** Public pages where analytics may run. */
 export function isTrackedPath(pathname: string) {
-  return pathname === "/" || pathname === "/demo" || pathname === "/guide" || /^\/apply\/[^/]+\/?$/.test(pathname);
+  return pathname === "/" || pathname === "/demo" || pathname === "/guide" || pathname === "/pricing" || /^\/apply\/[^/]+\/?$/.test(pathname);
 }
 
 /** Pages where the cookie banner is shown. */

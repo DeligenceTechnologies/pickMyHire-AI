@@ -1,7 +1,7 @@
 "use client";
-// Cookie consent and Google Analytics for the public website.
+// Cookie consent, Google Analytics and Google Tag Manager for the public website.
 // - Nothing is loaded or stored for analytics until the visitor clicks Accept.
-// - Analytics runs only on public pages (home, demo, job apply pages) on the live site.
+// - Analytics and Tag Manager run only on public pages (home, pricing, demo, guide, job apply pages) on the live site.
 // - Leaving those pages (into the app, an interview link, sign-in) switches it off before
 //   anything is sent, so private addresses and page titles never reach Google.
 
@@ -10,7 +10,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Cookie } from "lucide-react";
 import {
-  CONSENT_COOKIE, CONSENT_MAX_AGE, COOKIE_SETTINGS_EVENT, GA_COOKIE_EXPIRES, GA_HOSTS, GA_ID,
+  CONSENT_COOKIE, CONSENT_MAX_AGE, COOKIE_SETTINGS_EVENT, GA_COOKIE_EXPIRES, GA_HOSTS, GA_ID, GTM_ID,
   cleanLocation, cleanReferrer, isBannerPath, isTrackableUrl, isTrackedPath, type Consent,
 } from "@/lib/analytics";
 
@@ -46,6 +46,7 @@ function clearAnalyticsCookies() {
 
 let loaded = false;
 let guarded = false;
+let gtmLoaded = false;
 
 /**
  * Before Google's script loads, switch it off for any navigation that isn't to a
@@ -60,11 +61,24 @@ function guardNavigation() {
   for (const method of ["pushState", "replaceState"] as const) {
     const original = history[method].bind(history);
     history[method] = (data: unknown, unused: string, url?: string | URL | null) => {
-      if (url != null) sync(new URL(String(url), location.href));
+      if (url != null) {
+        const next = new URL(String(url), location.href);
+        sync(next);
+        // Tag Manager can run tags we don't control, so it must never stay on a private page:
+        // leaving the public pages reloads the browser, which unloads it.
+        if (gtmLoaded && next.href !== location.href && !isTrackableUrl(next)) {
+          location.assign(next.href);
+          return;
+        }
+      }
       return original(data, unused, url);
     };
   }
-  window.addEventListener("popstate", () => sync(new URL(location.href)));
+  window.addEventListener("popstate", () => {
+    const here = new URL(location.href);
+    sync(here);
+    if (gtmLoaded && !isTrackableUrl(here)) location.reload();
+  });
 }
 
 function loadAnalytics() {
@@ -92,6 +106,19 @@ function loadAnalytics() {
   s.async = true;
   s.src = `https://www.googletagmanager.com/gtag/js?id=${GA_ID}`;
   document.head.appendChild(s);
+  loadTagManager(here);
+}
+
+/** Marketing's Tag Manager: only on a clean public address, after the same consent (ads consent stays denied). */
+function loadTagManager(here: URL) {
+  if (gtmLoaded || !isTrackableUrl(here)) return;
+  gtmLoaded = true;
+  const w = gw();
+  w.dataLayer!.push({ "gtm.start": Date.now(), event: "gtm.js" });
+  const s = document.createElement("script");
+  s.async = true;
+  s.src = `https://www.googletagmanager.com/gtm.js?id=${GTM_ID}`;
+  document.head.appendChild(s);
 }
 
 function stopAnalytics() {
@@ -99,6 +126,8 @@ function stopAnalytics() {
   w[DISABLE_KEY] = true;
   w.gtag?.("consent", "update", { analytics_storage: "denied" });
   clearAnalyticsCookies();
+  // Tag Manager can't be switched off once running: reload so it's gone.
+  if (gtmLoaded) location.reload();
 }
 
 export function Analytics() {
@@ -118,7 +147,7 @@ export function Analytics() {
   // Start analytics on a public page once allowed; keep it switched off everywhere else.
   useEffect(() => {
     if (consent !== "granted" || !analyticsAllowedHere()) return;
-    if (isTrackedPath(pathname)) loadAnalytics();
+    if (isTrackedPath(pathname)) { loadAnalytics(); loadTagManager(new URL(location.href)); }
     else if (loaded) gw()[DISABLE_KEY] = true;
   }, [consent, pathname]);
 
