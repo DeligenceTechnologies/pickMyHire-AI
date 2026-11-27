@@ -9,13 +9,16 @@ import { getPublicJob } from "@/lib/services/applications";
 
 export async function generateMetadata(props: PageProps<"/apply/[slug]">): Promise<Metadata> {
   const job = await getPublicJob((await props.params).slug);
-  if (!job) return { title: { absolute: "Job not available" }, icons: { icon: "/neutral-icon.png" } };
+  // Apply pages are per job and temporary, so they stay out of search results.
+  const robots = { index: false, follow: false };
+  if (!job) return { title: { absolute: "Job not available" }, icons: { icon: "/neutral-icon.png" }, robots };
   const brand = brandOf(job);
   // Candidate pages carry only the hiring company's identity.
   return {
     title: { absolute: `${job.title} — ${job.company_name}` },
     description: `Apply for ${job.title} at ${job.company_name}.`,
     icons: { icon: brand.logoUrl ?? "/neutral-icon.png" },
+    robots,
   };
 }
 

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { AlertTriangle, Captions, CheckCircle2, CloudUpload, Keyboard, Loader2, Mic, MicOff, PhoneOff, Play, Radio, RotateCcw, SkipForward, Wifi, WifiOff } from "lucide-react";
+import { AlertTriangle, Captions, CheckCircle2, CloudUpload, Keyboard, Loader2, Mic, MicOff, PhoneOff, Play, RotateCcw, SkipForward, Wifi, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ConfirmDialog } from "@/components/common/confirm-dialog";
@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { classifyReply, isYes, MAX_REPEATS, type RequestKind } from "@/lib/interview/repeat";
 import { InterviewRecorder, type UploadStatus } from "./recorder";
 import { useFaceMonitor } from "./face-monitor";
+import { AiAvatar } from "./ai-avatar";
 import { BrowserVoice, fetchCredentials, RealtimeVoice, type VoiceCallbacks, type VoiceEngine } from "./voice";
 
 type Utterance = { question_id: string | null; text: string; kind: "question" | "followup" | "closing" };
@@ -115,6 +116,9 @@ export function InterviewSession({ token, company, job, interviewerName, demoMod
   const finishing = useRef(false);
   const submitting = useRef(false);
   const meterCtx = useRef<AudioContext | null>(null);
+  /** Loudness of the interviewer's voice (0–1) for the face; null when it can't be measured (browser voice). */
+  const aiLevel = useRef<number | null>(null);
+  const aiMeterCtx = useRef<AudioContext | null>(null);
   const switchingMic = useRef(false);
   const switchMicRef = useRef<(reason: string) => Promise<void>>(async () => {});
   const events = useRef<{ event_id: string; type: string; payload?: Record<string, string | number | boolean | null> }[]>([]);
@@ -166,6 +170,9 @@ export function InterviewSession({ token, company, job, interviewerName, demoMod
     if (video.current) video.current.srcObject = null;
     meterCtx.current?.close().catch(() => {});
     meterCtx.current = null;
+    aiMeterCtx.current?.close().catch(() => {});
+    aiMeterCtx.current = null;
+    aiLevel.current = null;
   };
 
   const unmounted = useRef(false);
@@ -177,6 +184,35 @@ export function InterviewSession({ token, company, job, interviewerName, demoMod
       stopMedia();
     };
   }, []);
+
+  /** Measures the interviewer's voice so the face's mouth moves with it. */
+  const startAiMeter = (stream: MediaStream) => {
+    aiMeterCtx.current?.close().catch(() => {});
+    aiLevel.current = null;
+    if (!stream.getAudioTracks().length) return;
+    try {
+      const ctx = new AudioContext();
+      aiMeterCtx.current = ctx;
+      void ctx.resume().catch(() => {});
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 512;
+      analyser.smoothingTimeConstant = 0.5;
+      ctx.createMediaStreamSource(stream).connect(analyser);
+      const data = new Uint8Array(analyser.fftSize);
+      aiLevel.current = 0;
+      const tick = () => {
+        if (ctx.state === "closed" || aiMeterCtx.current !== ctx) return;
+        analyser.getByteTimeDomainData(data);
+        let sum = 0;
+        for (const v of data) sum += (v - 128) * (v - 128);
+        aiLevel.current = Math.min(1, Math.sqrt(sum / data.length) / 28);
+        requestAnimationFrame(tick);
+      };
+      tick();
+    } catch {
+      aiLevel.current = null;
+    }
+  };
 
   // The interviewer's voice is recorded on its own (not mixed into the video) and
   // played in sync on review. A reconnect brings a new stream: keep recording it.
@@ -430,7 +466,7 @@ export function InterviewSession({ token, company, job, interviewerName, demoMod
       if (s === "connected") setConnection("connected");
       else if (!finishing.current) void reconnect();
     },
-    onRemoteStream: (stream) => recordVoice(stream),
+    onRemoteStream: (stream) => { recordVoice(stream); startAiMeter(stream); },
     onEvent: logEvent,
   };
   });
@@ -670,9 +706,7 @@ export function InterviewSession({ token, company, job, interviewerName, demoMod
         {introLines?.length ? (
           <section aria-labelledby="intro-h" className="mt-6 w-full rounded-2xl border bg-card p-5 text-left shadow-sm">
             <div className="flex items-center gap-3">
-              <span className={cn("flex size-11 shrink-0 items-center justify-center rounded-full", speaking ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary")}>
-                <Radio className={cn("size-5", speaking && "animate-pulse")} aria-hidden />
-              </span>
+              <AiAvatar name={interviewerName} state={speaking ? "speaking" : "idle"} size={56} />
               <div className="min-w-0">
                 <h2 id="intro-h" className="font-semibold">Introduction from {interviewerName}</h2>
                 <p aria-live="polite" className={cn("mt-0.5 flex items-center gap-1.5 text-sm", speaking ? "text-primary" : "text-muted-foreground")}>
@@ -761,11 +795,9 @@ export function InterviewSession({ token, company, job, interviewerName, demoMod
 
         <aside className="flex flex-col gap-4">
           <div className="flex flex-col items-center rounded-2xl bg-white/5 p-6 text-center">
-            <div className={cn("relative flex size-24 items-center justify-center rounded-full bg-indigo-500/20 transition-all", ai === "speaking" && "scale-110 bg-indigo-500/40", ai === "thinking" && "animate-pulse")}>
-              {ai === "speaking" && <span className="absolute inset-0 animate-ping rounded-full bg-indigo-400/20" />}
-              <Radio className="size-9 text-indigo-300" />
-            </div>
+            <AiAvatar name={interviewerName} state={ai} level={aiLevel} size={136} />
             <p className="mt-4 font-semibold">{interviewerName}</p>
+            <p className="mt-1 rounded-full bg-indigo-500/15 px-2.5 py-0.5 text-[11px] font-medium tracking-wide text-indigo-200 uppercase">AI interviewer</p>
             <p className="text-sm text-zinc-400" aria-live="polite">
               {ai === "connecting" && "Connecting…"}
               {ai === "speaking" && "Speaking"}
