@@ -28,10 +28,12 @@ export function isBannerPath(pathname: string) {
 }
 
 const KEEP_PARAMS = /^utm_(source|medium|campaign|term|content)$/;
+/** Added by Google Tag Assistant / GTM Preview to connect its debugger. Allowed, but never sent. */
+const DEBUG_PARAMS = /^gtm_debug$/;
 
 /** Only campaign (utm_*) parameters may be sent; any other parameter could be private. */
 export function hasOnlySafeParams(url: URL) {
-  return [...url.searchParams.keys()].every((k) => KEEP_PARAMS.test(k));
+  return [...url.searchParams.keys()].every((k) => KEEP_PARAMS.test(k) || DEBUG_PARAMS.test(k));
 }
 
 /** The address as sent to analytics: origin, path and campaign parameters only. */

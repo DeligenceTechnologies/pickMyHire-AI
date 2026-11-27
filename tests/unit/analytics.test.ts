@@ -19,6 +19,10 @@ describe("analytics pages", () => {
     expect(isTrackableUrl(u("/?utm_medium=social"))).toBe(true);
     expect(isTrackableUrl(u("/?code=SECRET"))).toBe(false);
     expect(isTrackableUrl(u("/dashboard"))).toBe(false);
+    // Google Tag Assistant adds gtm_debug: tracking stays on, but the parameter is never sent.
+    expect(isTrackableUrl(u("/?gtm_debug=1764230000000"))).toBe(true);
+    expect(isTrackableUrl(u("/?gtm_debug=1&code=SECRET"))).toBe(false);
+    expect(cleanLocation(u("/pricing?gtm_debug=1764230000000&utm_source=x"))).toBe("https://pickmyhire.ai/pricing?utm_source=x");
   });
 
   it("keeps only safe referrers", () => {
